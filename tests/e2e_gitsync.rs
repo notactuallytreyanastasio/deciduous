@@ -408,7 +408,6 @@ fn g5_sync_check_fails_on_pending_and_unreadable_records() {
 /// G6: a node added on a feature branch was written into main's graph.json
 /// by the first `sync` after `git checkout main`.
 #[test]
-#[ignore = "G6: expected branch semantics of the one local DB not decided; run with --ignored"]
 fn g6_nodes_do_not_leak_across_branches() {
     let Some(()) = local("g6_nodes_do_not_leak_across_branches") else {
         return;
@@ -449,8 +448,15 @@ fn g7_sync_on_an_old_commit_does_not_block_checkout() {
         "sync on a detached old commit dirtied the tree:\n{out}"
     );
     assert!(
-        out.contains("detached") && out.contains("not exported"),
-        "sync on a detached commit does not say what it left out:\n{out}"
+        out.contains("detached") && out.contains("shows this commit"),
+        "sync on a detached commit does not say what it did:\n{out}"
+    );
+    // 1.0.9: the local graph is this commit's graph. "two" is main's, and
+    // leaves the local view here without being deleted anywhere.
+    let listed = p.ok(&["nodes"]);
+    assert!(
+        !listed.contains("two"),
+        "main's node is still listed on the old commit:\n{listed}"
     );
     assert!(
         check.ok(),
@@ -463,9 +469,14 @@ fn g7_sync_on_an_old_commit_does_not_block_checkout() {
         "sync on an old commit blocked checkout:\n{}",
         co.all()
     );
-    // Nothing was lost: "two" is still in the database and back in the
-    // file on main, and main needs no sync.
+    // Nothing was lost: "two" is back in the file on main, back in the
+    // local graph under the id it had, and main needs no sync.
     assert!(!node(&p.graph_doc(), &two).is_null());
+    assert_eq!(
+        p.change_id_of(2),
+        two,
+        "\"two\" came back under a different local id"
+    );
     let settled = p.dx(&["sync", "--check"]);
     assert!(settled.ok(), "{}", settled.all());
 }
@@ -552,8 +563,8 @@ fn g7_sync_on_a_commit_without_a_graph_file_creates_none() {
     );
     assert_eq!(p.git_ok(&["status", "--porcelain"]), before, "{out}");
     assert!(
-        out.contains("detached") && out.contains("not exported"),
-        "sync does not say what it left out:\n{out}"
+        out.contains("detached") && out.contains("shows this commit"),
+        "sync does not say what it did:\n{out}"
     );
     assert!(check.ok(), "sync --check disagrees:\n{}", check.all());
 
@@ -606,9 +617,11 @@ fn g8_edge_rationale_changes_propagate() {
 }
 
 /// G9: a node deleted on one clone and edited later on another comes back
-/// (the edit wins, as documented) but without its incoming edge.
+/// (the edit wins, as documented) but without its incoming edge. Fixed in
+/// 1.0.8 by the cascade markers on edge tombstones (a tombstone written
+/// only because its node was deleted does not count once the node is
+/// back); the ignore outlived the fix, and this was passing unrun.
 #[test]
-#[ignore = "G9: whether a resurrected node's edges come back is a design decision; run with --ignored"]
 fn g9_a_resurrected_node_keeps_its_edges() {
     let Some(()) = local("g9_a_resurrected_node_keeps_its_edges") else {
         return;
@@ -706,16 +719,17 @@ fn g10_sync_check_writes_nothing() {
         "sync --check created deciduous.db"
     );
     assert_eq!(listing(&dir), before, "sync --check changed .deciduous/");
-    // A clone that has never synced is not settled: the graph file holds a
-    // node its (absent) database does not.
+    // 1.0.9: a clone that has never synced owes graph.json nothing: its
+    // database is only behind the file, and the first command catches it
+    // up. The check passes, and still says what the database would take in.
     assert!(
-        !out.ok(),
-        "sync --check in a clone that never synced exited 0:\n{}",
+        out.ok(),
+        "sync --check failed a clone with nothing to write to graph.json:\n{}",
         out.all()
     );
     assert!(
-        out.all().contains("deciduous sync"),
-        "sync --check does not say what to run:\n{}",
+        out.all().contains("1 nodes imported"),
+        "sync --check does not say what the database would take in:\n{}",
         out.all()
     );
     // And the check agrees with the sync that follows.
@@ -933,8 +947,8 @@ fn t8_commit_resolves_any_rev_and_is_shown_whole() {
 /// stopped is detached too, and there the file is being rewritten on
 /// purpose: sync must still export into it.
 #[test]
-fn g7_sync_during_a_stopped_rebase_still_exports() {
-    let Some(()) = local("g7_sync_during_a_stopped_rebase_still_exports") else {
+fn g7_a_stopped_rebase_writes_through_and_git_can_discard() {
+    let Some(()) = local("g7_a_stopped_rebase_writes_through_and_git_can_discard") else {
         return;
     };
     let sb = Sandbox::new();
@@ -951,16 +965,23 @@ fn g7_sync_during_a_stopped_rebase_still_exports() {
     p.git_ok(&["checkout", "-q", "feat"]);
     let stopped = p.git(&["rebase", "main"]);
     assert!(!stopped.ok(), "the rebase was meant to stop on x.txt");
-    // A row the database has and the file does not: written, then the
-    // file put back, as a rebase step can.
+    // A write mid-rebase goes into the file being rebased, not withheld as
+    // on a commit being looked at.
     let late = p.add("goal", "written mid-rebase");
-    p.git_ok(&["checkout", "--", ".deciduous/graph.json"]);
-    assert!(node(&p.graph_doc(), &late).is_null());
-    let out = p.ok(&["sync"]);
     assert!(
         !node(&p.graph_doc(), &late).is_null(),
-        "sync during a stopped rebase did not export:\n{out}"
+        "a write during a stopped rebase did not reach the graph file"
     );
+    // 1.0.9: discarding the file with git discards the write, as it would
+    // any other change to a tracked file. Before, sync exported the row
+    // back, so `git checkout -- graph.json` could never take anything out.
+    p.git_ok(&["checkout", "--", ".deciduous/graph.json"]);
+    let out = p.ok(&["sync"]);
+    assert!(
+        node(&p.graph_doc(), &late).is_null(),
+        "sync put back a write git discarded:\n{out}"
+    );
+    assert!(!p.ok(&["nodes"]).contains("written mid-rebase"), "{out}");
     let _ = p.git(&["rebase", "--abort"]);
 }
 
@@ -1045,5 +1066,266 @@ fn g7_remote_pull_on_an_old_commit_does_not_block_checkout() {
             .values()
             .any(|n| n["title"] == "server only"),
         "the pulled node never reached main's graph file"
+    );
+}
+
+// ------------------------------------- 1.0.9: the database follows graph.json
+//
+// The local database is gitignored, so it is one database for every branch
+// and commit a clone checks out, while graph.json is per commit. Before
+// 1.0.9 `sync` exported every row the file lacked, because it could not
+// tell a local write the file never got from a row git took out: a node
+// added on a branch was written into main's file (G6), and a reset or a
+// discarded change never took anything out. Now every command follows the
+// file first; only a write recorded as unpublished survives a file that
+// does not have it.
+
+fn op_lines(p: &Project) -> Vec<String> {
+    std::fs::read_to_string(p.dir.join(".deciduous/remote-log.jsonl"))
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| l.contains("\"entry\":\"op\""))
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn follow_reset_hard_discards_an_uncommitted_node() {
+    let Some(()) = local("follow_reset_hard_discards_an_uncommitted_node") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "kept");
+    p.commit_graph("kept");
+    let clean = p.git_ok(&["status", "--porcelain"]);
+    let gone = p.add("goal", "discarded by reset");
+    p.git_ok(&["reset", "-q", "--hard"]);
+    let listed = p.ok(&["nodes"]);
+    assert!(
+        !listed.contains("discarded by reset"),
+        "a node git reset away is still listed:\n{listed}"
+    );
+    assert!(listed.contains("kept"), "{listed}");
+    let out = p.ok(&["sync"]);
+    assert!(
+        node(&p.graph_doc(), &gone).is_null(),
+        "sync exported a node git discarded:\n{out}"
+    );
+    assert_eq!(p.git_ok(&["status", "--porcelain"]), clean, "{out}");
+}
+
+#[test]
+fn follow_branch_round_trip_keeps_ids_and_documents() {
+    let Some(()) = local("follow_branch_round_trip_keeps_ids_and_documents") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "on main");
+    p.commit_graph("main");
+    p.git_ok(&["checkout", "-q", "-b", "spike"]);
+    let id = created_id(&p.ok(&["add", "goal", "spike idea"]));
+    let cid = p.change_id_of(id);
+    std::fs::write(p.dir.join("evidence.txt"), "measured, not guessed").unwrap();
+    p.ok(&["doc", "attach", &id.to_string(), "evidence.txt"]);
+    p.commit_graph("spike");
+    let clean = p.git_ok(&["status", "--porcelain"]);
+
+    p.git_ok(&["checkout", "-q", "main"]);
+    let listed = p.ok(&["nodes"]);
+    assert!(
+        !listed.contains("spike idea"),
+        "spike's node listed on main:\n{listed}"
+    );
+    assert!(
+        node(&p.graph_doc(), &cid).is_null(),
+        "spike's node leaked into main's graph.json"
+    );
+    assert_eq!(p.git_ok(&["status", "--porcelain"]), clean);
+
+    p.git_ok(&["checkout", "-q", "spike"]);
+    let shown = p.ok(&["show", &id.to_string()]);
+    assert!(
+        shown.contains("spike idea"),
+        "spike's node did not come back under local id {id}:\n{shown}"
+    );
+    let docs = p.ok(&["doc", "list", &id.to_string()]);
+    assert!(
+        docs.contains("evidence.txt"),
+        "the document attached to it did not come back with it:\n{docs}"
+    );
+}
+
+#[test]
+fn follow_sends_nothing_to_the_server_for_what_git_took_out() {
+    let Some(()) = local("follow_sends_nothing_to_the_server_for_what_git_took_out") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    // A shared server that cannot be reached: ops queue and stay queued.
+    let cfg = p.dir.join(".deciduous/config.toml");
+    let mut text = std::fs::read_to_string(&cfg).unwrap();
+    text.push_str("\n[remote]\nurl = \"http://127.0.0.1:1\"\nworkspace = \"follow-test\"\n");
+    std::fs::write(&cfg, text).unwrap();
+
+    p.add("goal", "on main");
+    p.commit_graph("main");
+    p.git_ok(&["checkout", "-q", "-b", "spike"]);
+    let spike = p.add("goal", "spike only");
+    p.ok(&["status", "1", "completed"]);
+    p.commit_graph("spike");
+    let before = op_lines(&p);
+    assert!(
+        before.iter().any(|l| l.contains(&spike)),
+        "the spike node's create was never queued, so this test proves nothing:\n{before:?}"
+    );
+
+    // main has no spike node and has node 1 still pending: the local graph
+    // follows both, and neither is an edit to send.
+    p.git_ok(&["checkout", "-q", "main"]);
+    let listed = p.ok(&["nodes"]);
+    assert!(!listed.contains("spike only"), "{listed}");
+    let after = op_lines(&p);
+    let new: Vec<&String> = after.iter().filter(|l| !before.contains(l)).collect();
+    assert!(
+        new.is_empty(),
+        "following a checkout queued ops for the shared server: {new:#?}"
+    );
+}
+
+#[test]
+fn follow_a_deletion_on_a_detached_commit_is_refused() {
+    let Some(()) = local("follow_a_deletion_on_a_detached_commit_is_refused") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    p.add("goal", "two");
+    p.commit_graph("two");
+    p.git_ok(&["checkout", "-q", &old]);
+    let before = p.git_ok(&["status", "--porcelain"]);
+    let refused = p.dx(&["delete", "1"]);
+    assert!(
+        !refused.ok() && refused.all().contains("detached") && refused.all().contains("branch"),
+        "a delete on a detached commit was not refused by name:\n{}",
+        refused.all()
+    );
+    assert!(
+        p.ok(&["nodes"]).contains("one"),
+        "the refused delete deleted"
+    );
+    assert_eq!(p.git_ok(&["status", "--porcelain"]), before);
+}
+
+#[test]
+fn follow_a_running_mcp_server_follows_a_checkout() {
+    let Some(()) = local("follow_a_running_mcp_server_follows_a_checkout") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "on main");
+    p.commit_graph("main");
+    p.git_ok(&["checkout", "-q", "-b", "spike"]);
+    p.add("goal", "spike only");
+    p.commit_graph("spike");
+
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let on_spike = m.call_ok("list_nodes", json!({})).to_string();
+    assert!(on_spike.contains("spike only"), "{on_spike}");
+    p.git_ok(&["checkout", "-q", "main"]);
+    let on_main = m.call_ok("list_nodes", json!({})).to_string();
+    drop(m);
+    assert!(
+        !on_main.contains("spike only"),
+        "a running MCP server still lists spike's node after checking out main: {on_main}"
+    );
+    assert!(on_main.contains("on main"), "{on_main}");
+}
+
+#[test]
+fn follow_stash_and_pop_take_a_node_out_and_bring_it_back() {
+    let Some(()) = local("follow_stash_and_pop_take_a_node_out_and_bring_it_back") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "kept");
+    p.commit_graph("kept");
+    let id = created_id(&p.ok(&["add", "goal", "work in progress"]));
+    let cid = p.change_id_of(id);
+    p.git_ok(&["stash", "-q"]);
+    assert!(!p.ok(&["nodes"]).contains("work in progress"));
+    p.git_ok(&["stash", "pop", "-q"]);
+    let shown = p.ok(&["show", &id.to_string()]);
+    assert!(shown.contains("work in progress"), "{shown}");
+    assert_eq!(p.change_id_of(id), cid);
+}
+
+/// A database from before 1.0.9 has no mirror stamp and no record of which
+/// rows are unpublished. Its first sync must neither leak a branch's node
+/// into this branch's file (the branch has it) nor lose a row no branch has
+/// (a write made while HEAD was detached, which 1.0.8 kept only here).
+#[test]
+fn follow_upgrading_a_1_0_8_database_neither_leaks_nor_loses() {
+    let Some(()) = local("follow_upgrading_a_1_0_8_database_neither_leaks_nor_loses") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    p.git_ok(&["checkout", "-q", "-b", "spike"]);
+    let spike = p.add("goal", "spike only");
+    p.commit_graph("spike");
+    // Written while looking at history: in no graph file anywhere.
+    p.git_ok(&["checkout", "-q", &old]);
+    let homeless = p.add("goal", "written while detached");
+    // Make it look like 1.0.8 left it: the spike node (1.0.8 never took it
+    // out) and the detached write both in the database, nothing recorded
+    // about either, and the database mirroring spike's file.
+    let db = rusqlite::Connection::open(p.dir.join(".deciduous/deciduous.db")).unwrap();
+    let spike_id: i64 = db
+        .query_row(
+            "SELECT node_id FROM node_aliases WHERE change_id = ?1",
+            [&spike],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let present: i64 = db
+        .query_row(
+            "SELECT count(*) FROM decision_nodes WHERE id = ?1",
+            [spike_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    if present == 0 {
+        db.execute(
+            "INSERT INTO decision_nodes (id, change_id, node_type, title, status, created_at, updated_at)
+             VALUES (?1, ?2, 'goal', 'spike only', 'pending', '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00')",
+            rusqlite::params![spike_id, &spike],
+        )
+        .unwrap();
+    }
+    db.execute("DELETE FROM graph_mirror", []).unwrap();
+    db.execute("DELETE FROM unpublished", []).unwrap();
+    drop(db);
+    p.git_ok(&["checkout", "-q", "main"]);
+
+    let out = p.ok(&["sync"]);
+    let doc = p.graph_doc();
+    assert!(
+        node(&doc, &spike).is_null(),
+        "the first sync after the upgrade leaked spike's node into main:\n{out}"
+    );
+    assert!(
+        !node(&doc, &homeless).is_null(),
+        "the first sync after the upgrade lost a write no branch has:\n{out}"
     );
 }

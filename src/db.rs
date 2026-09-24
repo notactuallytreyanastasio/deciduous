@@ -784,6 +784,31 @@ pub struct Database {
     /// reading it is how every write-through asks, cheaply, whether HEAD is
     /// on a branch (see [`Self::write_store`]).
     head_file: std::sync::OnceLock<Option<std::path::PathBuf>>,
+    /// Set while the database is being made to follow graph.json after git
+    /// changed it (a checkout, reset or pull). What that changes is local
+    /// only: a node the checked-out branch does not have is not deleted on
+    /// the shared server, and an older version brought back by a reset is
+    /// not an edit to send. See [`Self::with_ops_suppressed`].
+    ops_suppressed: std::sync::atomic::AtomicBool,
+    /// The follow lock this process holds, and how many writes/syncs in it
+    /// are inside it (see [`Self::hold_mirror`]).
+    mirror_hold: std::sync::Mutex<(usize, Option<std::fs::File>)>,
+}
+
+/// Held from the start of a graph write until it is in graph.json, and for
+/// the whole of a sync or a follow. See [`Database::hold_mirror`].
+pub struct MirrorGuard<'a>(Option<&'a Database>);
+
+impl Drop for MirrorGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(db) = self.0 {
+            let mut hold = db.mirror_hold.lock().unwrap_or_else(|e| e.into_inner());
+            hold.0 = hold.0.saturating_sub(1);
+            if hold.0 == 0 {
+                hold.1 = None; // closing the file releases the lock
+            }
+        }
+    }
 }
 
 /// Error type for database operations
@@ -891,6 +916,8 @@ impl Database {
             auto_attach: std::sync::atomic::AtomicBool::new(true),
             store_author: std::sync::RwLock::new(None),
             head_file: std::sync::OnceLock::new(),
+            ops_suppressed: std::sync::atomic::AtomicBool::new(false),
+            mirror_hold: std::sync::Mutex::new((0, None)),
         };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
@@ -970,6 +997,12 @@ impl Database {
         bodies: Vec<crate::oplog::OpBody>,
         origin: Option<&str>,
     ) -> Result<Vec<Queued>> {
+        if self
+            .ops_suppressed
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Ok(Vec::new());
+        }
         let mut out = Vec::with_capacity(bodies.len());
         for body in bodies {
             let mut op = crate::oplog::OpLog::new_op(body);
@@ -1361,9 +1394,197 @@ impl Database {
     pub fn set_store(&self, store: Option<RecordStore>) {
         self.auto_attach
             .store(store.is_some(), std::sync::atomic::Ordering::SeqCst);
+        let store = store.map(|s| self.mirrored(s));
         if let Ok(mut slot) = self.store.write() {
             *slot = store;
         }
+    }
+
+    /// `store` with its writes recorded as what this database mirrors: each
+    /// write moves the recorded digest from the file it wrote over to the
+    /// file it wrote, and only if the recorded digest was the file it wrote
+    /// over (compare-and-set, under the graph file's lock). A file git
+    /// changed in between is not claimed as mirrored, so it is followed.
+    fn mirrored(&self, store: RecordStore) -> RecordStore {
+        let pool = self.pool.clone();
+        store.with_flush_hook(move |before: &str, after: &str| {
+            if let Ok(mut conn) = pool.get() {
+                let _ = diesel::sql_query(
+                    "UPDATE graph_mirror SET digest = ? WHERE id = 1 AND digest = ?",
+                )
+                .bind::<diesel::sql_types::Text, _>(after)
+                .bind::<diesel::sql_types::Text, _>(before)
+                .execute(&mut conn);
+            }
+        })
+    }
+
+    /// The digest of the graph.json this database mirrors, if one was ever
+    /// recorded (a database from before 1.0.9 has none).
+    pub(crate) fn mirror_digest(&self) -> Result<Option<String>> {
+        #[derive(diesel::QueryableByName)]
+        struct Row {
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            digest: String,
+        }
+        let mut conn = self.get_conn()?;
+        Ok(
+            diesel::sql_query("SELECT digest FROM graph_mirror WHERE id = 1")
+                .load::<Row>(&mut conn)?
+                .pop()
+                .map(|r| r.digest),
+        )
+    }
+
+    pub(crate) fn set_mirror_digest(&self, digest: &str) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::sql_query(
+            "INSERT INTO graph_mirror (id, digest) VALUES (1, ?)
+             ON CONFLICT (id) DO UPDATE SET digest = excluded.digest",
+        )
+        .bind::<diesel::sql_types::Text, _>(digest)
+        .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Record that a write of `kind` (node, edge, theme, tag) with this id
+    /// is in the database but not in graph.json.
+    pub(crate) fn mark_unpublished(&self, kind: &str, record_id: &str) {
+        let result = self.get_conn().and_then(|mut conn| {
+            diesel::sql_query("INSERT OR IGNORE INTO unpublished (kind, record_id) VALUES (?, ?)")
+                .bind::<diesel::sql_types::Text, _>(kind)
+                .bind::<diesel::sql_types::Text, _>(record_id)
+                .execute(&mut conn)
+                .map_err(DbError::from)
+        });
+        if let Err(e) = result {
+            // Not recorded means the next checkout could take it out of the
+            // database: say so, loudly, rather than hope.
+            eprintln!(
+                "Warning: could not record that {kind} {record_id} is not in graph.json yet ({e}). \
+                 Run `deciduous sync` on a branch before switching branches."
+            );
+        }
+    }
+
+    pub(crate) fn unpublished(&self) -> Result<std::collections::HashSet<(String, String)>> {
+        #[derive(diesel::QueryableByName)]
+        struct Row {
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            kind: String,
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            record_id: String,
+        }
+        let mut conn = self.get_conn()?;
+        Ok(diesel::sql_query("SELECT kind, record_id FROM unpublished")
+            .load::<Row>(&mut conn)?
+            .into_iter()
+            .map(|r| (r.kind, r.record_id))
+            .collect())
+    }
+
+    pub(crate) fn clear_unpublished(&self) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::sql_query("DELETE FROM unpublished").execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// One graph write, from its database commit to its line in graph.json,
+    /// or one sync or follow, at a time across every process on this
+    /// project. Without it a follow in one process could see another's
+    /// committed row before that row reached the file, take it for one git
+    /// took out, and forget it; the write then reached the file under a
+    /// mirror stamp that claimed the database had it (seen in the 5-writer
+    /// stress test: two acknowledged nodes missing from the database).
+    /// Reentrant within a process: a write that syncs holds it once.
+    pub fn hold_mirror(&self) -> Result<MirrorGuard<'_>> {
+        let Some(store) = self.store() else {
+            return Ok(MirrorGuard(None));
+        };
+        let mut hold = self.mirror_hold.lock().unwrap_or_else(|e| e.into_inner());
+        if hold.0 == 0 {
+            let path = store.path().with_extension("json.follow.lock");
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(&path)
+                .and_then(|f| f.lock().map(|_| f))
+                .map_err(|e| {
+                    DbError::Validation(format!(
+                        "nothing was changed: could not take the graph lock {}: {e}",
+                        path.display()
+                    ))
+                })?;
+            hold.1 = Some(file);
+        }
+        hold.0 += 1;
+        Ok(MirrorGuard(Some(self)))
+    }
+
+    /// Run `f` with nothing queued for the shared server. For following a
+    /// graph file git changed: what that does to the database is local.
+    pub(crate) fn with_ops_suppressed<T>(&self, f: impl FnOnce() -> T) -> T {
+        use std::sync::atomic::Ordering;
+        let was = self.ops_suppressed.swap(true, Ordering::SeqCst);
+        let out = f();
+        self.ops_suppressed.store(was, Ordering::SeqCst);
+        out
+    }
+
+    /// Take a node out of the local database because the graph file no
+    /// longer has it (git took it out: a checkout, a reset, a pull). Not a
+    /// deletion: nothing is queued for the server and nothing is written to
+    /// the file. Its edges and tags go with it (the file has them only with
+    /// it); its documents, sessions and context stay, under the id
+    /// node_aliases keeps, for when a later checkout brings it back.
+    pub(crate) fn forget_node_local(&self, node_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        // Foreign keys are enforced, and the rows this keeps (documents,
+        // context, session links) reference the node: they point at an id
+        // that is absent until a checkout brings the node back under it.
+        // The pragma cannot change inside a transaction, so it is turned
+        // off around this one, on this connection, and always back on.
+        diesel::sql_query("PRAGMA foreign_keys = OFF").execute(&mut conn)?;
+        let result = conn.immediate_transaction(|conn| {
+            diesel::delete(
+                decision_edges::table.filter(
+                    decision_edges::from_node_id
+                        .eq(node_id)
+                        .or(decision_edges::to_node_id.eq(node_id)),
+                ),
+            )
+            .execute(conn)?;
+            diesel::delete(node_themes::table.filter(node_themes::node_id.eq(node_id)))
+                .execute(conn)?;
+            diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        });
+        let restored = diesel::sql_query("PRAGMA foreign_keys = ON").execute(&mut conn);
+        result?;
+        restored?;
+        Ok(())
+    }
+
+    /// Refuse a deletion while HEAD is detached at a commit being looked
+    /// at. A write there stays in the database and is published on the next
+    /// branch; a deletion cannot wait like that (the commit's file still has
+    /// the record, so following it would bring the record back), and
+    /// writing it into that commit's file blocks `git checkout` (G7).
+    fn require_branch_for_delete(&self, what: &str) -> Result<()> {
+        let Some(store) = self.store() else {
+            return Ok(());
+        };
+        if self.write_store().is_some() {
+            return Ok(());
+        }
+        let at = crate::records::viewing_history(store.path()).unwrap_or_default();
+        Err(DbError::Validation(format!(
+            "nothing was changed: HEAD is detached at {at}, a commit being looked at, and a \
+             deletion has to be recorded in a branch's graph.json. Check out a branch \
+             (`git switch <branch>`) and {what} there."
+        )))
     }
 
     /// Attribute records in the graph file to `author`, including a graph
@@ -1391,6 +1612,7 @@ impl Database {
             return None;
         }
         let found = RecordStore::path_for_db(&self.path).and_then(RecordStore::open)?;
+        let found = self.mirrored(found);
         let mut slot = self.store.write().ok()?;
         if slot.is_none() {
             let author = self.store_author.read().ok().and_then(|a| a.clone());
@@ -1452,18 +1674,36 @@ impl Database {
     /// without this write ever having been stamped against the file's
     /// versions: a record stamped later than this clock wins, and the edit
     /// the CLI reported as done is reverted.
-    fn require_readable_store(&self) -> Result<()> {
+    fn require_readable_store(&self) -> Result<MirrorGuard<'_>> {
+        let guard = self.hold_mirror()?;
         let Some(store) = self.write_store() else {
-            return Ok(());
+            return Ok(guard);
         };
         store
             .read_doc_all()
-            .map(|_| ())
+            .map(|_| guard)
             .map_err(|e| DbError::Validation(format!("nothing was changed: {}", e)))
     }
 
     fn store_warn(what: &str, e: impl std::fmt::Display) {
         eprintln!("Warning: graph file: {} ({})", what, e);
+    }
+
+    /// A write graph.json did not get (HEAD detached at a commit being
+    /// looked at, or the file write failed): record it, so following the
+    /// file does not take it out of the database, and the next sync on a
+    /// branch publishes it.
+    fn withheld(&self, kind: &str, record_id: &str) {
+        if self.store().is_some() {
+            self.mark_unpublished(kind, record_id);
+        }
+    }
+
+    fn edge_key(edge: &DecisionEdge) -> Option<String> {
+        match (&edge.from_change_id, &edge.to_change_id) {
+            (Some(f), Some(t)) => Some(crate::records::edge_id(f, t, &edge.edge_type)),
+            _ => None,
+        }
     }
 
     fn publish_node_by_id(&self, node_id: i32) {
@@ -1475,6 +1715,9 @@ impl Database {
     /// that this write did not touch.
     fn publish_node_edit(&self, node_id: i32, before: Option<DecisionNode>) {
         let Some(store) = self.write_store() else {
+            if let Ok(Some(node)) = self.get_node(node_id) {
+                self.withheld("node", &node.change_id);
+            }
             return;
         };
         match self.get_node(node_id) {
@@ -1488,7 +1731,10 @@ impl Database {
                     }
                 }
                 Ok((_, None)) => {}
-                Err(e) => Self::store_warn("could not write node record", e),
+                Err(e) => {
+                    Self::store_warn("could not write node record", e);
+                    self.withheld("node", &node.change_id);
+                }
             },
             Ok(None) => {}
             Err(e) => Self::store_warn("could not read node for publishing", e),
@@ -1512,12 +1758,24 @@ impl Database {
 
     fn publish_edge_by_id(&self, edge_id: i32) {
         let Some(store) = self.write_store() else {
+            if let Some(key) = self
+                .get_edge(edge_id)
+                .ok()
+                .flatten()
+                .as_ref()
+                .and_then(Self::edge_key)
+            {
+                self.withheld("edge", &key);
+            }
             return;
         };
         match self.get_edge(edge_id) {
             Ok(Some(edge)) => {
                 if let Err(e) = store.publish_edge(&edge) {
                     Self::store_warn("could not write edge record", e);
+                    if let Some(key) = Self::edge_key(&edge) {
+                        self.withheld("edge", &key);
+                    }
                 }
             }
             Ok(None) => {}
@@ -1544,6 +1802,9 @@ impl Database {
 
     fn publish_theme_by_id(&self, theme_id: i32) {
         let Some(store) = self.write_store() else {
+            if let Ok(Some(theme)) = self.get_theme_by_id(theme_id) {
+                self.withheld("theme", &theme.change_id);
+            }
             return;
         };
         match self.get_theme_by_id(theme_id) {
@@ -1560,7 +1821,10 @@ impl Database {
                     }
                 }
                 Ok((_, None)) => {}
-                Err(e) => Self::store_warn("could not write theme record", e),
+                Err(e) => {
+                    Self::store_warn("could not write theme record", e);
+                    self.withheld("theme", &theme.change_id);
+                }
             },
             Ok(None) => {}
             Err(e) => Self::store_warn("could not read theme for publishing", e),
@@ -1568,11 +1832,18 @@ impl Database {
     }
 
     fn publish_tag(&self, node_id: i32, theme_id: i32) {
-        let Some(store) = self.write_store() else {
-            return;
-        };
         let node = self.get_node(node_id).ok().flatten();
         let theme = self.get_theme_by_id(theme_id).ok().flatten();
+        let key = match (&node, &theme) {
+            (Some(n), Some(t)) => Some(crate::records::tag_id(&n.change_id, &t.change_id)),
+            _ => None,
+        };
+        let Some(store) = self.write_store() else {
+            if let Some(key) = &key {
+                self.withheld("tag", key);
+            }
+            return;
+        };
         let tag = self.get_tag(node_id, theme_id).ok().flatten();
         if let (Some(node), Some(theme), Some(tag)) = (node, theme, tag) {
             if let Err(e) = store.publish_tag(
@@ -1582,6 +1853,9 @@ impl Database {
                 &tag.created_at,
             ) {
                 Self::store_warn("could not write tag record", e);
+                if let Some(key) = &key {
+                    self.withheld("tag", key);
+                }
             }
         }
     }
@@ -2055,6 +2329,57 @@ impl Database {
         )
         .execute(&mut conn)?;
 
+        // The graph file this database mirrors: the digest of graph.json as
+        // deciduous last wrote or followed it. git never updates it, so a
+        // checkout, reset or pull shows up as a digest that differs, and the
+        // database follows the file (records::follow_graph_file).
+        diesel::sql_query(
+            "CREATE TABLE IF NOT EXISTS graph_mirror (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                digest TEXT NOT NULL
+            )",
+        )
+        .execute(&mut conn)?;
+
+        // Local writes that are not in graph.json yet (made while HEAD was
+        // detached, or whose write to the file failed). Following the file
+        // keeps these and the next sync on a branch publishes them; every
+        // other row the file does not have is one git took out of it.
+        diesel::sql_query(
+            "CREATE TABLE IF NOT EXISTS unpublished (
+                kind TEXT NOT NULL,
+                record_id TEXT NOT NULL,
+                PRIMARY KEY (kind, record_id)
+            )",
+        )
+        .execute(&mut conn)?;
+
+        // A node's local integer id, kept after the node leaves the
+        // database: a node that leaves on `git checkout` and returns on the
+        // next one comes back under the id people typed, with the
+        // documents, sessions and context that point at that id.
+        diesel::sql_query(
+            "CREATE TABLE IF NOT EXISTS node_aliases (
+                change_id TEXT PRIMARY KEY NOT NULL,
+                node_id INTEGER NOT NULL UNIQUE
+            )",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "INSERT OR IGNORE INTO node_aliases (change_id, node_id)
+             SELECT change_id, id FROM decision_nodes",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE TRIGGER IF NOT EXISTS node_alias_on_insert
+             AFTER INSERT ON decision_nodes
+             BEGIN
+                 INSERT OR IGNORE INTO node_aliases (change_id, node_id)
+                 VALUES (NEW.change_id, NEW.id);
+             END",
+        )
+        .execute(&mut conn)?;
+
         // Themes table
         diesel::sql_query(
             r#"
@@ -2244,7 +2569,7 @@ impl Database {
                 "a node needs a non-empty title".to_string(),
             ));
         }
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
         let now = created_at
@@ -2311,7 +2636,7 @@ impl Database {
         files: Option<&str>,
         branch: Option<&str>,
     ) -> Result<i32> {
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
@@ -2386,13 +2711,38 @@ impl Database {
         };
         let body = self.node_created_body(&new_node);
         conn.immediate_transaction(|conn| {
-            diesel::insert_into(decision_nodes::table)
-                .values(&new_node)
-                .execute(conn)?;
-            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
-                "last_insert_rowid()",
-            ))
-            .first(conn)?;
+            // A node this database had before (a checkout took it out and
+            // this one brings it back) returns under its old id.
+            #[derive(diesel::QueryableByName)]
+            struct Alias {
+                #[diesel(sql_type = diesel::sql_types::Integer)]
+                node_id: i32,
+            }
+            let alias = diesel::sql_query(
+                "SELECT a.node_id FROM node_aliases a
+                 WHERE a.change_id = ?
+                   AND NOT EXISTS (SELECT 1 FROM decision_nodes n WHERE n.id = a.node_id)",
+            )
+            .bind::<diesel::sql_types::Text, _>(&rec.change_id)
+            .load::<Alias>(conn)?
+            .pop();
+            let id = match alias {
+                Some(Alias { node_id }) => {
+                    diesel::insert_into(decision_nodes::table)
+                        .values((decision_nodes::id.eq(node_id), &new_node))
+                        .execute(conn)?;
+                    node_id
+                }
+                None => {
+                    diesel::insert_into(decision_nodes::table)
+                        .values(&new_node)
+                        .execute(conn)?;
+                    diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                        "last_insert_rowid()",
+                    ))
+                    .first(conn)?
+                }
+            };
             self.queue_git_in_tx(conn, body.into_iter().collect())?;
             Ok(id)
         })
@@ -2950,7 +3300,7 @@ impl Database {
                 "cannot link node {from_id} to itself"
             )));
         }
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
 
@@ -3100,7 +3450,8 @@ impl Database {
         to_id: i32,
         edge_type: Option<&str>,
     ) -> Result<Vec<DecisionEdge>> {
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
+        self.require_branch_for_delete("unlink")?;
         let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
 
@@ -3202,9 +3553,13 @@ impl Database {
         dry_run: bool,
         publish: bool,
     ) -> Result<DeleteSummary> {
-        if !dry_run && publish {
-            self.require_readable_store()?;
-        }
+        let _mirror = if !dry_run && publish {
+            let guard = self.require_readable_store()?;
+            self.require_branch_for_delete("delete it")?;
+            Some(guard)
+        } else {
+            None
+        };
         let _log = if dry_run { None } else { self.hold_log()? };
         let mut conn = self.get_conn()?;
 
@@ -3355,7 +3710,7 @@ impl Database {
     /// Update node status
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
         one_of("status", status, NODE_STATUSES)?;
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
@@ -3388,7 +3743,7 @@ impl Database {
 
     /// Update a node's commit hash in metadata_json
     pub fn update_node_commit(&self, node_id: i32, commit_hash: &str) -> Result<()> {
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
@@ -3441,7 +3796,7 @@ impl Database {
 
     /// Update a node's prompt in metadata_json
     pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
@@ -4392,7 +4747,7 @@ impl Database {
                 "a theme needs a non-empty name".to_string(),
             ));
         }
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
         let change_id = Uuid::new_v4().to_string();
@@ -4445,7 +4800,8 @@ impl Database {
 
     /// Delete a theme by name (also removes all node_themes associations)
     pub fn delete_theme(&self, name: &str) -> Result<bool> {
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
+        self.require_branch_for_delete("delete the theme")?;
         let mut conn = self.get_conn()?;
         let normalized = name.to_lowercase().replace(' ', "-");
 
@@ -4483,7 +4839,7 @@ impl Database {
 
     /// Tag a node with a theme
     pub fn tag_node(&self, node_id: i32, theme_name: &str, source: &str) -> Result<()> {
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let theme = self.get_theme_by_name(theme_name)?.ok_or_else(|| {
             DbError::Validation(format!(
                 "Theme '{}' not found. Create it with: deciduous themes create {}",
@@ -4530,7 +4886,8 @@ impl Database {
     /// Remove a theme from a node. `Ok(false)` only when both exist and the
     /// node simply was not tagged.
     pub fn untag_node(&self, node_id: i32, theme_name: &str) -> Result<bool> {
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
+        self.require_branch_for_delete("untag it")?;
         let theme = self.existing_tag_parts(node_id, theme_name)?;
         let mut conn = self.get_conn()?;
         let deleted = diesel::delete(
@@ -4550,7 +4907,7 @@ impl Database {
 
     /// Confirm a suggested tag (change source from "suggested" to "manual")
     pub fn confirm_tag(&self, node_id: i32, theme_name: &str) -> Result<bool> {
-        self.require_readable_store()?;
+        let _mirror = self.require_readable_store()?;
         let theme = self.existing_tag_parts(node_id, theme_name)?;
         let mut conn = self.get_conn()?;
         let updated = diesel::update(

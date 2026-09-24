@@ -1557,6 +1557,27 @@ fn main() {
     // for the server is sent before the process exits.
     let _replay = deciduous::remote::ReplayOnExit;
 
+    // The local database follows graph.json when git changed it since the
+    // last command (checkout, reset, pull, stash): what every command reads
+    // is the graph of the commit that is checked out. `sync` does this
+    // itself, `mcp` does it per tool call, and --check changes nothing.
+    let follows = !matches!(
+        args.command,
+        Command::Sync { .. }
+            | Command::Mcp { .. }
+            | Command::Completion { .. }
+            | Command::Backup { .. }
+    );
+    if follows {
+        match deciduous::records::follow_graph_file(&db) {
+            Ok(Some(report)) if report.followed() > 0 || !report.is_clean() => {
+                eprintln!("{}", report.follow_note());
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("Warning: could not bring the local graph up to graph.json: {e}"),
+        }
+    }
+
     match args.command {
         Command::Init { .. } => unreachable!(),   // Handled above
         Command::Update { .. } => unreachable!(), // Handled above
@@ -3432,6 +3453,18 @@ fn main() {
                             deciduous::remote::pull(&remote, &db, scratch)
                         }),
                     };
+                    if let (Some(_), Ok(_)) = (&detached, &pulled) {
+                        // What was pulled went to a scratch copy of the file:
+                        // recorded, the next checkout publishes it instead of
+                        // taking it out as something git took out.
+                        let _held = db.hold_mirror();
+                        if let Err(e) = deciduous::records::mark_beyond_file(&db, store.as_ref()) {
+                            eprintln!(
+                                "{} could not record what was pulled as not yet in graph.json: {e}. Run `deciduous remote pull` again on a branch.",
+                                "Warning:".yellow()
+                            );
+                        }
+                    }
                     if let (Some(at), Ok(_)) = (&detached, &pulled) {
                         println!(
                             "{} HEAD is detached at {at}, so the graph file was left as this commit has it; what was pulled is in the database, and the next `deciduous sync` on a branch exports it.",
@@ -3673,7 +3706,7 @@ fn main() {
                 None => print_sync_report_body(&report),
             }
             if let Some(at) = &detached {
-                if !withheld.is_empty() || store.is_none() {
+                {
                     println!(
                         "  {} {}",
                         "Note:".yellow(),
@@ -6314,6 +6347,19 @@ fn print_sync_report_body(report: &SyncReport) {
     push(report.tags_imported, "tags imported");
     push(report.tags_deleted, "tags deleted");
     push(report.tags_exported, "tags exported");
+    let left = report.nodes_left;
+    push(
+        left,
+        "nodes left the local graph (graph.json no longer has them)",
+    );
+    push(
+        report.nodes_reverted,
+        "nodes set back to graph.json's version",
+    );
+    push(
+        report.edges_left + report.themes_left + report.tags_left + report.themes_reverted,
+        "edge/theme/tag records followed graph.json",
+    );
     if unresolved {
         println!("  Not compared with the database until the graph file is merged");
     } else if lines.is_empty() {

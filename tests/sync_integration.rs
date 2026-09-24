@@ -185,11 +185,15 @@ fn two_machines_share_a_graph_and_link_across_it() {
     // Bob deletes his action; the tombstone reaches Alice and cascades.
     bob.ok(&["delete", &action_id.to_string()]);
     alice.pull_from(&bob);
+    // 1.0.9: the tombstone only has to reach Alice's database, which any
+    // command catches up; graph.json owes nothing, so a pre-push check
+    // passes, and still says what the database would take in.
     let (success, out, _) = alice.run(&["sync", "--check"]);
     assert!(
-        !success,
-        "check must exit 1 while a change is pending:\n{out}"
+        success,
+        "check failed with nothing to write to graph.json:\n{out}"
     );
+    assert!(out.contains("1 nodes deleted"), "{out}");
     let out = alice.ok(&["sync", "--no-pages"]);
     assert!(out.contains("1 nodes deleted"), "{out}");
     assert_eq!(alice.node_count(), 1);

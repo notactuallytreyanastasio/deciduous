@@ -16,8 +16,12 @@
 //!
 //! The local SQLite database is a per-machine cache of that file (plus
 //! local-only data such as sessions and the command log). Every write that
-//! goes through [`crate::db::Database`] is mirrored into the file at once,
-//! and `deciduous sync` reconciles the two in both directions.
+//! goes through [`crate::db::Database`] is mirrored into the file at once.
+//! When git changes the file (checkout, reset, pull, stash), the database
+//! follows it before the next command ([`follow_graph_file`]): a row the
+//! file does not have is one git took out, unless it is recorded as an
+//! unpublished local write. `deciduous sync` then reconciles what is left,
+//! newer side winning.
 //!
 //! 0.17 kept one small file per record under `.deciduous/sync/`. The idea was
 //! that two people adding records never touch the same file, so git merges
@@ -850,6 +854,31 @@ pub struct RecordStore {
     /// Resolved on first write (asks git), never on open: `serve` opens the
     /// database on every request.
     author: Arc<OnceLock<String>>,
+    /// Called with (digest of the file written over, digest written) after
+    /// every write, under the file lock: how the attached database records
+    /// which file it mirrors (see `Database::mirrored`).
+    flush_hook: Option<FlushHook>,
+    /// A throwaway copy (see [`with_scratch_store`]): what is written here
+    /// never reaches the project's file, so it publishes nothing.
+    scratch: bool,
+}
+
+/// `hook(written_over, written)`, hex digests of the file's text.
+type FlushFn = dyn Fn(&str, &str) + Send + Sync;
+
+/// See [`RecordStore::with_flush_hook`].
+#[derive(Clone)]
+pub struct FlushHook(Arc<FlushFn>);
+
+impl std::fmt::Debug for FlushHook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FlushHook")
+    }
+}
+
+/// Hex SHA-256 of a graph file's text.
+pub fn digest_hex(text: &str) -> String {
+    digest(text).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 impl RecordStore {
@@ -897,7 +926,21 @@ impl RecordStore {
             path,
             cache: Arc::default(),
             author: Arc::default(),
+            flush_hook: None,
+            scratch: false,
         }
+    }
+
+    /// Call `hook(written_over, written)` (hex digests) after each write
+    /// of the file, while its lock is still held.
+    pub fn with_flush_hook(mut self, hook: impl Fn(&str, &str) + Send + Sync + 'static) -> Self {
+        self.flush_hook = Some(FlushHook(Arc::new(hook)));
+        self
+    }
+
+    /// Whether this is a throwaway copy of the project's file.
+    pub fn is_scratch(&self) -> bool {
+        self.scratch
     }
 
     /// Use a fixed author instead of asking git (tests, servers).
@@ -1000,6 +1043,9 @@ impl RecordStore {
         let changed = content != text;
         if changed {
             write_atomically(&self.path, &content)?;
+            if let Some(FlushHook(hook)) = &self.flush_hook {
+                hook(&digest_hex(&text), &digest_hex(&content));
+            }
         }
         cache.base = cache.doc.clone();
         cache.base_digest = Some(digest(&content));
@@ -1814,6 +1860,17 @@ pub struct SyncReport {
     /// Record files that carried git conflict markers: merged (or not) by
     /// this run, or (dry run) still waiting to be merged.
     pub conflicts: Vec<ConflictRepair>,
+    /// Rows taken out of the database because graph.json no longer has
+    /// them: git took them out (a checkout, reset or pull). Local only;
+    /// nothing is deleted on the server or written to the file.
+    pub nodes_left: usize,
+    pub edges_left: usize,
+    pub themes_left: usize,
+    pub tags_left: usize,
+    /// Rows set back to graph.json's older version (a reset or a checkout
+    /// of an older branch). Local only, like the above.
+    pub nodes_reverted: usize,
+    pub themes_reverted: usize,
 }
 
 impl SyncReport {
@@ -1833,14 +1890,67 @@ impl SyncReport {
             + self.themes_merged
     }
 
+    /// Rows the database changed to follow graph.json after git changed
+    /// it. Not sync debt: the file is already right, the local cache was
+    /// behind, so `is_clean` and `sync --check` do not count them.
+    pub fn followed(&self) -> usize {
+        self.nodes_left
+            + self.edges_left
+            + self.themes_left
+            + self.tags_left
+            + self.nodes_reverted
+            + self.themes_reverted
+    }
+
+    /// One line for a command that followed graph.json before running.
+    pub fn follow_note(&self) -> String {
+        let mut parts = Vec::new();
+        let left = self.nodes_left;
+        if left > 0 {
+            parts.push(format!("{left} node(s) not in it left the local graph"));
+        }
+        if self.nodes_reverted > 0 {
+            parts.push(format!(
+                "{} node(s) went back to its version",
+                self.nodes_reverted
+            ));
+        }
+        let other = self.edges_left + self.themes_left + self.tags_left + self.themes_reverted;
+        if other > 0 {
+            parts.push(format!("{other} edge/theme/tag record(s) followed it"));
+        }
+        if self.imported() > 0 {
+            parts.push(format!("{} record(s) came in from it", self.imported()));
+        }
+        if self.exported() > 0 {
+            parts.push(format!(
+                "{} local write(s) it did not have were published to it",
+                self.exported()
+            ));
+        }
+        format!(
+            "graph.json changed outside deciduous (a checkout, reset, pull or edit); the local \
+             graph follows it: {}. Nothing was sent to the server for records git took out.",
+            if parts.is_empty() {
+                "nothing differed".to_string()
+            } else {
+                parts.join(", ")
+            }
+        )
+    }
+
     /// Records pushed from the database into the store.
     pub fn exported(&self) -> usize {
         self.nodes_exported + self.edges_exported + self.themes_exported + self.tags_exported
     }
 
-    /// Nothing moved in either direction.
+    /// Nothing would be written to graph.json. Imports only bring the local
+    /// database up to the file, and every command does that before it runs
+    /// (1.0.9), so a database behind the file after `git checkout` or
+    /// `git pull` is not work sync owes: counting it failed a pre-push
+    /// `sync --check` after every branch switch.
     pub fn is_clean(&self) -> bool {
-        self.imported() == 0 && self.exported() == 0
+        self.exported() == 0
     }
 
     /// Nothing moved *and* nothing is left over: no edge waiting for a node,
@@ -1868,12 +1978,393 @@ pub fn reconcile(
     store: &RecordStore,
     dry_run: bool,
 ) -> std::result::Result<SyncReport, String> {
+    // No graph write in any process lands halfway through this (see
+    // Database::hold_mirror). A dry run changes nothing and needs no lock.
+    let _mirror = if dry_run {
+        None
+    } else {
+        Some(db.hold_mirror().map_err(|e| format!("database: {e}"))?)
+    };
     // One write at the end, not one per record: a first sync of a real
     // graph exports thousands of them.
-    match store.batch(|| reconcile_inner(db, store, dry_run)) {
-        Ok(report) => report,
-        Err(e) => Err(format!("record store: {}", e)),
+    let report = match store.batch(|| reconcile_inner(db, store, dry_run)) {
+        Ok(report) => report?,
+        Err(e) => return Err(format!("record store: {}", e)),
+    };
+    if !dry_run && !store.is_scratch() && report.conflicts.iter().all(|c| c.merged) {
+        // Everything the database held that the file did not was either
+        // taken out (git took it out) or published (a local write): the
+        // two now agree, and this is the file they agree on.
+        if report.errors.is_empty() && report.read_errors.is_empty() {
+            db.clear_unpublished()
+                .map_err(|e| format!("database: {e}"))?;
+        }
+        if let Ok(text) = read_text(store.path()) {
+            db.set_mirror_digest(&digest_hex(&text))
+                .map_err(|e| format!("database: {e}"))?;
+        }
     }
+    Ok(report)
+}
+
+/// Make the database follow graph.json if it changed outside deciduous
+/// since the database last mirrored it: a `git checkout`, `reset`, `pull`,
+/// `stash`, `merge` or a hand edit. Runs before a command (CLI) or a tool
+/// call (stdio MCP) does anything else, so what it reads is the graph of
+/// the commit that is checked out, like every other file in the tree.
+///
+/// Returns `None` when there is nothing to follow: no graph file, a file
+/// that will not parse or holds an unresolved merge (the command's own
+/// checks refuse writes then, and `deciduous sync` repairs it), or a file
+/// this database already mirrors.
+pub fn follow_graph_file(db: &Database) -> std::result::Result<Option<SyncReport>, String> {
+    let Some(store) = db.store() else {
+        return Ok(None);
+    };
+    // The digest is compared under the lock: a write in flight holds it
+    // until its record is in the file and the stamp moved with it.
+    let _mirror = db.hold_mirror().map_err(|e| format!("database: {e}"))?;
+    let Ok(text) = read_text(store.path()) else {
+        return Ok(None);
+    };
+    if has_conflict_markers(&text)
+        || parse_doc(store.path(), &text).is_err()
+        || !store.pending_conflicts().is_empty()
+    {
+        return Ok(None);
+    }
+    let digest = digest_hex(&text);
+    if db
+        .mirror_digest()
+        .map_err(|e| format!("database: {e}"))?
+        .as_deref()
+        == Some(&digest)
+    {
+        return Ok(None);
+    }
+    let report = if viewing_history(store.path()).is_some() {
+        // A commit being looked at: the database follows its file, writes
+        // nothing to it, and keeps what it holds that is not published.
+        let (report, _withheld) = reconcile_viewing_history(db, Some(&store), false)?;
+        db.set_mirror_digest(&digest)
+            .map_err(|e| format!("database: {e}"))?;
+        report
+    } else {
+        reconcile(db, &store, false)?
+    };
+    Ok(Some(report))
+}
+
+/// Rows the database holds that graph.json does not, and that no local
+/// branch's graph.json has either: local writes that never reached a file
+/// (made while HEAD was detached, under a version before 1.0.9 recorded
+/// them). A database from before 1.0.9 has no record of which rows are
+/// unpublished, so the first sync works it out here, once. A row some
+/// branch has is safe to take out of this checkout's view: git keeps it.
+fn homeless(
+    db: &Database,
+    store: &RecordStore,
+) -> std::result::Result<HashSet<(String, String)>, String> {
+    let db_err = |e: crate::db::DbError| format!("database: {}", e);
+    let file = store
+        .read_doc_all()
+        .map_err(|e| format!("record store: {e}"))?;
+    let dir = store.dir();
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    // Every local branch's copy of this file, as text: a record is on a
+    // branch if its key is. Not a git repository: no branch has anything.
+    let branch_files: Vec<String> = git(&["for-each-ref", "--format=%(objectname)", "refs/heads"])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|sha| git(&["show", &format!("{sha}:./{STORE_FILE_NAME}")]))
+        .collect();
+    let on_a_branch = |key: &str| {
+        branch_files
+            .iter()
+            .any(|t| t.contains(&format!("\"{key}\"")))
+    };
+
+    let mut out = HashSet::new();
+    for n in db.get_all_nodes().map_err(db_err)? {
+        if !file.nodes.contains_key(&n.change_id) && !on_a_branch(&n.change_id) {
+            out.insert(("node".to_string(), n.change_id));
+        }
+    }
+    for e in db.get_all_edges().map_err(db_err)? {
+        if let (Some(f), Some(t)) = (&e.from_change_id, &e.to_change_id) {
+            let key = edge_id(f, t, &e.edge_type);
+            if !file.edges.contains_key(&key) && !on_a_branch(&key) {
+                out.insert(("edge".to_string(), key));
+            }
+        }
+    }
+    let themes = db.get_all_themes().map_err(db_err)?;
+    for t in &themes {
+        if !file.themes.contains_key(&t.change_id) && !on_a_branch(&t.change_id) {
+            out.insert(("theme".to_string(), t.change_id.clone()));
+        }
+    }
+    let node_cid: HashMap<i32, String> = db
+        .get_all_nodes()
+        .map_err(db_err)?
+        .into_iter()
+        .map(|n| (n.id, n.change_id))
+        .collect();
+    let theme_cid: HashMap<i32, String> = themes.into_iter().map(|t| (t.id, t.change_id)).collect();
+    for tag in db.get_all_node_themes().map_err(db_err)? {
+        if let (Some(n), Some(t)) = (node_cid.get(&tag.node_id), theme_cid.get(&tag.theme_id)) {
+            let key = tag_id(n, t);
+            if !file.tags.contains_key(&key) && !on_a_branch(&key) {
+                out.insert(("tag".to_string(), key));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// The database follows graph.json: a row the file does not have, or has
+/// in an older version, is one git changed, unless it is a local write the
+/// file never got (`unpublished`). Those rows are taken out, or set back
+/// to the file's version, locally: nothing is queued for the server, and
+/// nothing is written to the file. What is left is exactly what the
+/// newer-wins reconcile after this was built for: records the file has
+/// that are newer or new, and unpublished local writes, which it exports.
+///
+/// Before 1.0.9 the reconcile exported every row the file lacked, because
+/// the database could not tell a local write the file never got from a
+/// row git took out: a node added on a branch was written into main's file
+/// by the first sync after `git checkout main` (G6), and `git reset --hard`
+/// never took anything out.
+/// What [`follow_file`] took out or set back, by key: a dry run leaves
+/// these rows where they are, and the reconcile after it must not count
+/// them as local writes to export.
+#[derive(Default)]
+struct Followed {
+    nodes: HashSet<String>,
+    edges: HashSet<String>,
+    themes: HashSet<String>,
+    tags: HashSet<String>,
+    /// Set back to the file's version: in a dry run, neither side of these
+    /// is left for the reconcile to count.
+    reverted: HashSet<String>,
+}
+
+fn follow_file(
+    db: &Database,
+    store: &RecordStore,
+    dry_run: bool,
+    report: &mut SyncReport,
+) -> std::result::Result<Followed, String> {
+    let mut followed = Followed::default();
+    let db_err = |e: crate::db::DbError| format!("database: {}", e);
+    let mut keep = db.unpublished().map_err(db_err)?;
+    // No mirror recorded yet (a database from before 1.0.9, or one that
+    // has never synced with this file): a row newer than the file's copy
+    // may be a local write the file never got, or a version git went back
+    // from, and nothing says which. This once, only rows some other branch
+    // has are taken out; the reconcile after this decides the rest by
+    // newer-wins, as every version before 1.0.9 did.
+    let first = db.mirror_digest().map_err(db_err)?.is_none();
+    if first {
+        let found = homeless(db, store)?;
+        if !dry_run {
+            for (kind, id) in &found {
+                db.mark_unpublished(kind, id);
+            }
+        }
+        keep.extend(found);
+    }
+    let kept = |kind: &str, id: &str| keep.contains(&(kind.to_string(), id.to_string()));
+
+    // ---- nodes
+    let read = store.read_nodes();
+    let bad = read.bad_ids();
+    let nodes: HashMap<String, NodeRecord> = read
+        .records
+        .into_iter()
+        .map(|r| (r.change_id.clone(), r))
+        .collect();
+    for row in db.get_all_nodes().map_err(db_err)? {
+        if bad.contains(&row.change_id) || kept("node", &row.change_id) {
+            continue;
+        }
+        let row_ts = parse_ts(&row.updated_at);
+        match nodes.get(&row.change_id) {
+            None => {
+                if !dry_run {
+                    db.forget_node_local(row.id).map_err(db_err)?;
+                }
+                report.nodes_left += 1;
+                followed.nodes.insert(row.change_id.clone());
+            }
+            // The reconcile would export a row edited after its tombstone
+            // (resurrect it). Not a local write, it is a state git brought
+            // back in which the node was deleted.
+            Some(rec) if rec.is_tombstone() => {
+                if !first && rec.effective_ts() < row_ts {
+                    if !dry_run {
+                        db.forget_node_local(row.id).map_err(db_err)?;
+                    }
+                    report.nodes_left += 1;
+                    followed.nodes.insert(row.change_id.clone());
+                }
+            }
+            Some(rec) => {
+                if !first && row_ts > parse_ts(&rec.updated_at) {
+                    if !dry_run {
+                        db.with_ops_suppressed(|| db.update_node_record(row.id, rec))
+                            .map_err(db_err)?;
+                    }
+                    report.nodes_reverted += 1;
+                    followed.nodes.insert(row.change_id.clone());
+                    followed.reverted.insert(row.change_id.clone());
+                }
+            }
+        }
+    }
+    let node_is_back = |cid: Option<&str>| {
+        cid.and_then(|c| nodes.get(c))
+            .is_some_and(|n| !n.is_tombstone())
+    };
+
+    // ---- edges (after nodes: a node taken out took its edges)
+    let read = store.read_edges();
+    let bad = read.bad_ids();
+    let edges: HashMap<String, EdgeRecord> = read
+        .records
+        .into_iter()
+        .map(|r| (r.edge_id.clone(), r))
+        .collect();
+    for row in db.get_all_edges().map_err(db_err)? {
+        let (Some(f), Some(t)) = (&row.from_change_id, &row.to_change_id) else {
+            continue;
+        };
+        let key = edge_id(f, t, &row.edge_type);
+        if bad.contains(&key) || kept("edge", &key) {
+            continue;
+        }
+        let gone = match edges.get(&key) {
+            None => true,
+            Some(rec) if rec.is_tombstone() && !node_is_back(rec.deleted_with()) => {
+                let deleted = rec.deleted_at.as_deref().map(parse_ts).unwrap_or_default();
+                // At or after creation the reconcile deletes it itself.
+                !first && deleted < parse_ts(&row.created_at)
+            }
+            Some(_) => false,
+        };
+        if gone {
+            if !dry_run {
+                db.with_ops_suppressed(|| db.delete_edge_local(row.id, None))
+                    .map_err(db_err)?;
+            }
+            report.edges_left += 1;
+            followed.edges.insert(key);
+        }
+    }
+
+    // ---- themes
+    let read = store.read_themes();
+    let bad = read.bad_ids();
+    let themes: HashMap<String, ThemeRecord> = read
+        .records
+        .into_iter()
+        .map(|r| (r.change_id.clone(), r))
+        .collect();
+    let db_themes = db.get_all_themes().map_err(db_err)?;
+    for row in &db_themes {
+        if bad.contains(&row.change_id) || kept("theme", &row.change_id) {
+            continue;
+        }
+        let row_ts = parse_ts(&row.updated_at);
+        match themes.get(&row.change_id) {
+            None => {
+                if !dry_run {
+                    db.with_ops_suppressed(|| db.delete_theme_local(row.id))
+                        .map_err(db_err)?;
+                }
+                report.themes_left += 1;
+                followed.themes.insert(row.change_id.clone());
+            }
+            Some(rec) if rec.is_tombstone() => {
+                if !first && rec.effective_ts() < row_ts {
+                    if !dry_run {
+                        db.with_ops_suppressed(|| db.delete_theme_local(row.id))
+                            .map_err(db_err)?;
+                    }
+                    report.themes_left += 1;
+                    followed.themes.insert(row.change_id.clone());
+                }
+            }
+            Some(rec) => {
+                if !first && row_ts > parse_ts(&rec.updated_at) {
+                    if !dry_run {
+                        db.with_ops_suppressed(|| db.update_theme_record(row.id, rec))
+                            .map_err(db_err)?;
+                    }
+                    report.themes_reverted += 1;
+                    followed.themes.insert(row.change_id.clone());
+                    followed.reverted.insert(row.change_id.clone());
+                }
+            }
+        }
+    }
+
+    // ---- tags
+    let read = store.read_tags();
+    let bad = read.bad_ids();
+    let tags: HashMap<String, TagRecord> = read
+        .records
+        .into_iter()
+        .map(|r| (tag_id(&r.node_change_id, &r.theme_change_id), r))
+        .collect();
+    let node_cid: HashMap<i32, String> = db
+        .get_all_nodes()
+        .map_err(db_err)?
+        .into_iter()
+        .map(|n| (n.id, n.change_id))
+        .collect();
+    let theme_cid: HashMap<i32, String> = db
+        .get_all_themes()
+        .map_err(db_err)?
+        .into_iter()
+        .map(|t| (t.id, t.change_id))
+        .collect();
+    for row in db.get_all_node_themes().map_err(db_err)? {
+        let (Some(n), Some(t)) = (node_cid.get(&row.node_id), theme_cid.get(&row.theme_id)) else {
+            continue;
+        };
+        let key = tag_id(n, t);
+        if bad.contains(&key) || kept("tag", &key) {
+            continue;
+        }
+        let gone = match tags.get(&key) {
+            None => true,
+            Some(rec) if rec.is_tombstone() && !node_is_back(rec.deleted_with()) => {
+                let deleted = rec.deleted_at.as_deref().map(parse_ts).unwrap_or_default();
+                !first && deleted < parse_ts(&row.created_at)
+            }
+            Some(_) => false,
+        };
+        if gone {
+            if !dry_run {
+                db.with_ops_suppressed(|| db.delete_tag_local(row.node_id, row.theme_id))
+                    .map_err(db_err)?;
+            }
+            report.tags_left += 1;
+            followed.tags.insert(key);
+        }
+    }
+    Ok(followed)
 }
 
 fn reconcile_inner(
@@ -1909,6 +2400,11 @@ fn reconcile_inner(
     }
     store.read_doc_all().map_err(io_err)?;
 
+    // The database follows the file first (see follow_file); the
+    // newer-wins reconcile below then has only new and newer records and
+    // unpublished local writes left to move.
+    let followed = follow_file(db, store, dry_run, &mut report)?;
+
     // ---- nodes -------------------------------------------------------------
     let node_read = store.read_nodes();
     // Records that would not read. Never export over one: whatever is wrong
@@ -1922,14 +2418,19 @@ fn reconcile_inner(
         .collect();
 
     let db_nodes = db.get_all_nodes().map_err(db_err)?;
+    // A dry run left the followed rows in place; count them as gone.
     let mut db_by_change: HashMap<String, DecisionNode> = db_nodes
         .into_iter()
+        .filter(|n| !(dry_run && followed.nodes.contains(&n.change_id)))
         .map(|n| (n.change_id.clone(), n))
         .collect();
 
     let mut tombstoned_nodes: HashSet<String> = HashSet::new();
 
     for (change_id, rec) in &store_nodes {
+        if dry_run && followed.reverted.contains(change_id) {
+            continue;
+        }
         match db_by_change.get(change_id) {
             None => {
                 if rec.is_tombstone() {
@@ -2084,11 +2585,15 @@ fn reconcile_inner(
     let db_themes = db.get_all_themes().map_err(db_err)?;
     let db_theme_by_change: HashMap<String, Theme> = db_themes
         .into_iter()
+        .filter(|t| !(dry_run && followed.themes.contains(&t.change_id)))
         .map(|t| (t.change_id.clone(), t))
         .collect();
     let mut tombstoned_themes: HashSet<String> = HashSet::new();
 
     for (change_id, rec) in &store_themes {
+        if dry_run && followed.reverted.contains(change_id) {
+            continue;
+        }
         match db_theme_by_change.get(change_id) {
             None => {
                 if rec.is_tombstone() {
@@ -2195,7 +2700,13 @@ fn reconcile_inner(
     let mut db_edge_by_key: HashMap<String, DecisionEdge> = HashMap::new();
     for e in db_edges {
         if let (Some(f), Some(t)) = (&e.from_change_id, &e.to_change_id) {
-            db_edge_by_key.insert(edge_id(f, t, &e.edge_type), e);
+            let key = edge_id(f, t, &e.edge_type);
+            let followed_away = followed.edges.contains(&key)
+                || followed.nodes.contains(f) && !store_nodes.contains_key(f)
+                || followed.nodes.contains(t) && !store_nodes.contains_key(t);
+            if !(dry_run && followed_away) {
+                db_edge_by_key.insert(key, e);
+            }
         }
     }
 
@@ -2315,7 +2826,10 @@ fn reconcile_inner(
             node_change_by_id.get(&t.node_id),
             theme_change_by_id.get(&t.theme_id),
         ) {
-            db_tag_by_key.insert(tag_id(n, th), (t, n.clone(), th.clone()));
+            let key = tag_id(n, th);
+            if !(dry_run && followed.tags.contains(&key)) {
+                db_tag_by_key.insert(key, (t, n.clone(), th.clone()));
+            }
         }
     }
 
@@ -3363,25 +3877,93 @@ pub fn with_scratch_store<T>(
             None => RecordStore::create(&copy)
                 .map_err(|e| format!("creating {}: {e}", copy.display()))?,
         };
+        let mut scratch = scratch;
+        scratch.scratch = true;
         f(&scratch)
     })();
     let _ = fs::remove_dir_all(&dir);
     result
 }
 
-/// The sentence saying what a sync on a detached commit left out.
+/// Record every row the database holds that `store`'s file does not (all
+/// of them when there is no file) as an unpublished local write. For a
+/// write applied while HEAD is detached, to a scratch copy of the file
+/// (`remote pull` there): the database follows the commit being looked
+/// at, so what it holds beyond that commit's file is exactly what was just
+/// applied, and without the mark the next checkout would take it out as a
+/// row git took out, instead of publishing it on the branch.
+pub fn mark_beyond_file(
+    db: &Database,
+    store: Option<&RecordStore>,
+) -> std::result::Result<usize, String> {
+    let db_err = |e: crate::db::DbError| format!("database: {}", e);
+    let doc = match store {
+        Some(store) => store
+            .read_doc_all()
+            .map_err(|e| format!("record store: {e}"))?,
+        None => GraphDoc::default(),
+    };
+    let mut marked = 0;
+    let nodes = db.get_all_nodes().map_err(db_err)?;
+    for n in &nodes {
+        if !doc.nodes.contains_key(&n.change_id) {
+            db.mark_unpublished("node", &n.change_id);
+            marked += 1;
+        }
+    }
+    for e in db.get_all_edges().map_err(db_err)? {
+        if let (Some(f), Some(t)) = (&e.from_change_id, &e.to_change_id) {
+            let key = edge_id(f, t, &e.edge_type);
+            if !doc.edges.contains_key(&key) {
+                db.mark_unpublished("edge", &key);
+                marked += 1;
+            }
+        }
+    }
+    let themes = db.get_all_themes().map_err(db_err)?;
+    for t in &themes {
+        if !doc.themes.contains_key(&t.change_id) {
+            db.mark_unpublished("theme", &t.change_id);
+            marked += 1;
+        }
+    }
+    let node_cid: HashMap<i32, &str> = nodes.iter().map(|n| (n.id, n.change_id.as_str())).collect();
+    let theme_cid: HashMap<i32, &str> = themes
+        .iter()
+        .map(|t| (t.id, t.change_id.as_str()))
+        .collect();
+    for tag in db.get_all_node_themes().map_err(db_err)? {
+        if let (Some(n), Some(t)) = (node_cid.get(&tag.node_id), theme_cid.get(&tag.theme_id)) {
+            let key = tag_id(n, t);
+            if !doc.tags.contains_key(&key) {
+                db.mark_unpublished("tag", &key);
+                marked += 1;
+            }
+        }
+    }
+    Ok(marked)
+}
+
+/// The sentence saying what a sync on a detached commit did: the local
+/// graph now shows that commit's graph file (records other commits have
+/// left it, and come back with them), the file itself was not written, and
+/// local writes that are in no file yet stayed in the database.
 pub fn viewing_history_note(at: &str, file_exists: bool, withheld: &[String]) -> String {
     let file = if file_exists {
         "the graph file was left as this commit has it"
     } else {
         "no graph file was created (this commit has none)"
     };
+    let view = format!(
+        "HEAD is detached at {at}: the local graph shows this commit's graph, and {file}. \
+         Records other commits have come back when one of them is checked out."
+    );
     if withheld.is_empty() {
-        format!("HEAD is detached at {at}, so {file}; nothing needed exporting.")
+        view
     } else {
         format!(
-            "HEAD is detached at {at}, so {file}: {} not exported. They are still in the \
-             database; check out a branch and run `deciduous sync` to export them there.",
+            "{view} {} written here are in no graph file yet: they were not exported, stay in \
+             the database, and are published by the next `deciduous sync` on a branch.",
             withheld.join(", ")
         )
     }
