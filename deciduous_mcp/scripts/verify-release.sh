@@ -114,10 +114,21 @@ expect_eq() {
   fi
 }
 
+# One checksum per table, over the tables the database had before the
+# upgrade (upgrade_tables). A whole-database dump also changes when a
+# migration adds an empty table, which is not data loss; per table, a
+# failure names what changed. write_locks held 10-second write leases and is
+# renamed to write_activity by 20260924110000, so it is not compared.
+upgrade_tables() {
+  sql "$1" "SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+    AND tablename NOT IN ('schema_migrations', 'write_locks') ORDER BY tablename"
+}
 data_fingerprint() {
-  docker exec "$db" pg_dump -U postgres --data-only --no-owner --no-privileges \
-    --exclude-table=public.schema_migrations "$1" |
-    sed '/^\\restrict /d; /^\\unrestrict /d' | cksum
+  for table in $2; do
+    printf '%s %s\n' "$table" "$(docker exec "$db" pg_dump -U postgres --data-only \
+      --no-owner --no-privileges --table="public.$table" "$1" |
+      sed '/^\\restrict /d; /^\\unrestrict /d' | cksum)"
+  done
 }
 
 for database in fresh existing snapshot invalid; do sql postgres "CREATE DATABASE $database" >/dev/null; done
@@ -162,7 +173,8 @@ start_server "$baseline_image" existing
 client wait --path /health
 expect_eq "$(sql existing 'SELECT count(*) FROM schema_migrations')" 15 "migrations applied by v1.0.0"
 client seed --case upgrade
-before_upgrade="$(data_fingerprint existing)"
+fingerprint_tables="$(upgrade_tables existing)"
+before_upgrade="$(data_fingerprint existing "$fingerprint_tables")"
 stop_server
 start_server "$otp_image" existing
 client wait
@@ -171,8 +183,12 @@ client wait
 expected_migrations="$(find "$project_dir/priv/repo/migrations" -name '[0-9]*_*.exs' | wc -l | tr -d ' ')"
 expect_eq "$(sql existing 'SELECT count(*) FROM schema_migrations')" "$expected_migrations" \
   "migrations applied after upgrading v1.0.0 in place"
-after_upgrade="$(data_fingerprint existing)"
-expect_eq "$after_upgrade" "$before_upgrade" "data fingerprint across the upgrade"
+after_upgrade="$(data_fingerprint existing "$fingerprint_tables")"
+if [ "$after_upgrade" != "$before_upgrade" ]; then
+  printf '%s\n' 'FAIL data across the upgrade; tables whose data changed:' >&2
+  diff <(printf '%s\n' "$before_upgrade") <(printf '%s\n' "$after_upgrade") >&2 || true
+  exit 1
+fi
 client verify --case upgrade --replaced
 docker restart "$server" >/dev/null
 client wait
