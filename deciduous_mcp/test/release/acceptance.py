@@ -174,6 +174,17 @@ def export(workspace):
     # the comparison strict while normalizing this additive 1.0.0 API change.
     for node in graph["nodes"]:
         node.setdefault("branch", (node.get("metadata") or {}).get("branch"))
+        # 1.0.8 adds deleted_at to every exported node (tombstones ride in
+        # `nodes`). Only the empty value is additive; a set one is a deletion
+        # and must still fail the comparison.
+        if "deleted_at" in node and node["deleted_at"] is None:
+            del node["deleted_at"]
+    # 1.0.8 also adds deleted_node_count and edge_tombstones. Same rule: an
+    # empty value is the additive change, anything else is data.
+    if graph["metadata"].get("deleted_node_count") == 0:
+        del graph["metadata"]["deleted_node_count"]
+    if graph.get("edge_tombstones") == []:
+        del graph["edge_tombstones"]
     for key in ("nodes", "edges", "documents", "themes", "node_themes"):
         graph[key] = sorted(graph[key], key=lambda item: json.dumps(item, sort_keys=True))
     return graph
