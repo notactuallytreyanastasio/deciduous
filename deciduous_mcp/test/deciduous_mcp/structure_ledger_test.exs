@@ -13,6 +13,13 @@ defmodule DeciduousMcp.StructureLedgerTest do
 
   @root Path.expand("../..", __DIR__)
 
+  # The release image's test stage copies lib/, test/ and priv/ but not
+  # STRUCTURE.sql; release acceptance runs test/release/check_structure.sh,
+  # the full diff, beside it. A checkout always has the file.
+  unless File.exists?(Path.join(@root, "STRUCTURE.sql")) do
+    @moduletag skip: "STRUCTURE.sql is not in this build (the release image); check_structure.sh covers it there"
+  end
+
   test "every migration is in STRUCTURE.sql's ledger, and nothing else is" do
     migrations =
       Path.join(@root, "priv/repo/migrations/*.exs")
