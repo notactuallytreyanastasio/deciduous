@@ -4,6 +4,7 @@ defmodule DeciduousMcp.MCP.Tools.ShowNode do
 
   import Ecto.Query
 
+  alias DeciduousMcp.Graph.Related
   alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.Node
@@ -12,7 +13,9 @@ defmodule DeciduousMcp.MCP.Tools.ShowNode do
     %{
       name: "show_node",
       description:
-        "Get detailed information about a single node, including connected edges, documents, and themes.",
+        "Get detailed information about a single node, including connected edges, documents, and themes. " <>
+          "`related` lists up to 10 nodes of the same workspace that name one of this node's files " <>
+          "or its commit, best overlap first; these are read off metadata, not edges.",
       input_schema: %{
         type: "object",
         properties: %{
@@ -60,10 +63,26 @@ defmodule DeciduousMcp.MCP.Tools.ShowNode do
           created_at: DateTime.to_iso8601(node.inserted_at)
         }
 
-        {:ok, Jason.encode!(result)}
+        {:ok, Jason.encode!(Map.merge(result, related_section(node)))}
 
       {:error, message} ->
         {:error, %{code: -1, message: message}}
+    end
+  end
+
+  # Derived at read time from metadata.files / metadata.commit; see
+  # DeciduousMcp.Graph.Related. A node whose own metadata cannot be read as
+  # paths says so under `related_error` instead of showing an empty list.
+  defp related_section(node) do
+    case Related.related(node, limit: 10) do
+      {:ok, %{related: rels, commit_ignored: nil}} ->
+        %{related: rels}
+
+      {:ok, %{related: rels, commit_ignored: reason}} ->
+        %{related: rels, related_commit_ignored: reason}
+
+      {:error, message} ->
+        %{related: [], related_error: message}
     end
   end
 
