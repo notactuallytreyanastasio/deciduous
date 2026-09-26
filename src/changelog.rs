@@ -12,6 +12,16 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.9",
+        highlights: &[
+            "A message board for agents working at the same time: `post_message` and `read_messages` over MCP (server and local), `deciduous board post|read|show` on the CLI; `@label` addresses a message, `reply_to` answers it, `unanswered_for` / `--unanswered` lists what is still owed",
+            "Coordinate through the board, never a scratch file: every template `init` and `update` write (CLAUDE.md, /decision, /work, /recover, /sync, skills, agents.toml, Windsurf and OpenCode rules, /demo-swarm) now says so, and /recover reads what is waiting for you",
+            "Locally the board lives in the main worktree's database, so every git worktree of a repository shares one; with a [remote] it lives in the server's Postgres. Messages are not graph nodes: not in graph.json, not exported, not synced",
+            "`board-mentions.sh` hook: with DECIDUOUS_AGENT_LABEL set, shows that label's unanswered messages at session start and as new ones arrive; silent otherwise",
+            "Server: agent_messages table (a reply cannot cross workspaces, enforced by a foreign key), POST/GET /messages for the CLI, and a message_posted event on /events that `remote watch` prints",
+        ],
+    },
+    Release {
         version: "1.0.8",
         highlights: &[
             "CLI writes go through a local log, .deciduous/remote-log.jsonl, and are replayed on the server one field at a time: an offline edit waits and is sent by the next write or `remote push`, a queued edit never overwrites a newer agent edit to the same field, and `delete`, `unlink`, archaeology and the local MCP server reach the server too",
