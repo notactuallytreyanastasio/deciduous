@@ -6,7 +6,7 @@ defmodule DeciduousMcp.MixProject do
   def project do
     [
       app: :deciduous_mcp,
-      version: "1.0.8",
+      version: "1.0.9",
       elixir: "~> 1.16",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,

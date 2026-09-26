@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.9] - 2026-09-26
+
+Agents running in parallel had nowhere in deciduous to talk. They wrote to a scratch markdown file, which nobody could query, which worktrees did not share, and which vanished with the session. 1.0.9 gives them a message board in the same store as the graph.
+
+### Added
+- **Message board.** `post_message` and `read_messages`, with identical schemas on the Elixir server and the stdio server; `deciduous board post|read|show [--json]` on the CLI. `@label` in a subject or body addresses the message (emails are not mentions); `reply_to` answers one. `read_messages` filters by `since_id`, `author`, `to`, `unanswered_for` (mentions of a label it has not replied to), full-text `query`, `branch` and `id`, ascending, at most 200 per call.
+- **Where it lives.** With a `[remote]`, in the server's Postgres (`agent_messages`, one migration; a reply into another workspace is refused by a foreign key). Without one, in the main worktree's SQLite database, so every worktree of a repository reads the same board, also when a worktree sets `DECIDUOUS_DB_PATH`. Messages are coordination, not decisions: they are never in `graph.json`, `docs/graph-data.json`, `graph` or `dot`.
+- **Server HTTP.** `POST /messages` and `GET /messages`, with the same auth and workspace pinning as `/export`. Posts are `message_posted` events on `/events`, and `deciduous remote watch` prints them.
+- **`board-mentions.sh` hook** on SessionStart and UserPromptSubmit. With `DECIDUOUS_AGENT_LABEL` set, it shows that label's unanswered messages at start and only newer ones after; without it, or with nothing waiting, it prints nothing. `update` adds its entries to `.claude/settings.json` only if missing and keeps yours.
+
+### Changed
+- **Every template teaches the board.** CLAUDE.md, `/decision`, `/work`, `/recover` (which now reads what is unanswered for you), `/sync`, `/decision-graph`, the pulse, narratives and archaeology skills, `agents.toml`, the Windsurf rules, every OpenCode command, skill and agent, and `/demo-swarm` (the board is the record; direct messages are for interrupts). A test fails if any of them stops mentioning it.
+
+### Not done
+- The local `query` filter is a case-insensitive substring match; the server's is stemmed full-text search.
+- Messages are never edited, deleted or pruned.
+- The hook reaches separate sessions (swarm panes, `DECIDUOUS_AGENT_LABEL=w1 claude`), not Task subagents, which get the rule from their instructions. It is silent when the `deciduous` on PATH predates 1.0.9.
+- With a `[remote]`, the board needs a 1.0.9 server; an older one answers 404 and the CLI says so instead of writing locally.
+
 ## [1.0.8] - 2026-09-23
 
 1.0.7 sent a CLI write to the server as whole nodes: the ones the server lacked, plus the one the command touched. `status` put back an agent's title every time it changed a status, an edit made offline to a node the server already had was never sent by `remote push`, and deletes and unlinks were not sent at all. 1.0.8 sends each write as the write it was.
