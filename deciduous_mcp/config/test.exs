@@ -10,3 +10,8 @@ config :deciduous_mcp, DeciduousMcp.Repo,
   pool_size: System.schedulers_online() * 2
 
 config :logger, level: :warning
+
+# The app's Events.Listener would run its timed catch-up pass through
+# whichever test owns the shared sandbox connection. Tests that need the
+# timer start their own listener.
+config :deciduous_mcp, :events_catch_up_every_ms, nil
