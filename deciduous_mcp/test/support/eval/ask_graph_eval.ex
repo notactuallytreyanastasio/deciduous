@@ -189,6 +189,8 @@ defmodule DeciduousMcp.Eval.AskGraph do
       result_count: length(results),
       # Diagnostic only, when the tool reports them; never scored.
       search_terms: answer["search_terms"],
+      term_hits: answer["term_hits"],
+      stop_reason: answer["stop_reason"],
       top5: Enum.take(ranked_keys, 5)
     }
 
