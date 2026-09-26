@@ -142,7 +142,8 @@ defmodule DeciduousMcp.MCP.Component do
   # to know. Said after a read's refusal ("max_depth must be at least 1,
   # got 0; nothing was written") it suggested the read might have written.
   @reads ~w(show_node query_nodes get_graph find_orphans get_ancestors get_descendants
-            ask_graph list_workspaces check_activity read_messages)
+            ask_graph list_workspaces check_activity read_messages
+            consolidation_report)
 
   defp refused(module, message) do
     if module.definition()[:name] in @reads,

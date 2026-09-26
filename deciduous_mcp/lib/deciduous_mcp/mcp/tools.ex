@@ -23,6 +23,7 @@ defmodule DeciduousMcp.MCP.Tools do
   - `FindOrphans` — Find disconnected non-goal nodes
   - `GetAncestors` — Walk backward from a node
   - `GetDescendants` — Walk forward from a node
+  - `ConsolidationReport` — Read-only: duplicate goals, missing revisits, stale actions, parentless nodes
 
   ### High-Level Capture
   - `CaptureConversationTurn` — Atomically capture a full conversation exchange
@@ -55,7 +56,8 @@ defmodule DeciduousMcp.MCP.Tools do
     DeciduousMcp.MCP.Tools.GetGraph,
     DeciduousMcp.MCP.Tools.FindOrphans,
     DeciduousMcp.MCP.Tools.GetAncestors,
-    DeciduousMcp.MCP.Tools.GetDescendants
+    DeciduousMcp.MCP.Tools.GetDescendants,
+    DeciduousMcp.MCP.Tools.ConsolidationReport
   ]
 
   @capture_tools [
