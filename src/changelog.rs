@@ -12,6 +12,17 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.10",
+        highlights: &[
+            "ask_graph is a closed loop: trigram and full-text anchors fused by rank, routes by question shape, a budget and an explicit stop_reason; recall@10 0.611 -> 0.889 and MRR 0.264 -> 0.726 on the new eval, 5-11 queries per question instead of 72-152",
+            "ask_graph says when the graph never recorded a topic (stop_reason distinctive_term_unmatched, unmatched_terms) instead of returning pages of loosely related nodes",
+            "Nodes naming the same file or commit are related at read time: show_node lists them, query_nodes takes a file, ask_graph follows them",
+            "add_node without a parent_id answers with ranked parent guesses; find_orphans can too; consolidation_report proposes duplicate goals, missing revisits, stale actions and parents for loose nodes, and changes nothing",
+            "Sync fixes found by the model battery: a status write no longer reverts an agent's retitle on pull; the git merge driver keeps a status set on a node that arrived only from the server; an edit that changes nothing no longer brings a deleted node back",
+            "The stdio MCP server never answers with a line that is not JSON; live events written during a database outage, or committed out of order, still reach subscribers",
+        ],
+    },
+    Release {
         version: "1.0.9",
         highlights: &[
             "A message board for agents working at the same time: `post_message` and `read_messages` over MCP (server and local), `deciduous board post|read|show` on the CLI; `@label` addresses a message, `reply_to` answers it, `unanswered_for` / `--unanswered` lists what is still owed",

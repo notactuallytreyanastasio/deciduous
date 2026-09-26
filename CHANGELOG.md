@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.10] - 2026-09-26
+
+`ask_graph` used to match question words with ILIKE, rank by insert time and return 25 nodes whatever it found: recall@10 0.611 and MRR 0.264 on a 43-question eval, 0 of 7 questions about things never recorded answered as such. 1.0.10 rebuilds it on ideas from the Jev-Mem paper (arXiv 2609.23986), deterministically, with no model calls, and fixes five convergence bugs the integration battery kept hitting.
+
+### Added (server)
+- **Closed-loop `ask_graph`.** Anchors from trigram and full-text rankings fused by reciprocal rank; routes chosen by question shape (rationale, history, dependency, outcome) with a budget and a depth cap; every result says how it was reached; the answer says why retrieval stopped. Recall@10 0.889 and MRR 0.726 on the original questions; 0.826 on 28 held-out questions written without the routing cue words. 5-11 queries per question instead of 72-152.
+- **Absent topics.** When a question names something the graph never recorded (a word written as a name, or not common English by SCOWL size 35), `ask_graph` returns at most three nodes, `stop_reason: "distinctive_term_unmatched"` and the words. Strict adversarial passes: 6/7 original, 4/4 held-out, 11/15 on a probe set.
+- **File and commit links.** Nodes that name the same file or commit are related at read time, never stored as edges: `show_node` lists them, `query_nodes` takes `file`, and `ask_graph` follows them. Paths are normalised; a 7-character and a 40-character hash of one commit match; `HEAD` is not a commit.
+- **Parent suggestions.** `add_node` without `parent_id` (for anything but a goal) answers with up to five ranked candidates and the signals behind each; `find_orphans` takes `suggest_parents`. Replayed over real writes, the right parent is in the top five 79% of the time on deciduous and 72% on blimp.
+- **`consolidation_report`.** Read-only: likely duplicate goals, competing decisions with no revisit, stale pending actions, and parentless nodes with a suggested parent.
+- **An eval**: `mix deciduous.eval` in the server, with original, held-out and probe question sets and both adversarial criteria.
+
+### Fixed
+- **A status write no longer reverts an agent's retitle.** `remote pull` merged server rows with no base, so the later-stamped record took every differing field; it now merges against what this clone last knew the server held (#284).
+- **The git merge driver keeps a status set on a node that reached both clones only by pull**, using the pulled copy as the ancestor for a field only when that is sound (#293).
+- **An edit that changes nothing does not bring a deleted node back** (#294).
+- **The stdio MCP server never answers with a line that is not JSON**: an id holding a raw control character is no longer echoed verbatim (#291).
+- **Live events survive a database outage and out-of-order commits.** The listener catches up from `graph_events`, and a socket no longer drops a lower seq that commits late (#295).
+
+### Not done
+- A client resuming `/events?since=` still misses an event that commits after a higher seq it already saw; that needs a visibility horizon per event row.
+- `ask_graph` still misses absent topics named by a common word (notifications, dark mode), and tells two answerable questions ("latency", "browser") that nothing was recorded, though the right node is among the three it returns.
+- A clone that pulled before an agent's retitle and then wrote another field still wins the title (one `updated_at` per record); per-field versions are the fix.
+- Git-origin ops are dated when queued, not when the edit was made.
+
 ## [1.0.9] - 2026-09-26
 
 Agents running in parallel had nowhere in deciduous to talk. They wrote to a scratch markdown file, which nobody could query, which worktrees did not share, and which vanished with the session. 1.0.9 gives them a message board in the same store as the graph.
