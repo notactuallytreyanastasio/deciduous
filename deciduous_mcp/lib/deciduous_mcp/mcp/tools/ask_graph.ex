@@ -17,7 +17,8 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
 
   The retrieval itself is `DeciduousMcp.Graph.Retrieval`: anchors from a
   reciprocal-rank fusion of trigram and full-text rankings, then routed,
-  budgeted expansion along the graph with an explicit stop reason. This
+  budgeted expansion along the graph with an explicit stop reason, plus
+  `DeciduousMcp.Graph.Related`'s shared file/commit route. This
   module only reads the arguments, calls it, and renders the JSON, loading
   each result's one-hop context in two queries for all results together.
   """
@@ -25,7 +26,7 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
 
   import Ecto.Query
   alias DeciduousMcp.MCP.Scope
-  alias DeciduousMcp.Graph.Retrieval
+  alias DeciduousMcp.Graph.{Related, Retrieval}
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Node, Edge}
 
@@ -78,7 +79,10 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
     scope = args["scope"] || "all"
     include_context = args["include_context"] != false
 
-    case Retrieval.run(workspace_id, question, scope: scope) do
+    # Related.route/1 adds the shared_identifier route: neighbours that
+    # share a file path or commit with the frontier, read from metadata
+    # rather than stored as edges.
+    case Retrieval.run(workspace_id, question, scope: scope, extra_routes: [Related.route()]) do
       {:ok, r} -> {:ok, Jason.encode!(render(question, scope, include_context, r))}
       {:error, message} -> {:error, %{code: -1, message: message}}
     end
