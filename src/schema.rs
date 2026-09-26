@@ -216,3 +216,18 @@ diesel::table! {
         created_at -> Text,
     }
 }
+
+// The agent message board. Coordination between agents, not graph: never in
+// graph.json, never exported, never synced. See src/board.rs.
+diesel::table! {
+    agent_messages (id) {
+        id -> BigInt,
+        branch -> Nullable<Text>,
+        author -> Text,
+        subject -> Text,
+        body -> Text,
+        mentions -> Text,
+        reply_to -> Nullable<BigInt>,
+        created_at -> Text,
+    }
+}

@@ -596,6 +596,52 @@ impl Remote {
             .map_err(|e| format!("the server's response was not a graph: {e}"))
     }
 
+    /// `POST /messages`: one message on the project's board.
+    pub fn board_post(&self, body: &Value) -> Result<Value, String> {
+        let req = self.post("/messages");
+        let req = match &self.repo_roots {
+            Some(roots) => req.set("x-deciduous-repo-roots", &roots.join(",")),
+            None => req,
+        };
+        req.timeout(std::time::Duration::from_secs(30))
+            .send_json(body.clone())
+            .map_err(|e| self.board_error("POST", e))?
+            .into_json::<Value>()
+            .map_err(|e| format!("the server's answer to POST /messages was not JSON: {e}"))
+    }
+
+    /// `GET /messages`: the board, filtered by `params`.
+    pub fn board_read(&self, params: &[(&str, String)]) -> Result<Value, String> {
+        let query: Vec<String> = params
+            .iter()
+            .map(|(k, v)| format!("{k}={}", urlencode(v)))
+            .collect();
+        self.get(&format!("/messages?{}", query.join("&")))
+            .timeout(std::time::Duration::from_secs(30))
+            .call()
+            .map_err(|e| self.board_error("GET", e))?
+            .into_json::<Value>()
+            .map_err(|e| format!("the server's answer to GET /messages was not JSON: {e}"))
+    }
+
+    /// A 404 from `/messages` is a server that predates the board. It is
+    /// said so, with the version to upgrade to, and nothing is written to
+    /// the local table instead: the other agents read the server, and a
+    /// message they cannot see is worse than an error.
+    fn board_error(&self, method: &str, e: ureq::Error) -> String {
+        match e {
+            ureq::Error::Status(404, _) => format!(
+                "{method} {}/messages answered 404: this server has no message board. \
+                 The board needs deciduous server {} or later; upgrade the server. \
+                 Nothing was written locally instead, because the other agents on this \
+                 project read the server.",
+                self.url,
+                crate::board::SERVER_VERSION_NEEDED
+            ),
+            e => format!("{method} {}/messages: {}", self.url, describe(e)),
+        }
+    }
+
     /// Sends the local graph up. Used to seed a workspace and to carry local
     /// history that predates the remote; it is not the normal write path.
     pub fn import(&self, graph: Value) -> Result<ImportReport, String> {

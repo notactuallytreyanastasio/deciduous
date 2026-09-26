@@ -2101,6 +2101,11 @@ impl Database {
         )
         .execute(&mut conn)?;
 
+        // The agent message board (src/board.rs). Local coordination only:
+        // nothing in records.rs or export.rs reads it, so it never reaches
+        // graph.json, docs/graph-data.json or the server log.
+        crate::board::create_table(&mut conn)?;
+
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
         Ok(())

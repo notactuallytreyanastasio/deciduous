@@ -180,6 +180,35 @@ pub fn format_event(event: &Value, at: &str) -> Option<String> {
                 short("to_change_id")
             )
         }
+        // A board post (server 1.0.9+). Printed rather than passed through
+        // as a bare "agent_messages INSERT": who wrote to whom is the point.
+        "agent_messages" => {
+            let id = event
+                .get("id")
+                .map(|v| v.to_string().trim_matches('"').to_string())
+                .unwrap_or_else(|| "?".into());
+            let author = event.get("author").and_then(Value::as_str).unwrap_or("?");
+            let to: Vec<&str> = event
+                .get("mentions")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).collect())
+                .unwrap_or_default();
+            let to = if to.is_empty() {
+                String::new()
+            } else {
+                format!(" -> {}", to.join(", "))
+            };
+            let re = event
+                .get("reply_to")
+                .and_then(Value::as_i64)
+                .map(|r| format!(" re #{r}"))
+                .unwrap_or_default();
+            let subject = event.get("subject").and_then(Value::as_str).unwrap_or("");
+            format!(
+                "{at}  {branch:<8}  message #{id}{re}  {author}{to} {}",
+                quote(subject)
+            )
+        }
         other => format!("{at}  {branch:<8}  {other} {op}"),
     };
 
@@ -565,6 +594,22 @@ mod tests {
             format_event(&e, "t").unwrap(),
             "t  agent-3   edge chosen  a1b2c3d4 -> e5f6a7b8"
         );
+    }
+
+    #[test]
+    fn a_board_post_shows_who_wrote_to_whom() {
+        // The frame the 1.0.9 server emits (board post 18, item 12).
+        let e = json!({
+            "table": "agent_messages", "op": "INSERT", "event": "message_posted",
+            "workspace": "deciduous", "id": 18, "author": "board-server",
+            "subject": "choices", "mentions": ["board-cli", "orchestrator"],
+            "reply_to": 16, "branch": null, "seq": 3, "at": "2026-09-26T18:00:00Z"
+        });
+        assert_eq!(
+            format_event(&e, "t").unwrap(),
+            "t  -         message #18 re #16  board-server -> board-cli, orchestrator \"choices\""
+        );
+        assert!(Filter::default().admits(&e));
     }
 
     #[test]
