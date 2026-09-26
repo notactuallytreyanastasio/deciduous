@@ -837,6 +837,13 @@ CREATE INDEX idx_nodes_description_trgm ON public.decision_nodes USING gin (desc
 
 
 --
+-- Name: idx_nodes_fts; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_nodes_fts ON public.decision_nodes USING gin (to_tsvector('english'::regconfig, ((title || ' '::text) || COALESCE(description, ''::text))));
+
+
+--
 -- Name: idx_nodes_metadata_text_trgm; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1246,7 +1253,8 @@ INSERT INTO public.schema_migrations (version, inserted_at) VALUES
   (20260924020000, NOW()),
   (20260924100000, NOW()),
   (20260924110000, NOW()),
-  (20260926120000, NOW());
+  (20260926120000, NOW()),
+  (20260926130000, NOW());
 
 -- Database defaults from the migrated database -------------------------------
 DO $$
