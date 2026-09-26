@@ -548,3 +548,115 @@ fn stdio_mcp_serves_the_board_tools() {
     let r = json_of(&sb.dx_ok(&dir, &["board", "read", "--json"]));
     assert_eq!(ids(&r), [1]);
 }
+
+/// The hook `init` installs, run the way Claude Code runs it: silent with no
+/// label or nothing waiting, everything unanswered at session start, and on
+/// prompt submit only what is new since it last spoke.
+#[test]
+fn board_mentions_hook_speaks_only_when_something_waits() {
+    let sb = Sandbox::new();
+    let dir = sb.repo("proj");
+    let hook = dir.join(".claude/hooks/board-mentions.sh");
+    assert!(hook.exists(), "init did not install the hook");
+    let bin_dir = Path::new(env!("CARGO_BIN_EXE_deciduous")).parent().unwrap();
+    let path = format!("{}:{}", bin_dir.display(), std::env::var("PATH").unwrap());
+    let run = |label: Option<&str>, event: &str| {
+        let mut c = Command::new("bash");
+        c.arg(&hook)
+            .arg(event)
+            .current_dir(&dir)
+            .env("PATH", &path)
+            .env("HOME", sb.path().join("home"))
+            .env("DECIDUOUS_NO_SERVER", "1")
+            .env_remove("DECIDUOUS_DB_PATH")
+            .env_remove("DECIDUOUS_AGENT_LABEL");
+        if let Some(l) = label {
+            c.env("DECIDUOUS_AGENT_LABEL", l);
+        }
+        let out = c.output().unwrap();
+        assert!(out.status.success());
+        text(&out.stdout)
+    };
+    sb.dx_ok(
+        &dir,
+        &[
+            "board",
+            "post",
+            "--as",
+            "lead",
+            "-s",
+            "port?",
+            "-m",
+            "@w1 which port",
+        ],
+    );
+    assert_eq!(run(None, "start"), "", "no label: silent");
+    assert_eq!(run(Some("w2"), "start"), "", "nothing for w2: silent");
+    let out = run(Some("w1"), "start");
+    assert!(
+        out.starts_with("DECIDUOUS BOARD: messages for @w1"),
+        "{out}"
+    );
+    assert!(out.contains("#1  lead -> w1"), "{out}");
+    // Already shown: the next prompt stays quiet until something new lands.
+    assert_eq!(run(Some("w1"), "prompt"), "");
+    sb.dx_ok(
+        &dir,
+        &[
+            "board",
+            "post",
+            "--as",
+            "lead",
+            "-s",
+            "db?",
+            "-m",
+            "@w1 which db",
+        ],
+    );
+    let out = run(Some("w1"), "prompt");
+    assert!(
+        out.contains("#2  lead -> w1") && !out.contains("#1 "),
+        "{out}"
+    );
+    // Answered: gone, also at the next session start.
+    sb.dx_ok(
+        &dir,
+        &[
+            "board",
+            "post",
+            "--as",
+            "w1",
+            "-s",
+            "re",
+            "-m",
+            "4000",
+            "--reply-to",
+            "1",
+        ],
+    );
+    let out = run(Some("w1"), "start");
+    assert!(
+        out.contains("#2  lead") && !out.contains("#1  lead"),
+        "{out}"
+    );
+    // A board post with the label from the environment.
+    let out = sb
+        .cmd(
+            &dir,
+            &[
+                "board",
+                "post",
+                "-s",
+                "re",
+                "-m",
+                "sqlite",
+                "--reply-to",
+                "2",
+            ],
+        )
+        .env("DECIDUOUS_AGENT_LABEL", "w1")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    assert_eq!(run(Some("w1"), "start"), "");
+}

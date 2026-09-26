@@ -395,6 +395,7 @@ mod tests {
             ("WORK_MD", t::WORK_MD),
             ("DEMO_SWARM_MD", t::DEMO_SWARM_MD),
             ("HOOK_VERSION_CHECK", t::HOOK_VERSION_CHECK),
+            ("HOOK_BOARD_MENTIONS", t::HOOK_BOARD_MENTIONS),
             ("CLAUDE_AGENTS_TOML", t::CLAUDE_AGENTS_TOML),
             ("SKILL_PULSE", t::SKILL_PULSE),
             ("SKILL_NARRATIVES", t::SKILL_NARRATIVES),

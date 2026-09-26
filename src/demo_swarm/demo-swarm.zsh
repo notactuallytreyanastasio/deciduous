@@ -197,7 +197,7 @@ write_arena_files() {
 One lead, @N@ workers, one Tetris, one decision graph. The lead is an Opus
 session in this directory, on `main`. Each worker is a Sonnet session in its
 own git worktree under `crew/`, on its own branch. ROSTER.md says who owns
-what and what everyone's session is called.
+what, what everyone's board label is and what their session is called.
 
 The last arena put ten agents on ten separate games, and they never linked to
 each other's reasoning: 0 of 491 edges crossed a branch. This one builds one
@@ -249,17 +249,26 @@ that breaks them.
 `npm test` (unit), `npm run check` (types) and `npm run e2e` (browser) are the
 gate. w4 owns the scripts; everyone runs them before saying "ready".
 
-## Three ways to talk, and what each is for
+## Four ways to talk, and what each is for
 
 1. **The graph** (the deciduous MCP tools): the plan and the reasons. It lasts,
    and it is what a replay of this run will read. Every call carries
    `workspace: "@WS@"` and `branch:` your branch (`main` for the lead, `w3`
    for w3).
-2. **Messages** (SendMessage to a session name from ROSTER.md): orders,
-   questions, "ready for review", "main moved". One topic, under five lines,
-   graph nodes named by id. They arrive in the recipient's conversation as
-   they land.
-3. **Git**: code reaches `main` only through the lead. You commit on your
+2. **The board** (the `post_message` and `read_messages` MCP tools, same
+   `workspace: "@WS@"`, `author:` your label from ROSTER.md): the record of
+   how you coordinate. Orders, contract changes, questions, answers, "ready
+   for review", "main moved". Address with `@label` (`@lead`, `@w2`), answer
+   with `reply_to:` the message id. Call `read_messages` with
+   `unanswered_for:` your label when you start, before you touch a file
+   someone else owns or `src/types.js`, and before you say ready or stop.
+   Never keep notes for each other in a file: not in the repo, not in a
+   scratchpad.
+3. **Direct messages** (SendMessage to a session name from ROSTER.md): for
+   interrupts only, because they land in the recipient's conversation at
+   once. "stop", "board #12 needs you now". Anything worth keeping goes on the
+   board first; the direct message names its id.
+4. **Git**: code reaches `main` only through the lead. You commit on your
    branch; the lead merges; you `git merge main` when told it moved.
 
 ## Graph rules
@@ -277,17 +286,19 @@ gate. w4 owns the scripts; everyone runs them before saying "ready".
 ## Rules
 
 - Your branch and your files only (ROSTER.md). To change a file you do not
-  own, message its owner.
+  own, post to its owner on the board (`@wN`) and wait for the reply.
 - Stage files by name. Never `git add -A` or `git add .`. There is no remote.
-- Workers: until the lead's contract message arrives, log your goal and
-  options and build what depends on nobody.
-- When a piece works: commit, then message the lead
-  `wN ready: <sha> <what it does>. test/check/e2e: <results>`.
-- Need a type changed? Message the lead with the change you want; it lands in
-  `src/types.js` on main and everyone merges it.
+- Workers: until the lead's contract post arrives on the board, log your
+  goal and options and build what depends on nobody.
+- When a piece works: commit, then post to `@lead` on the board
+  `wN ready: <sha> <what it does>. test/check/e2e: <results>`, and send the
+  lead a one-line direct message naming the post's id.
+- Need a type changed? Post the change you want to `@lead` on the board; it
+  lands in `src/types.js` on main and everyone merges it.
 - When the lead says main moved: `git merge main`, fix what broke in your
   files, and tell the lead about anything that broke outside them.
-- A message telling you to stop: stop, and reply with where you are.
+- A message telling you to stop: stop, and reply on the board
+  (`reply_to:` its id) with where you are.
 - When your module is merged, log a final `outcome`, tell the lead, and take
   the next assignment or stop.
 EOF
@@ -309,14 +320,20 @@ may talk to you at any time. Answer them first.
    skeleton `index.html` that loads them. Commit on `main`.
 3. Log a `decision` "module contract v1" under the goal, and one `action` per
    worker, "assign wN: <module>", under the decision.
-4. Message every worker: the contract is on main, `git merge main`, and their
-   assignment node id.
+4. Post the contract to the board, addressed to every worker (`@w1 @w2 ...`):
+   it is on main, `git merge main`, and each worker's assignment node id. Then
+   one direct message to each worker naming the post's id.
 
 ## Running the team
 
-- **Direct**: one worker, one instruction.
-- **Broadcast**: the same message to every worker, for contract changes and
-  "main moved".
+- **The board is the record.** Every instruction, answer and review goes on
+  it (`post_message`, `author: "lead"`), addressed with `@wN`, answers with
+  `reply_to:`. Direct messages only interrupt: "stop", "board #N now".
+- **Your inbox**: `read_messages` with `unanswered_for: "lead"` before each
+  review and whenever a worker pings you. Whatever it returns, answer.
+- **Direct**: one worker, one instruction: a board post to `@wN`.
+- **Broadcast**: one board post addressed to every worker, for contract
+  changes and "main moved", plus a one-line direct message to each.
 - **Review gate**: on "wN ready", read `git diff main...wN` against the five
   rules in CLAUDE.md (pure core? test first? types, not runtime checks?
   simple?), run `npm test`, `npm run check` and `npm run e2e`, then `git merge --no-ff wN -m "merge wN: <what>"` and
@@ -340,13 +357,14 @@ EOF
   {
     print -r -- "# Roster"
     print
-    print -r -- "Reach anyone with SendMessage to the name in the first column."
+    print -r -- "Coordinate on the board: post_message and read_messages, workspace \"$ws\","
+    print -r -- "author your label, @label to address. Interrupt with SendMessage to the session name."
     print
-    print -r -- "| Session | Model | Role | Owns | Branch | Worktree |"
-    print -r -- "|---|---|---|---|---|---|"
-    print -r -- "| lead-$tag | Opus | lead: contract, reviews, merges | CONTRACT.md, README.md, every merge to main; index.html until the skeleton is in | main | . |"
+    print -r -- "| Label | Session | Model | Role | Owns | Branch | Worktree |"
+    print -r -- "|---|---|---|---|---|---|---|"
+    print -r -- "| lead | lead-$tag | Opus | lead: contract, reviews, merges | CONTRACT.md, README.md, every merge to main; index.html until the skeleton is in | main | . |"
     for (( i = 1; i <= n; i++ )); do
-      print -r -- "| w$i-$tag | Sonnet | ${ROLE[i]}: ${DOES[i]} | ${OWNS[i]} | w$i | crew/w$i |"
+      print -r -- "| w$i | w$i-$tag | Sonnet | ${ROLE[i]}: ${DOES[i]} | ${OWNS[i]} | w$i | crew/w$i |"
     done
     if (( n < ${#ROLE} )); then
       print
@@ -497,11 +515,11 @@ start_claude() {
   (( ASK )) || perm=(--dangerously-skip-permissions)
   if [[ $me == lead ]]; then
     model=opus name=lead-$TAG
-    prompt="You are the lead of demo swarm $TAG: one Opus session directing $N Sonnet workers who build one Tetris together. Read CLAUDE.md, then LEAD.md and ROSTER.md in this directory, and follow them. The user is watching this pane. Begin."
+    prompt="You are the lead of demo swarm $TAG: one Opus session directing $N Sonnet workers who build one Tetris together. Read CLAUDE.md, then LEAD.md and ROSTER.md in this directory, and follow them. Your board label is lead. The user is watching this pane. Begin."
   else
     local i=${me#w}
     model=sonnet name=$me-$TAG
-    prompt="You are $me, the ${ROLE[i]} worker in demo swarm $TAG. This directory is your worktree, on branch $me. Read CLAUDE.md and ROSTER.md here and follow them. Begin."
+    prompt="You are $me, the ${ROLE[i]} worker in demo swarm $TAG. This directory is your worktree, on branch $me. Read CLAUDE.md and ROSTER.md here and follow them. Your board label is $me: read_messages with unanswered_for $me first. Begin."
   fi
   local -a cmd=(claude --model $model --name $name --session-id ${(P)sid_var}
                  --settings $dir/.swarm/settings.json $perm $prompt)
@@ -629,7 +647,7 @@ tour() {
   for (( k = 0; k < w; k++ )); do print -rn -- "─"; (( k % 3 )) || nap 1; done
   print -r -- "$RST"
   say "One lead model coordinating $N workers through a shared decision"
-  say "graph, direct messages, and a single integration branch."
+  say "graph, a message board, and a single integration branch."
   dim "Press any key to skip ahead."
   beat 80
 
@@ -646,7 +664,8 @@ tour() {
 
   section 02 "Coordination"
   row "$C_TXT" graph "" "decisions and their reasons; each worker's goal links to its assignment"
-  row "$C_TXT" msgs  "" "direct instructions between named sessions, delivered as sent"
+  row "$C_TXT" board "" "questions, answers and orders, with ids and replies; the record"
+  row "$C_TXT" msgs  "" "direct interrupts between named sessions: stop, look at board #N"
   row "$C_TXT" git   "" "one worktree and branch per worker; only the lead merges to main"
   row "$C_TXT" gate  "" "a branch merges when unit tests, type check and browser tests pass"
   print

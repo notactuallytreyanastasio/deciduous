@@ -152,6 +152,8 @@ deciduous add action "What you're about to implement" -c 85 -f "file1.rs,file2.r
 deciduous link <goal_id> <action_id> -r "Implementation step"
 ```
 
+**Other agents working at the same time?** Before editing a file another agent may be changing, read `deciduous board read --unanswered <your-label>`, and post an interface change on the board (`deciduous board post --as <your-label> -s "..." -m "@owner ..."`) before you make it. Never coordinate through a scratch or markdown file.
+
 ## Step 4: After Completion
 
 When the work is done:
@@ -284,6 +286,17 @@ done
 ```bash
 deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
 ```
+
+## Step 1.7: Check the Message Board
+
+If other agents are working on this project at the same time, read what they have asked you before doing anything else:
+
+```bash
+deciduous board read --unanswered <your-label>
+deciduous board read --since <last id you saw>
+```
+
+Answer each with `deciduous board post --as <your-label> --reply-to <id> ...`. Coordinate there, never in a scratch or markdown file.
 
 ## Step 2: Check Git State
 
@@ -698,6 +711,16 @@ EXPORT PATCHES FOR YOUR TEAMMATES.
 ```
 
 **Live graph**: https://notactuallytreyanastasio.github.io/deciduous/
+
+## Parallel Agents: The Message Board
+
+When more than one agent works at once, coordinate through deciduous, never through a scratch or markdown file. A file has no ids to answer, no way to ask what is waiting for you, and it is gone with the worktree it was written in.
+
+- **Post** interface changes, questions and answers: `post_message` (MCP) or `deciduous board post --as <your-label> -s "subject" -m "body"`. Address other agents with `@label`.
+- **Read** what is waiting for you: `read_messages` with `unanswered_for: "<your-label>"`, or `deciduous board read --unanswered <your-label>`. Do it at start, before touching a file another agent may be changing, and before finishing.
+- **Reply** with `reply_to: <id>` (`--reply-to <id>`). A reply is what takes a question off the asker's list; a new post does not.
+
+One board serves every git worktree of the repository, or the server when the project has a `[remote]`. Messages are not graph nodes: not in `graph.json`, not exported, not synced. With `DECIDUOUS_AGENT_LABEL` set in a session's environment, `board post` uses it for `--as`.
 "#;
 
 /// OpenCode command template: /build-test
@@ -1136,6 +1159,8 @@ git push
 
 `deciduous sync --check` exits non-zero if anything is still pending, so it works as a pre-push guard.
 
+Agent messages (`deciduous board`) are not part of the graph and never travel through sync: locally they live in the main worktree's database, shared by every worktree; with a `[remote]`, on the server.
+
 ## Merge conflicts
 
 - **`.deciduous/graph.json`**: two people changed the graph. Normally git merges it record by record through the `deciduous` merge driver, so you never see this. If it has `<<<<<<<` markers, run `deciduous sync`: it merges the sides the same way and imports the result.
@@ -1551,6 +1576,10 @@ Sources:
 ## Output
 
 When done, run `deciduous graph > graph.json` to export.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.
 "#;
 
 /// OpenCode skill template: /pulse
@@ -1640,6 +1669,10 @@ deciduous doc attach <goal_id> docs/architecture.png -d "Current architecture"
 ## Connecting to History
 
 Pulse gives you the "Now". For history, run `/narratives` then `/archaeology`.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.
 "#;
 
 /// OpenCode skill template: /narratives
@@ -1731,6 +1764,10 @@ Each narrative section in `.deciduous/narratives.md`:
 ## Next Step
 
 After narratives are written, run `/archaeology` to transform them into a queryable decision graph.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.
 "#;
 
 /// OpenCode skill template: /archaeology
@@ -1858,6 +1895,10 @@ deciduous nodes --type revisit
 - **Don't create nodes for every commit.** Commits are evidence, not graph nodes.
 - **Don't create implementation nodes.** The graph is about the MODEL, not the code.
 - **Don't over-structure.** Simple narratives might just be: goal -> option -> decision.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.
 "#;
 
 /// OpenCode skill: /pulse (SKILL.md format for .opencode/skills/pulse/SKILL.md)
@@ -1936,6 +1977,10 @@ deciduous doc attach <goal_id> docs/architecture.png -d "Current architecture"
 ## Connecting to History
 
 Pulse gives you the "Now". For history, run `/narratives` then `/archaeology`.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.
 "#;
 
 /// OpenCode skill: /narratives (SKILL.md format for .opencode/skills/narratives/SKILL.md)
@@ -2021,6 +2066,10 @@ Each narrative section in `.deciduous/narratives.md`:
 ## Next Step
 
 After narratives are written, run `/archaeology` to transform them into a queryable decision graph.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.
 "#;
 
 /// OpenCode skill: /archaeology (SKILL.md format for .opencode/skills/archaeology/SKILL.md)
@@ -2148,6 +2197,10 @@ deciduous nodes --type revisit
 - **Don't create nodes for every commit.** Commits are evidence, not graph nodes.
 - **Don't create implementation nodes.** The graph is about the MODEL, not the code.
 - **Don't over-structure.** Simple narratives might just be: goal -> option -> decision.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.
 "#;
 
 /// OpenCode agent definition for .opencode/agents/deciduous.md
@@ -2184,6 +2237,16 @@ deciduous pulse
 # Sync and export
 deciduous sync
 deciduous dot --png
+```
+
+## Other Agents: The Message Board
+
+When other agents work at the same time, coordinate on the board, never in a scratch or markdown file:
+
+```bash
+deciduous board read --unanswered <label>                       # at start, before shared files, before finishing
+deciduous board post --as <label> -s "subject" -m "@other body"  # interface changes, questions, answers
+deciduous board post --as <label> -s "re" -m "..." --reply-to <id>
 ```
 
 ## Node Flow Rule
@@ -2228,13 +2291,15 @@ pub const TOOL_DECIDUOUS: &str = r#"// OpenCode Custom Tool: Deciduous Decision 
 import { tool } from "@opencode-ai/plugin"
 
 export default tool({
-  description: "Manage the deciduous decision graph - add nodes, create edges, query the graph, and sync",
+  description: "Manage the deciduous decision graph - add nodes, create edges, query the graph, sync - and post to or read the agent message board",
   args: {
     command: tool.schema.string().describe(
       "The deciduous subcommand and arguments to run. Examples: " +
       "'add goal \"Title\" -c 90', " +
       "'link 1 2 -r \"reason\"', " +
-      "'nodes', 'edges', 'graph', 'pulse', 'sync'"
+      "'nodes', 'edges', 'graph', 'pulse', 'sync', " +
+      "'board read --unanswered <label>', 'board post --as <label> -s \"subject\" -m \"@other body\"'. " +
+      "Parallel agents coordinate with 'board', never through a scratch file."
     ),
   },
   async execute(args, context) {
@@ -2885,6 +2950,16 @@ git add .deciduous/graph.json  # before git push
 
 Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits merge record by record through a git merge driver; if the file ever shows conflict markers, `deciduous sync` merges it.
 
+### Parallel Agents: The Message Board
+
+When more than one agent works at once, coordinate through deciduous, never through a scratch or markdown file. A file has no ids to answer, no way to ask what is waiting for you, and it is gone with the worktree it was written in.
+
+- **Post** interface changes, questions and answers: `post_message` (MCP) or `deciduous board post --as <your-label> -s "subject" -m "body"`. Address other agents with `@label`.
+- **Read** what is waiting for you: `read_messages` with `unanswered_for: "<your-label>"`, or `deciduous board read --unanswered <your-label>`. Do it at start, before touching a file another agent may be changing, and before finishing.
+- **Reply** with `reply_to: <id>` (`--reply-to <id>`). A reply is what takes a question off the asker's list; a new post does not.
+
+One board serves every git worktree of the repository, or the server when the project has a `[remote]`. Messages are not graph nodes: not in `graph.json`, not exported, not synced. With `DECIDUOUS_AGENT_LABEL` set in a session's environment, `board post` uses it for `--as`.
+
 ### Session Start Checklist
 
 ```bash
@@ -2893,6 +2968,7 @@ deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
 deciduous doc list        # Any attached documents to review?
+deciduous board read --unanswered <label>  # parallel agents: anything waiting for you?
 git status                # Current state
 ```
 "#
@@ -2988,6 +3064,16 @@ deciduous sync --check            # Anything pending? (exit 1 if so)
 deciduous link a1b2c3d4 <id>      # Link to a teammate's node by change_id prefix
 ```
 
+### Parallel Agents: The Message Board
+
+When more than one agent works at once, coordinate through deciduous, never through a scratch or markdown file. A file has no ids to answer, no way to ask what is waiting for you, and it is gone with the worktree it was written in.
+
+- **Post** interface changes, questions and answers: `post_message` (MCP) or `deciduous board post --as <your-label> -s "subject" -m "body"`. Address other agents with `@label`.
+- **Read** what is waiting for you: `read_messages` with `unanswered_for: "<your-label>"`, or `deciduous board read --unanswered <your-label>`. Do it at start, before touching a file another agent may be changing, and before finishing.
+- **Reply** with `reply_to: <id>` (`--reply-to <id>`). A reply is what takes a question off the asker's list; a new post does not.
+
+One board serves every git worktree of the repository, or the server when the project has a `[remote]`. Messages are not graph nodes: not in `graph.json`, not exported, not synced. With `DECIDUOUS_AGENT_LABEL` set in a session's environment, `board post` uses it for `--as`.
+
 ### Session Start Checklist
 
 ```bash
@@ -2996,6 +3082,7 @@ deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
 deciduous doc list        # Any attached documents?
+deciduous board read --unanswered <label>  # parallel agents: anything waiting for you?
 git status                # Current state
 ```
 "#
