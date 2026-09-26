@@ -14,7 +14,7 @@ defmodule DeciduousMcp.MCP.Server do
   add_edge, delete_edge, get_graph
 
   ### Graph Analysis
-  find_orphans, get_ancestors, get_descendants
+  find_orphans, get_ancestors, get_descendants, consolidation_report
 
   ### High-Level Capture
   capture_conversation_turn, log_decision, log_observation, close_thread
@@ -59,6 +59,7 @@ defmodule DeciduousMcp.MCP.Server do
   component DeciduousMcp.MCP.Tools.FindOrphans
   component DeciduousMcp.MCP.Tools.GetAncestors
   component DeciduousMcp.MCP.Tools.GetDescendants
+  component DeciduousMcp.MCP.Tools.ConsolidationReport
 
   # --- High-level capture tools ---
   component DeciduousMcp.MCP.Tools.CaptureConversationTurn
