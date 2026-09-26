@@ -496,6 +496,25 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
     assert node(w, "c").title == "C"
   end
 
+  test "an edit that changes nothing does not bring a deleted node back", %{token: token} do
+    # The model battery (seed 1790450177773958000): a git merge kept a
+    # tombstone correctly, then reconcile queued a git-origin update for an
+    # edit made before the delete, dated when it was queued. Every field
+    # already held its value, and the server revived the node anyway, with
+    # an audit row of nothing but `restore {"deleted_at": null}`.
+    ws = "ops-noop-revive-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    {:ok, _} = Nodes.delete_node(node(w, "c").id)
+    later = DateTime.add(DateTime.utc_now(), 1, :second)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("c", iso(later), %{status: "pending"}, %{status: "pending"})])
+
+    assert r["result"] == "absent", inspect(r)
+    refute is_nil(node(w, "c").deleted_at)
+  end
+
   test "log_conflicts_delete_first: an edit made before the delete stays refused, with both times",
        %{token: token} do
     ws = "ops-dfirst2-" <> Integer.to_string(System.unique_integer([:positive]))
