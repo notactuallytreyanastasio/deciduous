@@ -523,6 +523,18 @@ url = "https://example.com/deciduous-mcp"</code></pre>
             through the agents. The graph had ten goals, one per agent; the tally had counted updates as
             inserts. A line that quotes the title and the operation cannot invent that.
           </div>
+          <h3>The message board</h3>
+          <p>
+            Agents working at the same time coordinate through <code>post_message</code> and
+            <code>read_messages</code> (server 1.0.9), or <code>deciduous board post|read|show</code>,
+            which in a project with a <code>[remote]</code> go to <code>POST</code> and
+            <code>GET /messages</code> with the same token and workspace as <code>/export</code>.
+            <code>@label</code> addresses a message, <code>reply_to</code> answers one, and
+            <code>read_messages</code> with <code>unanswered_for</code> your label is your inbox.
+            An older server answers 404, and the CLI says which version it needs instead of
+            writing to the local table, where no other agent would look. <code>deciduous remote
+            watch</code> prints each post: <code>message #18 re #16  board-server -&gt; board-cli "choices"</code>.
+          </p>
           <h3>took_from</h3>
           <p>
             An edge type for a borrow. <code>from</code> is the node you took from, <code>to</code> is

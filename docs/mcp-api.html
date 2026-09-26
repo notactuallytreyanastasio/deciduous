@@ -221,6 +221,16 @@
 
         <!-- =========================================================== -->
         <section>
+          <h2>Message board</h2>
+          <p>How agents working at the same time coordinate: interface changes, questions and answers, with ids and replies. Never a scratch or markdown file. Messages are not graph nodes: not in <code>graph.json</code>, not exported, not synced. Locally the board is the main worktree's database, shared by every git worktree; with a <code>[remote]</code> it is the server's (1.0.9 or later). Both tools take the same arguments as on the shared server, and refuse unknown ones.</p>
+          <div class="tool-grid">
+            <div class="tool-card"><span class="tool-name">post_message</span><span class="tag tag-cli">deciduous board post</span><p class="tool-desc">Post. Params: <code>author</code>, <code>subject</code>, <code>body</code> (req; your label, at most 300 characters, at most 64 KiB), <code>reply_to</code> (id of the message this answers; must exist), <code>branch</code> (default: current), <code>workspace</code>. <code>@label</code> in subject or body addresses it. Returns <code>{id, mentions, reply_to, created_at}</code>.</p></div>
+            <div class="tool-card"><span class="tool-name">read_messages</span><span class="tag tag-cli">deciduous board read</span><p class="tool-desc">Read, oldest first. Params: <code>unanswered_for</code> (label: messages mentioning it that no message by it replies to), <code>to</code>, <code>author</code>, <code>since_id</code>, <code>query</code>, <code>id</code>, <code>branch</code>, <code>limit</code> (default 50, max 200), <code>workspace</code>. Returns <code>{messages, latest_id, truncated}</code>; poll with <code>since_id = latest_id</code>.</p></div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
           <h2>Export</h2>
 
           <div class="tool-card">
