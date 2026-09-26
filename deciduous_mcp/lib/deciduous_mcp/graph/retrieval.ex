@@ -610,24 +610,40 @@ defmodule DeciduousMcp.Graph.Retrieval do
   end
 
   defp any_term_dynamic(terms) do
-    # Metadata values, not the JSON text: `metadata::text` includes the key
-    # names, and every node add_node writes has "branch", so asking about
-    # "branch" matched every node. jsonb_each_text gives top-level values as
-    # text (an array value as its JSON, so a file path still matches).
     Enum.reduce(terms, dynamic(false), fn term, acc ->
       pattern = Nodes.contains_pattern(term)
 
       dynamic(
         [node: n],
         ^acc or ilike(n.title, ^pattern) or ilike(n.description, ^pattern) or
-          fragment(
-            "EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(?) = 'object' THEN ? ELSE '{}'::jsonb END) AS kv WHERE kv.value ILIKE ?)",
-            n.metadata,
-            n.metadata,
-            ^pattern
-          )
+          ^metadata_value_matches(pattern)
       )
     end)
+  end
+
+  # Metadata values, not the JSON text: `metadata::text` includes the key
+  # names, and every node add_node writes has "branch", so asking about
+  # "branch" matched every node. jsonb_each_text gives top-level values as
+  # text (an array value as its JSON, so a file path still matches).
+  #
+  # jsonb_each_text alone cannot use an index, so it ran for every node in
+  # the workspace: 130-140 ms per query at 30,000 nodes, twice per question
+  # (anchors and term_hits). `metadata::text ILIKE` goes first, served by
+  # idx_nodes_metadata_text_trgm. It is a necessary condition: a term is
+  # letters, digits and `_ - / .` (extract_terms/1), none of which the JSON
+  # text form escapes, so a value containing the term puts the same
+  # characters, contiguous, into metadata::text.
+  defp metadata_value_matches(pattern) do
+    dynamic(
+      [node: n],
+      fragment("?::text ILIKE ?", n.metadata, ^pattern) and
+        fragment(
+          "EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(?) = 'object' THEN ? ELSE '{}'::jsonb END) AS kv WHERE kv.value ILIKE ?)",
+          n.metadata,
+          n.metadata,
+          ^pattern
+        )
+    )
   end
 
   defp trigram_list([], _scope_dyn), do: []
@@ -752,32 +768,19 @@ defmodule DeciduousMcp.Graph.Retrieval do
   defp term_hits([], _scope_dyn), do: %{}
 
   defp term_hits(terms, scope_dyn) do
-    patterns = Enum.map(terms, &Nodes.contains_pattern/1)
     tsqs = Enum.map(terms, &("'" <> &1 <> "'"))
 
-    text =
-      from(
-        t in fragment(
-          "SELECT * FROM unnest(?::text[], ?::text[]) AS u(term, pat)",
-          ^terms,
-          ^patterns
-        ),
-        join: n in Node,
-        as: :node,
-        on:
-          ^dynamic(
-            [t, node: n],
-            ^scope_dyn and
-              (ilike(n.title, t.pat) or ilike(n.description, t.pat) or
-                 fragment(
-                   "EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(?) = 'object' THEN ? ELSE '{}'::jsonb END) AS kv WHERE kv.value ILIKE ?)",
-                   n.metadata,
-                   n.metadata,
-                   t.pat
-                 ))
-          ),
-        select: %{term: t.term, id: n.id}
-      )
+    # One branch per term with the pattern as a query parameter: joined
+    # against unnest(), the pattern was a column, no trigram index could
+    # take it, and the query scanned the workspace (140 ms at 30,000 nodes).
+    [first | rest] =
+      Enum.map(terms, fn term ->
+        nodes_in_scope(scope_dyn)
+        |> where(^any_term_dynamic([term]))
+        |> select([node: n], %{term: type(^term, :string), id: n.id})
+      end)
+
+    text = Enum.reduce(rest, first, &union_all(&2, ^&1))
 
     stemmed =
       from(

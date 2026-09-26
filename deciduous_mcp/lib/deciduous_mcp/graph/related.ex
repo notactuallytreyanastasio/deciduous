@@ -39,6 +39,14 @@ defmodule DeciduousMcp.Graph.Related do
   broken by rarity -- the sum over shared paths of 1/(nodes naming that
   path), so sharing a file only two nodes touched beats sharing `src/main.rs`
   -- then by recency.
+
+  ## Cost
+
+  PostgreSQL does the matching (see "the database side" in the source):
+  per call, at most 50 nodes per path and per commit come back, whatever
+  the size of the workspace. With 30,000 nodes naming one file, show_node
+  went from 1.1-1.4 s to 9 ms. What the bound gives up is written down
+  next to it.
   """
 
   import Ecto.Query
@@ -142,12 +150,9 @@ defmodule DeciduousMcp.Graph.Related do
     with {:ok, files} <- read_files(node.metadata),
          {commit, commit_ignored} <- read_own_commit(node.metadata) do
       rels =
-        if files == [] and is_nil(commit) do
-          []
-        else
-          index = build_index(node.workspace_id)
-          rank(index, node.id, files, commit, MapSet.new([node.id]), opts[:limit] || 10)
-        end
+        node.workspace_id
+        |> neighbours([{node.id, files, commit}], [], opts[:limit] || 10)
+        |> Map.fetch!(node.id)
 
       {:ok, %{related: rels, commit_ignored: commit_ignored}}
     end
@@ -164,8 +169,10 @@ defmodule DeciduousMcp.Graph.Related do
   (pass the visited set to keep a walk moving outward). A node is never
   listed as related to itself.
 
-  A neighbour whose metadata is malformed is left out and logged; a node of
-  the frontier whose own metadata is malformed maps to `[]` and is logged.
+  A neighbour whose metadata is malformed is left out: the SQL side reads
+  its files as NULL, so it matches nothing and is never seen, and so is not
+  logged. A node of the frontier whose own metadata is malformed maps to
+  `[]` and is logged.
   """
   def expand(workspace_id, node_ids, opts \\ [])
 
@@ -177,29 +184,26 @@ defmodule DeciduousMcp.Graph.Related do
       )
 
   def expand(workspace_id, node_ids, opts) when is_binary(workspace_id) and is_list(node_ids) do
-    index = build_index(workspace_id)
-    limit = opts[:limit] || 5
-    exclude = MapSet.new(opts[:exclude] || [])
+    sources =
+      from(n in Node,
+        where:
+          n.id in ^Enum.uniq(node_ids) and n.workspace_id == ^workspace_id and
+            is_nil(n.deleted_at),
+        select: {n.id, n.metadata}
+      )
+      |> Repo.all()
+      |> Enum.map(fn {id, meta} ->
+        case read_files(meta) do
+          {:ok, files} ->
+            {id, files, neighbour_commit(meta)}
 
-    ids = Enum.uniq(node_ids)
+          {:error, reason} ->
+            Logger.warning("Related: node #{id} expands to nothing: #{reason}")
+            {id, [], nil}
+        end
+      end)
 
-    bare =
-      live_without_identifiers(workspace_id, Enum.reject(ids, &Map.has_key?(index.by_id, &1)))
-
-    ids
-    |> Enum.flat_map(fn id ->
-      case Map.get(index.by_id, id) do
-        nil ->
-          if MapSet.member?(bare, id), do: [{id, []}], else: []
-
-        :malformed ->
-          [{id, []}]
-
-        %{files: files, commit: commit} ->
-          [{id, rank(index, id, files, commit, MapSet.put(exclude, id), limit)}]
-      end
-    end)
-    |> Map.new()
+    neighbours(workspace_id, sources, opts[:exclude] || [], opts[:limit] || 5)
   end
 
   @doc """
@@ -309,31 +313,20 @@ defmodule DeciduousMcp.Graph.Related do
   def nodes_for_file(workspace_id, path) when is_binary(workspace_id) do
     case safe_normalize(path) do
       {:ok, wanted} ->
-        index = build_index(workspace_id)
         wanted_dir? = String.ends_with?(wanted, "/")
 
-        matches =
-          Enum.reduce(index.by_file, %{}, fn {stored, ids}, acc ->
-            case file_match(stored, wanted, wanted_dir?) do
-              nil ->
-                acc
-
-              match ->
-                Enum.reduce(ids, acc, &Map.update(&2, &1, match, fn m -> better(m, match) end))
-            end
-          end)
-
-        nodes =
-          if matches == %{},
-            do: [],
-            else:
-              Node
-              |> where([n], n.id in ^Map.keys(matches) and is_nil(n.deleted_at))
-              |> Repo.all()
-
         {:ok,
-         nodes
-         |> Enum.map(&%{node: &1, match: Map.fetch!(matches, &1.id)})
+         workspace_id
+         |> file_candidates(wanted, wanted_dir?)
+         |> Enum.flat_map(fn {node, files} ->
+           files
+           |> Enum.map(&file_match(&1, wanted, wanted_dir?))
+           |> Enum.reject(&is_nil/1)
+           |> case do
+             [] -> []
+             ms -> [%{node: node, match: Enum.reduce(ms, &better/2)}]
+           end
+         end)
          |> Enum.sort_by(&{match_rank(&1.match), sortable_time(&1.node.inserted_at)})}
 
       {:error, _} = error ->
@@ -430,19 +423,6 @@ defmodule DeciduousMcp.Graph.Related do
   # Negated so an ascending sort puts the newest first.
   defp sortable_time(%DateTime{} = t), do: -DateTime.to_unix(t, :microsecond)
 
-  # A frontier id with no files and no commit is still a live node of the
-  # workspace; it gets [] rather than being dropped as if unknown.
-  defp live_without_identifiers(_workspace_id, []), do: MapSet.new()
-
-  defp live_without_identifiers(workspace_id, ids) do
-    from(n in Node,
-      where: n.id in ^ids and n.workspace_id == ^workspace_id and is_nil(n.deleted_at),
-      select: n.id
-    )
-    |> Repo.all()
-    |> MapSet.new()
-  end
-
   defp safe_normalize(path) do
     {:ok, normalize_path(path)}
   rescue
@@ -479,89 +459,217 @@ defmodule DeciduousMcp.Graph.Related do
     end
   end
 
-  # One read of every live node in the workspace that names a path or a
-  # commit, turned into lookup maps. Rows whose files cannot be read are
-  # marked :malformed and logged; a non-hex commit is dropped (it is not an
-  # identifier, see commit_key/1).
-  defp build_index(workspace_id) do
+  # A neighbour's commit, as the frontier reads it: unusable is absent.
+  defp neighbour_commit(meta) do
+    case (meta || %{})["commit"] do
+      nil ->
+        nil
+
+      c ->
+        case commit_key(c) do
+          {:ok, key} -> key
+          {:error, _} -> nil
+        end
+    end
+  end
+
+  # --- the database side ------------------------------------------------------
+  #
+  # Nothing here loads the workspace. For the paths and commits the sources
+  # hold, PostgreSQL returns at most @per_path nodes naming each (newest
+  # first, served by idx_nodes_files and idx_nodes_ws_commit7) and how many
+  # nodes name each path, counted up to @count_cap. The path and commit
+  # rules are the SQL functions deciduous_node_files/1 and
+  # deciduous_commit_key/1 (migration 20260926020000), which RelatedTest
+  # holds to normalize_path/1 and commit_key/1.
+  #
+  # What the bound gives up, by name: a node reached only through paths that
+  # more than @per_path other nodes also name is considered only if it is
+  # among the newest @per_path of one of them. Its score, when considered,
+  # is exact (its whole files list is compared). So an old node sharing two
+  # such hub paths with the source can lose its place to newer nodes
+  # sharing one; a node sharing any rarer path, or the commit, is always
+  # considered. Rarity counts a path named by more than @count_cap nodes as
+  # @count_cap, which only matters between two such hubs.
+
+  @per_path 50
+  @count_cap 1_000
+
+  # sources: [{id, normalised files, commit key | nil}]. Returns
+  # %{source_id => [rel]}, best first, at most `limit` each; neither a
+  # source itself nor anything in `exclude` is ever returned.
+  defp neighbours(workspace_id, sources, exclude, limit) do
+    files = sources |> Enum.flat_map(&elem(&1, 1)) |> Enum.uniq()
+    commits = sources |> Enum.map(&elem(&1, 2)) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+    exclude = Enum.uniq(exclude)
+    # A source can sit in another source's lists; it is dropped for itself
+    # only after the per-path limit, so the limit leaves room for them.
+    per = @per_path + length(sources)
+
+    by_path = path_hits(workspace_id, files, exclude, per)
+    by_commit = commit_hits(workspace_id, commits, exclude, per)
+
     rows =
-      from(n in Node,
-        where:
-          n.workspace_id == ^workspace_id and is_nil(n.deleted_at) and
-            (fragment("? \\? 'files'", n.metadata) or fragment("? \\? 'commit'", n.metadata)),
-        select: %{
-          id: n.id,
-          node_type: n.node_type,
-          title: n.title,
-          status: n.status,
-          inserted_at: n.inserted_at,
-          files: fragment("?->'files'", n.metadata),
-          commit: fragment("?->'commit'", n.metadata)
-        }
-      )
-      |> Repo.all()
+      by_path
+      |> Map.values()
+      |> Enum.flat_map(& &1.ids)
+      |> Kernel.++(Enum.flat_map(by_commit, fn {_c, hits} -> Enum.map(hits, &elem(&1, 0)) end))
+      |> Enum.uniq()
+      |> details()
 
-    Enum.reduce(rows, %{by_id: %{}, by_file: %{}, by_commit: %{}, rows: %{}}, fn row, acc ->
-      case read_files(%{"files" => row.files}) do
-        {:error, reason} ->
-          Logger.warning("Related: node #{row.id} left out: #{reason}")
-          put_in(acc, [:by_id, row.id], :malformed)
+    named_by = Map.new(by_path, fn {f, %{named_by: n}} -> {f, n} end)
 
-        {:ok, files} ->
-          commit =
-            case row.commit && commit_key(row.commit) do
-              {:ok, key} -> key
-              _ -> nil
-            end
-
-          acc
-          |> put_in([:by_id, row.id], %{files: files, commit: commit})
-          |> put_in([:rows, row.id], Map.drop(row, [:files, :commit]))
-          |> Map.update!(:by_file, fn m ->
-            Enum.reduce(files, m, &Map.update(&2, &1, [row.id], fn ids -> [row.id | ids] end))
-          end)
-          |> Map.update!(:by_commit, fn m ->
-            if commit,
-              do:
-                Map.update(
-                  m,
-                  binary_part(commit, 0, 7),
-                  [{row.id, commit}],
-                  &[{row.id, commit} | &1]
-                ),
-              else: m
-          end)
-      end
+    Map.new(sources, fn {id, src_files, commit} ->
+      {id, rank(id, src_files, commit, by_path, by_commit, rows, named_by, limit)}
     end)
   end
 
-  defp rank(index, _self, files, commit, exclude, limit) do
-    by_file =
-      for f <- files,
-          id <- Map.get(index.by_file, f, []),
-          not MapSet.member?(exclude, id),
-          reduce: %{} do
-        acc -> Map.update(acc, id, [f], &[f | &1])
-      end
+  defp path_hits(_workspace_id, [], _exclude, _per), do: %{}
 
-    by_commit =
+  defp path_hits(workspace_id, files, exclude, per) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        WITH wanted AS (SELECT DISTINCT unnest($2::text[]) AS f),
+        counted AS MATERIALIZED (
+          SELECT w.f,
+                 (SELECT count(*) FROM (
+                    SELECT 1 FROM decision_nodes c
+                    WHERE public.deciduous_node_files(c.metadata) && ARRAY[w.f]
+                      AND c.deleted_at IS NULL AND c.workspace_id = $1
+                    LIMIT $4) AS capped) AS named_by
+          FROM wanted w
+        )
+        SELECT counted.f, counted.named_by, h.id
+        FROM counted
+        LEFT JOIN LATERAL (
+          SELECT m.id FROM decision_nodes m
+          WHERE public.deciduous_node_files(m.metadata) && ARRAY[counted.f]
+            AND m.deleted_at IS NULL AND m.workspace_id = $1
+            AND NOT (m.id = ANY($3::uuid[]))
+          ORDER BY m.inserted_at DESC, m.id
+          LIMIT $5
+        ) h ON true
+        """,
+        [dump(workspace_id), files, Enum.map(exclude, &dump/1), @count_cap, per]
+      )
+
+    Enum.reduce(rows, %{}, fn [f, n, id], acc ->
+      entry = Map.get(acc, f, %{named_by: n, ids: []})
+      entry = if id, do: %{entry | ids: [load(id) | entry.ids]}, else: entry
+      Map.put(acc, f, entry)
+    end)
+  end
+
+  defp commit_hits(_workspace_id, [], _exclude, _per), do: %{}
+
+  defp commit_hits(workspace_id, commits, exclude, per) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT w.c, h.id, h.k
+        FROM (SELECT DISTINCT unnest($2::text[]) AS c) w
+        JOIN LATERAL (
+          SELECT m.id, public.deciduous_commit_key(m.metadata) AS k FROM decision_nodes m
+          WHERE m.workspace_id = $1 AND m.deleted_at IS NULL
+            AND left(public.deciduous_commit_key(m.metadata), 7) = left(w.c, 7)
+            AND (starts_with(public.deciduous_commit_key(m.metadata), w.c)
+                 OR starts_with(w.c, public.deciduous_commit_key(m.metadata)))
+            AND NOT (m.id = ANY($3::uuid[]))
+          ORDER BY m.inserted_at DESC, m.id
+          LIMIT $4
+        ) h ON true
+        """,
+        [dump(workspace_id), commits, Enum.map(exclude, &dump/1), per]
+      )
+
+    Enum.group_by(rows, fn [c, _, _] -> c end, fn [_, id, k] -> {load(id), k} end)
+  end
+
+  defp details([]), do: %{}
+
+  defp details(ids) do
+    from(n in Node,
+      where: n.id in ^ids,
+      select: %{
+        id: n.id,
+        node_type: n.node_type,
+        title: n.title,
+        status: n.status,
+        inserted_at: n.inserted_at,
+        files: fragment("public.deciduous_node_files(?)", n.metadata)
+      }
+    )
+    |> Repo.all()
+    |> Map.new(&{&1.id, &1})
+  end
+
+  # Nodes a query_nodes file filter can match, with their normalised files:
+  # the exact path and every directory above it, through idx_nodes_files.
+  # A directory question ("lib/a/") has to find stored paths *under* it,
+  # which no index here serves: that one is a scan of the workspace's nodes,
+  # in SQL.
+  defp file_candidates(workspace_id, wanted, true) do
+    from(n in Node,
+      where:
+        n.workspace_id == ^workspace_id and is_nil(n.deleted_at) and
+          fragment(
+            "EXISTS (SELECT 1 FROM unnest(public.deciduous_node_files(?)) AS x(p) WHERE starts_with(x.p, ?))",
+            n.metadata,
+            ^wanted
+          ),
+      select: {n, fragment("public.deciduous_node_files(?)", n.metadata)}
+    )
+    |> Repo.all()
+  end
+
+  defp file_candidates(workspace_id, wanted, false) do
+    # Every directory above the file: "src/a/b.rs" -> "src/", "src/a/";
+    # "/x/y.md" -> "/", "/x/". A stored directory matches exactly one of
+    # these when it contains the file.
+    dirs =
+      wanted
+      |> String.split("/")
+      |> Enum.drop(-1)
+      |> Enum.scan("", &(&2 <> &1 <> "/"))
+
+    from(n in Node,
+      where:
+        n.workspace_id == ^workspace_id and is_nil(n.deleted_at) and
+          fragment(
+            "public.deciduous_node_files(?) && ?::text[]",
+            n.metadata,
+            ^[wanted | dirs]
+          ),
+      select: {n, fragment("public.deciduous_node_files(?)", n.metadata)}
+    )
+    |> Repo.all()
+  end
+
+  defp rank(self, files, commit, by_path, by_commit, rows, named_by, limit) do
+    src = MapSet.new(files)
+
+    from_paths = Enum.flat_map(files, &Map.get(by_path, &1, %{ids: []}).ids)
+
+    shas =
       if commit do
-        for {id, other} <- Map.get(index.by_commit, binary_part(commit, 0, 7), []),
-            not MapSet.member?(exclude, id),
-            same_commit?(commit, other),
-            into: %{},
-            do: {id, if(byte_size(other) > byte_size(commit), do: other, else: commit)}
+        by_commit
+        |> Map.get(commit, [])
+        |> Map.new(fn {id, other} ->
+          {id, if(byte_size(other) > byte_size(commit), do: other, else: commit)}
+        end)
       else
         %{}
       end
 
-    (Map.keys(by_file) ++ Map.keys(by_commit))
+    (from_paths ++ Map.keys(shas))
     |> Enum.uniq()
+    |> Enum.reject(&(&1 == self))
     |> Enum.map(fn id ->
-      shared = by_file |> Map.get(id, []) |> Enum.sort()
-      sha = Map.get(by_commit, id)
-      row = Map.fetch!(index.rows, id)
-      rarity = Enum.reduce(shared, 0.0, &(&2 + 1 / length(Map.fetch!(index.by_file, &1))))
+      row = Map.fetch!(rows, id)
+      shared = (row.files || []) |> Enum.filter(&MapSet.member?(src, &1)) |> Enum.sort()
+      sha = Map.get(shas, id)
+      rarity = Enum.reduce(shared, 0.0, &(&2 + 1 / Map.fetch!(named_by, &1)))
 
       %{
         id: id,
@@ -575,8 +683,11 @@ defmodule DeciduousMcp.Graph.Related do
         inserted_at: row.inserted_at
       }
     end)
-    |> Enum.sort_by(&{-&1.score, -&1.rarity, sortable_time(&1.inserted_at)})
+    |> Enum.sort_by(&{-&1.score, -&1.rarity, sortable_time(&1.inserted_at), &1.id})
     |> Enum.take(limit)
     |> Enum.map(&Map.drop(&1, [:rarity, :inserted_at]))
   end
+
+  defp dump(uuid), do: Ecto.UUID.dump!(uuid)
+  defp load(bin), do: Ecto.UUID.load!(bin)
 end
