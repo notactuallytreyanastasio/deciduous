@@ -255,6 +255,47 @@ defmodule DeciduousMcp.Graph.Related do
   end
 
   @doc """
+  The path-shaped tokens in a free-text question, normalised: a token with a
+  `/` in it, or ending in a short extension (`db.rs`, `CLAUDE.md`).
+  Surrounding quotes, backticks, brackets and sentence punctuation are
+  dropped. For retrieval to seed anchors from paths, which a word tokenizer
+  destroys ("src/db.rs" -> "srcdbrs", D-eval finding 1).
+
+      iex> DeciduousMcp.Graph.Related.path_terms("what did we decide about `src/db.rs` and lib/?")
+      ["src/db.rs", "lib/"]
+  """
+  def path_terms(question) when is_binary(question) do
+    question
+    |> String.split(~r/[\s,;]+/, trim: true)
+    |> Enum.map(&String.replace(&1, ~r/\A[`'"(\[{<]+|[`'")\]}>.:?!]+\z/, ""))
+    |> Enum.filter(&path_shaped?/1)
+    |> Enum.map(&normalize_path/1)
+    |> Enum.uniq()
+  end
+
+  # A bare name needs two stem characters, so "e.g" and "i.e" stay prose.
+  defp path_shaped?(t) do
+    t != "" and not String.contains?(t, "://") and
+      (String.contains?(t, "/") or Regex.match?(~r/\A[\w.-]*\w\w\.[A-Za-z][A-Za-z0-9]{0,5}\z/, t)) and
+      Regex.match?(~r/\A[\w.\/\-*~]+\z/, t)
+  end
+
+  @doc """
+  Nodes naming any path-shaped token of `question`, for use as retrieval
+  anchors: `[%{node: %Node{}, match: atom, term: path}]`, per term in
+  question order, each node once (first term that reached it).
+  """
+  def anchors_for_question(workspace_id, question) when is_binary(workspace_id) do
+    question
+    |> path_terms()
+    |> Enum.flat_map(fn term ->
+      {:ok, hits} = nodes_for_file(workspace_id, term)
+      Enum.map(hits, &Map.put(&1, :term, term))
+    end)
+    |> Enum.uniq_by(& &1.node.id)
+  end
+
+  @doc """
   Every live node in the workspace whose files name `path`.
 
   `{:ok, [%{node: %Node{}, match: :exact | :under_dir | :dir_contains}]}`,

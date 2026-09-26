@@ -175,6 +175,26 @@ defmodule DeciduousMcp.Graph.RelatedTest do
     end
   end
 
+  describe "path_terms/1 and anchors_for_question/2" do
+    test "keeps paths a word tokenizer would destroy, ignores prose and urls" do
+      assert Related.path_terms(
+               "What did we decide about `src/db.rs`, ./lib/api/rate_limiter.ex and CLAUDE.md? " <>
+                 "See https://x.io/a. Also e.g. the end."
+             ) == ["src/db.rs", "lib/api/rate_limiter.ex", "CLAUDE.md"]
+
+      assert Related.path_terms("why did we pick postgres") == []
+    end
+
+    test "anchors each node once, under the first term that reached it", %{wid: wid} do
+      a = node(wid, "a", %{"files" => ["src/db.rs"]})
+      b = node(wid, "b", %{"files" => ["src/db.rs", "CLAUDE.md"]})
+
+      hits = Related.anchors_for_question(wid, "what about src/db.rs and CLAUDE.md?")
+      assert Enum.sort(Enum.map(hits, & &1.node.id)) == Enum.sort([a.id, b.id])
+      assert Enum.all?(hits, &(&1.term == "src/db.rs" and &1.match == :exact))
+    end
+  end
+
   describe "decisions_above/2" do
     test "stops at the first decision on each path, nearest first, through real edges only",
          %{wid: wid} do
