@@ -650,8 +650,55 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 }
             }),
         },
+        // -----------------------------------------------------------------
+        // Message board: agents working at the same time
+        // -----------------------------------------------------------------
+        ToolDefinition {
+            name: "post_message".to_string(),
+            description: format!(
+                "Post to the agent message board. When more than one agent works at once, interface changes, questions and answers go here, never into a scratch or markdown file. Address agents with @label in subject or body; answer a message with reply_to its id. Messages are not graph nodes: not in graph.json, not exported, not synced. Local projects keep one board for all git worktrees; a project with a [remote] posts to the server (which needs {}+).",
+                crate::board::SERVER_VERSION_NEEDED
+            ),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "workspace": {"type": "string", "maxLength": 262144, "description": BOARD_WORKSPACE_DESC},
+                    "branch": {"type": "string", "maxLength": 512, "description": "Branch the message is about (default: the current one)"},
+                    "author": {"type": "string", "minLength": 1, "maxLength": 100, "description": "Your label, e.g. \"lead\" or \"A-retrieval\" (at most 100 characters)"},
+                    "subject": {"type": "string", "minLength": 1, "maxLength": 300, "description": "Subject line (at most 300 characters)"},
+                    "body": {"type": "string", "minLength": 1, "maxLength": 65536, "description": "The message (at most 64 KiB). @label anywhere addresses it."},
+                    "reply_to": {"type": "integer", "minimum": 1, "maximum": i64::MAX, "description": "Id of the message this answers; must exist on this board"}
+                },
+                "required": ["author", "subject", "body"],
+                "additionalProperties": false
+            }),
+        },
+
+        ToolDefinition {
+            name: "read_messages".to_string(),
+            description: "Read the agent message board, oldest first. At start, before touching shared files, and before finishing, call it with unanswered_for set to your own label: it returns messages that mention you and that you have not answered with reply_to. Poll with since_id = the latest_id of the previous call.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "workspace": {"type": "string", "maxLength": 262144, "description": BOARD_WORKSPACE_DESC},
+                    "branch": {"type": "string", "maxLength": 512, "description": "Only messages posted with this branch"},
+                    "since_id": {"type": "integer", "minimum": 0, "maximum": i64::MAX, "description": "Only messages with an id greater than this"},
+                    "author": {"type": "string", "minLength": 1, "maxLength": 100, "description": "Only messages by this label"},
+                    "to": {"type": "string", "minLength": 1, "maxLength": 100, "description": "Only messages mentioning this label"},
+                    "unanswered_for": {"type": "string", "minLength": 1, "maxLength": 100, "description": "Messages mentioning this label that no message by this label replies to"},
+                    "query": {"type": "string", "minLength": 1, "maxLength": 1000, "description": "Text to find in subject or body"},
+                    "id": {"type": "integer", "minimum": 1, "maximum": i64::MAX, "description": "One message by id (an unknown id is an empty list)"},
+                    "limit": {"type": "integer", "description": "At most this many (default 50, max 200); truncated says whether more match", "minimum": 1, "maximum": 200}
+                },
+                "additionalProperties": false
+            }),
+        },
     ]
 }
+
+/// The `workspace` argument of the board tools. It is there so the tools
+/// read the same here as on the server; a local board has one workspace.
+const BOARD_WORKSPACE_DESC: &str = "Project this call belongs to: `workspace` under [remote] in the repository's .deciduous/config.toml when it has one, otherwise the basename of the git repo root. Optional here; a workspace other than this project's is refused.";
 
 /// Look up a tool definition by name. Returns None if not found.
 pub fn find_tool(name: &str) -> Option<ToolDefinition> {
@@ -732,17 +779,24 @@ pub fn validate_tool_args(tool_name: &str, args: &Value) -> Result<(), String> {
 fn suggest<'a>(key: &str, declared: &[&'a str]) -> Option<&'a str> {
     const ALIASES: &[(&str, &[&str])] = &[
         ("type", &["node_type", "edge_type"]),
-        ("from", &["from_id"]),
+        ("from", &["from_id", "author"]),
         ("to", &["to_id"]),
         ("from_node_id", &["from_id"]),
         ("to_node_id", &["to_id"]),
         ("id", &["node_id"]),
         ("parent_id", &["from_id", "node_id"]),
         ("name", &["title"]),
-        ("text", &["description", "title"]),
+        ("text", &["description", "title", "body"]),
         ("search", &["query"]),
         ("q", &["query"]),
         ("reason", &["rationale"]),
+        // The board tools, as the CLI spells them.
+        ("unanswered", &["unanswered_for"]),
+        ("since", &["since_id"]),
+        ("message", &["body"]),
+        ("as", &["author"]),
+        ("reply", &["reply_to"]),
+        ("in_reply_to", &["reply_to"]),
     ];
     if let Some((_, targets)) = ALIASES.iter().find(|(k, _)| *k == key) {
         if let Some(t) = targets.iter().find(|t| declared.contains(t)) {
@@ -843,8 +897,55 @@ mod tests {
     #[test]
     fn test_tool_count() {
         let tools = all_tool_definitions();
-        // 6 CRUD + 5 Query + 6 Analysis + 2 Docs + 4 Themes + 5 Sessions + 2 Export + 2 Sync = 32
-        assert_eq!(tools.len(), 32, "Expected 32 tools, got {}", tools.len());
+        // 6 CRUD + 5 Query + 6 Analysis + 2 Docs + 4 Themes + 5 Sessions + 2 Export + 2 Sync
+        // + 2 Board = 34
+        assert_eq!(tools.len(), 34, "Expected 34 tools, got {}", tools.len());
+    }
+
+    /// The board tools take exactly the arguments the 1.0.9 interface gives
+    /// them on the server (board post 16), with the same types, so an agent
+    /// moving between a local and a remote project calls them the same way.
+    #[test]
+    fn board_tool_schemas_match_the_interface() {
+        // The server's tools/list inputSchema for both tools, descriptions
+        // dropped, as board-server captured it from the Elixir router at
+        // 30f99cb (board post 19). Everything but the descriptions has to
+        // be identical: names, types, bounds, required, closed objects.
+        let server = json!({
+            "post_message": {"additionalProperties":false,"properties":{"author":{"maxLength":100,"minLength":1,"type":"string"},"body":{"maxLength":65536,"minLength":1,"type":"string"},"branch":{"maxLength":512,"type":"string"},"reply_to":{"maximum":9223372036854775807_i64,"minimum":1,"type":"integer"},"subject":{"maxLength":300,"minLength":1,"type":"string"},"workspace":{"maxLength":262144,"type":"string"}},"required":["author","subject","body"],"type":"object"},
+            "read_messages": {"additionalProperties":false,"properties":{"author":{"maxLength":100,"minLength":1,"type":"string"},"branch":{"maxLength":512,"type":"string"},"id":{"maximum":9223372036854775807_i64,"minimum":1,"type":"integer"},"limit":{"maximum":200,"minimum":1,"type":"integer"},"query":{"maxLength":1000,"minLength":1,"type":"string"},"since_id":{"maximum":9223372036854775807_i64,"minimum":0,"type":"integer"},"to":{"maxLength":100,"minLength":1,"type":"string"},"unanswered_for":{"maxLength":100,"minLength":1,"type":"string"},"workspace":{"maxLength":262144,"type":"string"}},"type":"object"}
+        });
+        fn strip(v: &Value) -> Value {
+            match v {
+                Value::Object(m) => Value::Object(
+                    m.iter()
+                        .filter(|(k, _)| k.as_str() != "description")
+                        .map(|(k, v)| (k.clone(), strip(v)))
+                        .collect(),
+                ),
+                other => other.clone(),
+            }
+        }
+        for name in ["post_message", "read_messages"] {
+            assert_eq!(
+                strip(&find_tool(name).unwrap().input_schema),
+                server[name],
+                "{name} differs from the server's schema"
+            );
+        }
+        let e = validate_tool_args("read_messages", &json!({"unanswered": "lead"})).unwrap_err();
+        assert!(
+            e.contains("\"unanswered\" (did you mean unanswered_for?)"),
+            "{e}"
+        );
+        let e = validate_tool_args("read_messages", &json!({"from": "lead"})).unwrap_err();
+        assert!(e.contains("did you mean author?"), "{e}");
+        let e = validate_tool_args(
+            "post_message",
+            &json!({"author": "a", "subject": "s", "body": "b", "message": "m"}),
+        )
+        .unwrap_err();
+        assert!(e.contains("did you mean body?"), "{e}");
     }
 
     #[test]

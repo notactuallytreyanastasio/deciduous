@@ -101,6 +101,9 @@ pub fn dispatch_as(db: &Database, tool_name: &str, args: Value, caller: Caller) 
         "sync" => handle_sync(db, &args),
         // Old name, kept so existing clients keep working
         "events_status" => handle_sync_status(db),
+        // Message board
+        "post_message" => handle_post_message(db, &args, caller),
+        "read_messages" => handle_read_messages(db, &args),
         _ => Err(HandlerError {
             message: format!("Unknown tool: {tool_name}"),
         }),
@@ -1226,6 +1229,36 @@ fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
 }
 
 // ---------------------------------------------------------------------------
+// Message board (src/board.rs): not graph, so nothing here touches the
+// database handle beyond asking where it is.
+// ---------------------------------------------------------------------------
+
+fn open_board(db: &Database, args: &Value) -> Result<crate::board::Board, HandlerError> {
+    let board = crate::board::Board::open_for(db.path()).map_err(HandlerError::from)?;
+    crate::board::check_workspace(args, &board.workspace(db.path())).map_err(HandlerError::from)?;
+    Ok(board)
+}
+
+fn handle_post_message(db: &Database, args: &Value, caller: Caller) -> HandlerResult {
+    let mut post = crate::board::NewPost::from_args(args)?;
+    if post.branch.is_none() && caller == Caller::Local {
+        post.branch = db::get_current_git_branch();
+    }
+    let posted = open_board(db, args)?.post(&post)?;
+    Ok(tool_result_json(
+        &serde_json::to_value(posted).map_err(|e| e.to_string())?,
+    ))
+}
+
+fn handle_read_messages(db: &Database, args: &Value) -> HandlerResult {
+    let filter = crate::board::Filter::from_args(args)?;
+    let read = open_board(db, args)?.read(&filter)?;
+    Ok(tool_result_json(
+        &serde_json::to_value(read).map_err(|e| e.to_string())?,
+    ))
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1553,5 +1586,51 @@ mod tests {
         let result = dispatch(&db, "untag_node", json!({"node_id": id, "theme": "perf"}));
         assert!(result.is_error.is_none());
         assert!(result.content[0].text.contains("Removed"));
+    }
+
+    #[test]
+    fn board_tools_post_reply_and_read_unanswered() {
+        let db = test_db();
+        let call = |tool: &str, args: Value| {
+            let r = dispatch(&db, tool, args);
+            (r.is_error.is_some(), r.content[0].text.clone())
+        };
+        let (err, text) = call(
+            "post_message",
+            json!({"author": "lead", "subject": "port?", "body": "@w1 which port", "branch": "main"}),
+        );
+        assert!(!err, "{text}");
+        let posted: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(posted["mentions"], json!(["w1"]));
+        assert_eq!(posted["reply_to"], Value::Null);
+        let id = posted["id"].as_i64().unwrap();
+
+        let (_, text) = call("read_messages", json!({"unanswered_for": "w1"}));
+        let read: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(read["messages"][0]["id"], id);
+        assert_eq!(read["messages"][0]["branch"], "main");
+        assert_eq!(read["latest_id"], id);
+        assert_eq!(read["truncated"], false);
+
+        let (err, text) = call(
+            "post_message",
+            json!({"author": "w1", "subject": "re", "body": "4000", "reply_to": id + 100}),
+        );
+        assert!(err && text.contains("no such message"), "{text}");
+        let (err, _) = call(
+            "post_message",
+            json!({"author": "w1", "subject": "re", "body": "4000", "reply_to": id}),
+        );
+        assert!(!err);
+        let (_, text) = call("read_messages", json!({"unanswered_for": "w1"}));
+        assert_eq!(
+            serde_json::from_str::<Value>(&text).unwrap()["messages"],
+            json!([])
+        );
+
+        let (err, text) = call("read_messages", json!({"workspace": "some-other-project"}));
+        assert!(err && text.contains("not this project's"), "{text}");
+        // Messages are not graph: the graph is still empty.
+        assert!(db.get_all_nodes().unwrap().is_empty());
     }
 }

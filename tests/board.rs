@@ -507,3 +507,44 @@ fn a_server_without_the_board_is_an_error_naming_the_version_not_a_local_fallbac
         .unwrap_or(0);
     assert_eq!(n, 0);
 }
+
+#[test]
+fn stdio_mcp_serves_the_board_tools() {
+    let sb = Sandbox::new();
+    let dir = sb.repo("proj");
+    let mut child = sb
+        .cmd(&dir, &["mcp"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let lines = [
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}),
+        json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
+        json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "post_message", "arguments": {"workspace": "proj", "author": "lead", "subject": "s", "body": "@w1 go"}}}),
+        json!({"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "read_messages", "arguments": {"unanswered_for": "w1"}}}),
+    ];
+    for l in &lines {
+        writeln!(stdin, "{l}").unwrap();
+    }
+    drop(stdin);
+    let out = child.wait_with_output().unwrap();
+    let replies: Vec<Value> = text(&out.stdout).lines().map(json_of).collect();
+    let tools: Vec<&str> = replies[1]["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert!(tools.contains(&"post_message") && tools.contains(&"read_messages"));
+    let posted = json_of(replies[2]["result"]["content"][0]["text"].as_str().unwrap());
+    assert_eq!(posted["id"], 1);
+    let read = json_of(replies[3]["result"]["content"][0]["text"].as_str().unwrap());
+    assert_eq!(read["messages"][0]["mentions"], json!(["w1"]));
+
+    // The CLI in the same project sees what the MCP tool posted.
+    let r = json_of(&sb.dx_ok(&dir, &["board", "read", "--json"]));
+    assert_eq!(ids(&r), [1]);
+}
