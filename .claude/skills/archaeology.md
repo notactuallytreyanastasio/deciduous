@@ -117,3 +117,7 @@ deciduous nodes --type revisit
 - **Don't create nodes for every commit.** Commits are evidence, not graph nodes.
 - **Don't create implementation nodes.** The graph is about the MODEL, not the code.
 - **Don't over-structure.** Simple narratives might just be: goal → option → decision.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.

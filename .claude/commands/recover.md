@@ -53,6 +53,17 @@ done
 deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
 ```
 
+## Step 1.7: Check the Message Board
+
+If other agents are working on this project at the same time, read what they have asked you before doing anything else:
+
+```bash
+deciduous board read --unanswered <your-label>   # or read_messages with unanswered_for
+deciduous board read --since <last id you saw>    # everything new, addressed to you or not
+```
+
+Answer each with `deciduous board post --as <your-label> --reply-to <id> ...` (or `post_message` with `reply_to`). Coordinate there, never in a scratch or markdown file.
+
 ## Step 2: Check Git State
 
 ```bash
@@ -76,6 +87,7 @@ cat git.log | tail -30
 5. **Open questions** or unresolved observations
 6. **Attached documents** - diagrams, specs, or screenshots on key nodes
 7. **Suggested next steps**
+8. **Unanswered board messages** addressed to you, if other agents are working in parallel
 
 ### Branch Configuration
 
@@ -167,7 +179,7 @@ SESSION END -> Final audit
 Teammates' decisions arrive in `.deciduous/graph.json`. After `git pull`, pull them into your database:
 
 ```bash
-deciduous sync            # import their records, export yours, refresh docs/graph-data.json
+deciduous sync            # import their records, export yours
 deciduous sync --check    # just report what is pending
 ```
 

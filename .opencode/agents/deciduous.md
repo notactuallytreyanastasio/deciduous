@@ -33,6 +33,16 @@ deciduous sync
 deciduous dot --png
 ```
 
+## Other Agents: The Message Board
+
+When other agents work at the same time, coordinate on the board, never in a scratch or markdown file:
+
+```bash
+deciduous board read --unanswered <label>                       # at start, before shared files, before finishing
+deciduous board post --as <label> -s "subject" -m "@other body"  # interface changes, questions, answers
+deciduous board post --as <label> -s "re" -m "..." --reply-to <id>
+```
+
 ## Node Flow Rule
 
 ```

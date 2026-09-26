@@ -27,13 +27,4 @@ Launch the deciduous web server for viewing and navigating the decision graph.
   - Connected nodes (incoming/outgoing edges)
   - Timestamps and status
 
-## Alternative: Static Hosting
-
-For GitHub Pages or other static hosting:
-```bash
-deciduous sync  # Exports to docs/graph-data.json
-```
-
-Then push to GitHub - the graph is viewable at your GitHub Pages URL.
-
 $ARGUMENTS

@@ -41,6 +41,8 @@ deciduous add action "What you're about to implement" -c 85 -f "file1.rs,file2.r
 deciduous link <goal_id> <action_id> -r "Implementation step"
 ```
 
+**Other agents working at the same time?** Before editing a file another agent may be changing, read `deciduous board read --unanswered <your-label>`, and post an interface change on the board (`deciduous board post --as <your-label> -s "..." -m "@owner ..."`) before you make it. Never coordinate through a scratch or markdown file.
+
 ## Step 4: After Completion
 
 When the work is done:
