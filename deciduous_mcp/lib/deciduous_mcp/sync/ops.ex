@@ -266,8 +266,11 @@ defmodule DeciduousMcp.Sync.Ops do
          {:ok, outcome} <- apply_op(nil, op["kind"], op) do
       {%{op_id: op_id, result: outcome}, claim}
     else
-      {:rejected, reason} -> {%{op_id: op_id, result: "rejected", reason: reason}, claim}
-      reason when is_binary(reason) -> {%{op_id: op_id, result: "rejected", reason: reason}, claim}
+      {:rejected, reason} ->
+        {%{op_id: op_id, result: "rejected", reason: reason}, claim}
+
+      reason when is_binary(reason) ->
+        {%{op_id: op_id, result: "rejected", reason: reason}, claim}
     end
   end
 
@@ -525,15 +528,26 @@ defmodule DeciduousMcp.Sync.Ops do
           do: set,
           else: Map.put(set, "metadata", Map.merge(node.metadata || %{}, meta))
 
-      if attrs == %{} and is_nil(node.deleted_at) do
-        # Every field already held the value this op sets.
-        {:ok, "exists"}
-      else
-        case Nodes.update_node(node.id, attrs, revive: true) do
-          {:ok, _} -> {:ok, "applied"}
-          {:error, %Ecto.Changeset{} = cs} -> {:rejected, "update_node #{cid}: #{errors(cs)}"}
-          {:error, other} -> {:rejected, "update_node #{cid}: #{describe(other)}"}
-        end
+      cond do
+        attrs == %{} and is_nil(node.deleted_at) ->
+          # Every field already held the value this op sets.
+          {:ok, "exists"}
+
+        attrs == %{} ->
+          # A deleted node whose every field already holds what this op
+          # sets. Reviving it for that restored a node nobody edited: a
+          # git-origin op for an edit made before the delete is dated when
+          # it was queued, so it passed editable_node's "made after the
+          # delete" test while changing nothing. Only a change brings a
+          # node back.
+          {:ok, "absent"}
+
+        true ->
+          case Nodes.update_node(node.id, attrs, revive: true) do
+            {:ok, _} -> {:ok, "applied"}
+            {:error, %Ecto.Changeset{} = cs} -> {:rejected, "update_node #{cid}: #{errors(cs)}"}
+            {:error, other} -> {:rejected, "update_node #{cid}: #{describe(other)}"}
+          end
       end
     end
   end
