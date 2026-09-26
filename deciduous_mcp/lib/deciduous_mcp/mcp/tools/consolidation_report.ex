@@ -29,7 +29,8 @@ defmodule DeciduousMcp.MCP.Tools.ConsolidationReport do
           "uncertain with the evidence), competing_decisions (similar live decisions under " <>
           "the same option or goal with no revisit between them: a missing revisit), " <>
           "stale_actions (pending actions older than stale_days with no outcome), and " <>
-          "parentless actions and outcomes. Bounded; every cap and what it cut is in the result.",
+          "parentless actions and outcomes (the first 10 with a ranked suggested_parent, never " <>
+          "linked). Bounded; every cap and what it cut is in the result.",
       input_schema: %{
         type: "object",
         properties: %{

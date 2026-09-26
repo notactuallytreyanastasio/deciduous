@@ -23,7 +23,9 @@ defmodule DeciduousMcp.Graph.Consolidation do
       leaves: the second decision replaced the first and nobody said so.
     * `stale_actions` -- pending/active actions older than `stale_days` from
       which no outcome is reachable without passing through another action.
-    * `parentless` -- live actions and outcomes with no live parent.
+    * `parentless` -- live actions and outcomes with no live parent. The
+      first 10 listed carry `suggested_parent`, the top hit of
+      `DeciduousMcp.Graph.Candidates.suggest_parents/3` (or nil).
 
   "Live" means not soft-deleted. A decision is current unless its status
   is superseded, abandoned or rejected: status `active` is almost never set
@@ -38,6 +40,7 @@ defmodule DeciduousMcp.Graph.Consolidation do
 
   import Ecto.Query
 
+  alias DeciduousMcp.Graph.Candidates
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Edge, Node}
 
@@ -54,6 +57,9 @@ defmodule DeciduousMcp.Graph.Consolidation do
   # dropped, so it cannot compete with anything.
   @closed_statuses ~w(superseded abandoned rejected)
   @open_action_statuses ~w(pending active)
+
+  # parentless nodes that get a ranked parent guess from Candidates.
+  @suggest_max 10
 
   # merge needs this much title similarity when descriptions do not
   # contradict it; keep_separate fires when both descriptions exist and
@@ -153,6 +159,7 @@ defmodule DeciduousMcp.Graph.Consolidation do
           status: n.status,
           title: n.title,
           branch: fragment("?->>'branch'", n.metadata),
+          workspace_id: n.workspace_id,
           inserted_at: n.inserted_at
         }
       )
@@ -523,19 +530,63 @@ defmodule DeciduousMcp.Graph.Consolidation do
       )
       |> Enum.sort_by(&{&1.inserted_at, &1.id}, &sort_le/2)
 
+    listed = Enum.take(all, o.max_items)
+    guesses = parent_guesses(Enum.take(listed, @suggest_max), graph)
+
     listed =
-      all
-      |> Enum.take(o.max_items)
-      |> Enum.map(fn n ->
+      Enum.map(listed, fn n ->
         want =
           if n.node_type == "outcome",
             do: "the action that produced it",
             else: "the decision that spawned it"
 
-        Map.put(node_ref(graph, n.id), :suggestion, "add_edge <#{want}> -> #{n.id}")
+        node_ref(graph, n.id)
+        |> Map.put(:suggestion, "add_edge <#{want}> -> #{n.id}")
+        |> Map.put(:suggested_parent, Map.get(guesses, n.id))
       end)
 
     {listed, length(all)}
+  end
+
+  # Candidates.suggest_parents (02-candidate-parents) for the first
+  # @suggest_max listed nodes, called the way find_orphans calls it: the
+  # node's own descendants excluded (linking to one would close a cycle)
+  # and ranked as of a second after the node was written. About 20 ms a
+  # node on the dev database, hence the cap. Only the top hit is kept.
+  defp parent_guesses([], _graph), do: %{}
+
+  defp parent_guesses(nodes, graph) do
+    ids = Enum.map(nodes, & &1.id)
+
+    details =
+      from(n in Node,
+        where: n.id in ^ids,
+        select: {n.id, %{description: n.description, files: fragment("?->'files'", n.metadata)}}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    Map.new(nodes, fn n ->
+      d = details[n.id]
+
+      top =
+        Candidates.suggest_parents(
+          n.workspace_id,
+          %{
+            node_type: n.node_type,
+            title: n.title,
+            description: d.description,
+            branch: n.branch,
+            files: d.files
+          },
+          limit: 1,
+          exclude: [n.id | MapSet.to_list(descendants(n.id, graph.children))],
+          as_of: DateTime.add(n.inserted_at, 1, :second)
+        )
+        |> List.first()
+
+      {n.id, top && Map.take(top, [:id, :node_type, :title, :status, :score, :signals])}
+    end)
   end
 
   # --- helpers ---

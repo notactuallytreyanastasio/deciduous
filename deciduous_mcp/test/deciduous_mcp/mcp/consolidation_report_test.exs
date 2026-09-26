@@ -296,6 +296,34 @@ defmodule DeciduousMcp.MCP.ConsolidationReportTest do
       assert Enum.all?(r["findings"], &(&1["suggestion"] =~ "the action that produced it"))
       assert r["total"] == 2
     end
+
+    test "suggested_parent is Candidates' top hit, never the node's own descendant", %{
+      ws: ws,
+      client: c
+    } do
+      g = node(ws, "goal", "Cache the export pipeline")
+      d = node(ws, "decision", "Cache exports in redis")
+      link(ws, g, d)
+      right = node(ws, "action", "Add redis cache to the export pipeline")
+      link(ws, d, right)
+
+      loose = node(ws, "outcome", "Redis cache cut export time from 9s to 2s")
+
+      # A parentless action whose only fitting-titled node sits below it.
+      top = node(ws, "action", "Rewrite the invoice renderer")
+      below = node(ws, "action", "Rewrite the invoice renderer templates")
+      link(ws, top, below)
+
+      findings = Map.new(report(c)["parentless"]["findings"], &{&1["id"], &1})
+
+      assert findings[loose.id]["suggested_parent"]["id"] == right.id
+      assert findings[loose.id]["suggestion"] =~ "the action that produced it"
+
+      case findings[top.id]["suggested_parent"] do
+        nil -> :ok
+        s -> refute s["id"] == below.id
+      end
+    end
   end
 
   test "writes nothing to any table", %{ws: ws, client: c} do
