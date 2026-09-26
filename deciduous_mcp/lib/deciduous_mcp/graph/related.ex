@@ -224,8 +224,12 @@ defmodule DeciduousMcp.Graph.Related do
 
     %{
       name: "shared_identifier",
-      cues:
-        ~w(file files path paths module commit sha touched changed .rs .ex .exs .ts .tsx .py .md),
+      cues: ~w(file files path paths module commit sha touched changed),
+      # A path in the question ("src/db.rs", "CLAUDE.md") switches the route
+      # on. The cue list used to hold ".rs", ".ex" and so on, which never
+      # fired: Retrieval compares cues with words split on [^\w-]+, so
+      # "db.rs" arrives as "db" and "rs".
+      matches: &(path_terms(&1) != []),
       weight: opts[:weight] || 1.0,
       expand: fn workspace, frontier, visited ->
         route_expand(workspace, frontier, visited, limit)
@@ -262,8 +266,8 @@ defmodule DeciduousMcp.Graph.Related do
   The path-shaped tokens in a free-text question, normalised: a token with a
   `/` in it, or ending in a short extension (`db.rs`, `CLAUDE.md`).
   Surrounding quotes, backticks, brackets and sentence punctuation are
-  dropped. For retrieval to seed anchors from paths, which a word tokenizer
-  destroys ("src/db.rs" -> "srcdbrs", D-eval finding 1).
+  dropped. route/1 switches shared_identifier on with it: a word tokenizer
+  splits "src/db.rs" into pieces no cue word can match.
 
       iex> DeciduousMcp.Graph.Related.path_terms("what did we decide about `src/db.rs` and lib/?")
       ["src/db.rs", "lib/"]

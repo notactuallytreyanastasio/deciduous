@@ -181,6 +181,22 @@ defmodule DeciduousMcp.Graph.RetrievalTest do
     assert msg =~ "invalid route"
   end
 
+  test "a path in the question switches shared_identifier on, with no cue word", ctx do
+    # The route's cues listed ".rs" and ".ex", but question words are split
+    # on anything that is not a word character or "-", so "db.rs" arrived
+    # as "db" and "rs" and an extension cue could never match.
+    active = fn q ->
+      {:ok, r} = Retrieval.run(ctx.ws.id, q, extra_routes: [Related.route()])
+      Enum.map(r.routes, & &1.name)
+    end
+
+    assert "shared_identifier" in active.("what did we decide about src/db.rs")
+    assert "shared_identifier" in active.("anything on CLAUDE.md?")
+    assert "shared_identifier" in active.("notes on lib/api/")
+    refute "shared_identifier" in active.("why did we pick postgres")
+    refute "shared_identifier" in active.("see e.g. the end")
+  end
+
   describe "scope applies to every route's neighbours" do
     # An extra route supplies neighbours through its own expand/3, not
     # through the edge query that carries the scope's WHERE. Before the

@@ -91,6 +91,12 @@ defmodule DeciduousMcp.Graph.Retrieval do
 
   An edge route's `edge` is `fn edge_type, neighbour, from_node -> usefulness | nil`.
 
+  Any route may also carry `matches: fn question -> boolean end`, which
+  switches it on for a question its cue words cannot describe. Cues are
+  compared with the question's words, split on everything but letters,
+  digits and `-`, so a cue like ".rs" can never match; the
+  shared_identifier route uses `matches` to switch on for a path.
+
   Pass it in `opts[:extra_routes]`. Its neighbours are scope-checked,
   scored and budgeted like any other (the scope is applied once, to every
   route's neighbours together, so a route need not know about scopes); the
@@ -330,7 +336,8 @@ defmodule DeciduousMcp.Graph.Retrieval do
       Enum.reject(routes, fn r ->
         is_map(r) and is_binary(r[:name]) and is_number(r[:weight]) and r[:weight] > 0 and
           (r[:cues] == :always or is_list(r[:cues])) and
-          (is_function(r[:edge], 3) or is_function(r[:expand], 3))
+          (is_function(r[:edge], 3) or is_function(r[:expand], 3)) and
+          (not Map.has_key?(r, :matches) or is_function(r[:matches], 1))
       end)
 
     names = Enum.map(routes, & &1[:name])
@@ -352,7 +359,7 @@ defmodule DeciduousMcp.Graph.Retrieval do
     q = String.downcase(question)
 
     hint = type_hint(words, q)
-    active = active_routes(routes ++ type_route(hint), words)
+    active = active_routes(routes ++ type_route(hint), words, question)
     budgets = allocate(active, budget)
 
     {terms, route_terms} = split_terms(extract_terms(question), active, hint)
@@ -454,10 +461,11 @@ defmodule DeciduousMcp.Graph.Retrieval do
     question |> String.downcase() |> String.split(~r/[^\w-]+/u, trim: true)
   end
 
-  defp active_routes(routes, words) do
+  defp active_routes(routes, words, question) do
     Enum.filter(routes, fn
       %{cues: :always} -> true
       %{cues: :hint} -> true
+      %{matches: matches} = r -> Enum.any?(r.cues, &(&1 in words)) or matches.(question)
       %{cues: cues} -> Enum.any?(cues, &(&1 in words))
     end)
   end
