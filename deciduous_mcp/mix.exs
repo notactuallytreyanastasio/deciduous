@@ -18,6 +18,9 @@ defmodule DeciduousMcp.MixProject do
     ]
   end
 
+  # The ask_graph eval runs inside the SQL sandbox with the test MCP client.
+  def cli, do: [preferred_envs: ["deciduous.eval": :test]]
+
   def application do
     [
       extra_applications: [:logger],
