@@ -91,8 +91,16 @@ defmodule DeciduousMcp.Graph.Retrieval do
 
   An edge route's `edge` is `fn edge_type, neighbour, from_node -> usefulness | nil`.
 
-  Pass it in `opts[:extra_routes]`. Its neighbours are scored and budgeted
-  like any other; the extra map is merged into the path step.
+  Any route may also carry `matches: fn question -> boolean end`, which
+  switches it on for a question its cue words cannot describe. Cues are
+  compared with the question's words, split on everything but letters,
+  digits and `-`, so a cue like ".rs" can never match; the
+  shared_identifier route uses `matches` to switch on for a path.
+
+  Pass it in `opts[:extra_routes]`. Its neighbours are scope-checked,
+  scored and budgeted like any other (the scope is applied once, to every
+  route's neighbours together, so a route need not know about scopes); the
+  extra map is merged into the path step.
   """
 
   import Ecto.Query
@@ -328,7 +336,8 @@ defmodule DeciduousMcp.Graph.Retrieval do
       Enum.reject(routes, fn r ->
         is_map(r) and is_binary(r[:name]) and is_number(r[:weight]) and r[:weight] > 0 and
           (r[:cues] == :always or is_list(r[:cues])) and
-          (is_function(r[:edge], 3) or is_function(r[:expand], 3))
+          (is_function(r[:edge], 3) or is_function(r[:expand], 3)) and
+          (not Map.has_key?(r, :matches) or is_function(r[:matches], 1))
       end)
 
     names = Enum.map(routes, & &1[:name])
@@ -350,7 +359,7 @@ defmodule DeciduousMcp.Graph.Retrieval do
     q = String.downcase(question)
 
     hint = type_hint(words, q)
-    active = active_routes(routes ++ type_route(hint), words)
+    active = active_routes(routes ++ type_route(hint), words, question)
     budgets = allocate(active, budget)
 
     {terms, route_terms} = split_terms(extract_terms(question), active, hint)
@@ -452,10 +461,11 @@ defmodule DeciduousMcp.Graph.Retrieval do
     question |> String.downcase() |> String.split(~r/[^\w-]+/u, trim: true)
   end
 
-  defp active_routes(routes, words) do
+  defp active_routes(routes, words, question) do
     Enum.filter(routes, fn
       %{cues: :always} -> true
       %{cues: :hint} -> true
+      %{matches: matches} = r -> Enum.any?(r.cues, &(&1 in words)) or matches.(question)
       %{cues: cues} -> Enum.any?(cues, &(&1 in words))
     end)
   end
@@ -608,24 +618,40 @@ defmodule DeciduousMcp.Graph.Retrieval do
   end
 
   defp any_term_dynamic(terms) do
-    # Metadata values, not the JSON text: `metadata::text` includes the key
-    # names, and every node add_node writes has "branch", so asking about
-    # "branch" matched every node. jsonb_each_text gives top-level values as
-    # text (an array value as its JSON, so a file path still matches).
     Enum.reduce(terms, dynamic(false), fn term, acc ->
       pattern = Nodes.contains_pattern(term)
 
       dynamic(
         [node: n],
         ^acc or ilike(n.title, ^pattern) or ilike(n.description, ^pattern) or
-          fragment(
-            "EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(?) = 'object' THEN ? ELSE '{}'::jsonb END) AS kv WHERE kv.value ILIKE ?)",
-            n.metadata,
-            n.metadata,
-            ^pattern
-          )
+          ^metadata_value_matches(pattern)
       )
     end)
+  end
+
+  # Metadata values, not the JSON text: `metadata::text` includes the key
+  # names, and every node add_node writes has "branch", so asking about
+  # "branch" matched every node. jsonb_each_text gives top-level values as
+  # text (an array value as its JSON, so a file path still matches).
+  #
+  # jsonb_each_text alone cannot use an index, so it ran for every node in
+  # the workspace: 130-140 ms per query at 30,000 nodes, twice per question
+  # (anchors and term_hits). `metadata::text ILIKE` goes first, served by
+  # idx_nodes_metadata_text_trgm. It is a necessary condition: a term is
+  # letters, digits and `_ - / .` (extract_terms/1), none of which the JSON
+  # text form escapes, so a value containing the term puts the same
+  # characters, contiguous, into metadata::text.
+  defp metadata_value_matches(pattern) do
+    dynamic(
+      [node: n],
+      fragment("?::text ILIKE ?", n.metadata, ^pattern) and
+        fragment(
+          "EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(?) = 'object' THEN ? ELSE '{}'::jsonb END) AS kv WHERE kv.value ILIKE ?)",
+          n.metadata,
+          n.metadata,
+          ^pattern
+        )
+    )
   end
 
   defp trigram_list([], _scope_dyn), do: []
@@ -750,32 +776,19 @@ defmodule DeciduousMcp.Graph.Retrieval do
   defp term_hits([], _scope_dyn), do: %{}
 
   defp term_hits(terms, scope_dyn) do
-    patterns = Enum.map(terms, &Nodes.contains_pattern/1)
     tsqs = Enum.map(terms, &("'" <> &1 <> "'"))
 
-    text =
-      from(
-        t in fragment(
-          "SELECT * FROM unnest(?::text[], ?::text[]) AS u(term, pat)",
-          ^terms,
-          ^patterns
-        ),
-        join: n in Node,
-        as: :node,
-        on:
-          ^dynamic(
-            [t, node: n],
-            ^scope_dyn and
-              (ilike(n.title, t.pat) or ilike(n.description, t.pat) or
-                 fragment(
-                   "EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(?) = 'object' THEN ? ELSE '{}'::jsonb END) AS kv WHERE kv.value ILIKE ?)",
-                   n.metadata,
-                   n.metadata,
-                   t.pat
-                 ))
-          ),
-        select: %{term: t.term, id: n.id}
-      )
+    # One branch per term with the pattern as a query parameter: joined
+    # against unnest(), the pattern was a column, no trigram index could
+    # take it, and the query scanned the workspace (140 ms at 30,000 nodes).
+    [first | rest] =
+      Enum.map(terms, fn term ->
+        nodes_in_scope(scope_dyn)
+        |> where(^any_term_dynamic([term]))
+        |> select([node: n], %{term: type(^term, :string), id: n.id})
+      end)
+
+    text = Enum.reduce(rest, first, &union_all(&2, ^&1))
 
     stemmed =
       from(
@@ -913,8 +926,10 @@ defmodule DeciduousMcp.Graph.Retrieval do
   end
 
   # Every live, in-scope, unvisited neighbour of the frontier: two queries
-  # for stored edges (out and in), plus each extra route's expand/3.
-  # Returns {[{kind, from_id, node, edge_or_nil, direction, extra}], truncated?}.
+  # for stored edges (out and in), plus each extra route's expand/3, then
+  # one scope check over all of them (in_scope/2).
+  # Returns {[{:edge, from, node, edge, direction} | {:custom, route, from,
+  # node, usefulness, extra}], truncated?}.
   defp neighbours(ctx, frontier, visited) do
     visited_list = MapSet.to_list(visited)
 
@@ -934,8 +949,33 @@ defmodule DeciduousMcp.Graph.Retrieval do
         {:custom, r, from, node, u, extra}
       end
 
-    {out ++ inc ++ extra, t1 or t2}
+    {in_scope(ctx, out ++ inc ++ extra), t1 or t2}
   end
+
+  # The one place the scope is enforced on expansion. An extra route's
+  # expand/3 gets only the workspace, so it cannot apply scope=decisions or
+  # scope=active itself, and asking every route to re-implement the scope
+  # is how shared_identifier came to return actions under scope=decisions
+  # and completed nodes under scope=active. edge_neighbours/4 also filters
+  # in SQL, but only so out-of-scope edges do not use up the per-round cap;
+  # correctness does not depend on it.
+  defp in_scope(_ctx, []), do: []
+
+  defp in_scope(ctx, raw) do
+    ids = raw |> Enum.map(&neighbour_id/1) |> Enum.uniq()
+
+    keep =
+      nodes_in_scope(ctx.scope_dyn)
+      |> where([node: n], n.id in type(^ids, {:array, :binary_id}))
+      |> select([node: n], n.id)
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.filter(raw, &MapSet.member?(keep, neighbour_id(&1)))
+  end
+
+  defp neighbour_id({:edge, _from, node, _e, _dir}), do: node.id
+  defp neighbour_id({:custom, _r, _from, node, _u, _extra}), do: node.id
 
   defp edge_neighbours(ctx, frontier, visited_list, direction) do
     base =

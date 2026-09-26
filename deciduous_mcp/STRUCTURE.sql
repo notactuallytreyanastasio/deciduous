@@ -64,6 +64,59 @@ CREATE TYPE public.node_type AS ENUM (
 
 
 --
+-- Name: deciduous_commit_key(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.deciduous_commit_key(metadata jsonb) RETURNS text
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $_$
+    SELECT CASE
+      WHEN jsonb_typeof(metadata) = 'object'
+       AND jsonb_typeof(metadata -> 'commit') = 'string'
+       AND lower(btrim(metadata ->> 'commit')) ~ '^[0-9a-f]{7,40}$'
+      THEN lower(btrim(metadata ->> 'commit'))
+    END
+  $_$;
+
+
+--
+-- Name: deciduous_node_files(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.deciduous_node_files(metadata jsonb) RETURNS text[]
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$
+    SELECT CASE
+      WHEN jsonb_typeof(metadata) IS DISTINCT FROM 'object'
+        OR jsonb_typeof(metadata -> 'files') IS DISTINCT FROM 'array' THEN NULL
+      WHEN EXISTS (
+        SELECT 1 FROM jsonb_array_elements(metadata -> 'files') AS e(v)
+        WHERE jsonb_typeof(e.v) <> 'string'
+           OR public.deciduous_normalize_path(e.v #>> '{}') = '') THEN NULL
+      ELSE ARRAY(
+        SELECT DISTINCT public.deciduous_normalize_path(e.v)
+        FROM jsonb_array_elements_text(metadata -> 'files') AS e(v)
+        ORDER BY 1)
+    END
+  $$;
+
+
+--
+-- Name: deciduous_normalize_path(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.deciduous_normalize_path(p text) RETURNS text
+    LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    AS $_$
+    SELECT regexp_replace(
+             regexp_replace(
+               regexp_replace(p, '^[[:space:]]+|[[:space:]]+$', '', 'g'),
+               '/(\.?/)+', '/', 'g'),
+             '^(\./)+', '')
+  $_$;
+
+
+--
 -- Name: edge_tombstone_on_delete(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -837,6 +890,13 @@ CREATE INDEX idx_nodes_description_trgm ON public.decision_nodes USING gin (desc
 
 
 --
+-- Name: idx_nodes_files; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_nodes_files ON public.decision_nodes USING gin (public.deciduous_node_files(metadata)) WITH (fastupdate=off) WHERE (deleted_at IS NULL);
+
+
+--
 -- Name: idx_nodes_fts; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -869,6 +929,13 @@ CREATE INDEX idx_nodes_ws_branch_inserted ON public.decision_nodes USING btree (
 --
 
 CREATE INDEX idx_nodes_ws_branchkey_latest ON public.decision_nodes USING btree (workspace_id, COALESCE((metadata ->> 'branch'::text), ''::text), inserted_at DESC, id DESC) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: idx_nodes_ws_commit7; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_nodes_ws_commit7 ON public.decision_nodes USING btree (workspace_id, "left"(public.deciduous_commit_key(metadata), 7)) WHERE (deleted_at IS NULL);
 
 
 --
@@ -1254,7 +1321,8 @@ INSERT INTO public.schema_migrations (version, inserted_at) VALUES
   (20260924100000, NOW()),
   (20260924110000, NOW()),
   (20260926120000, NOW()),
-  (20260926130000, NOW());
+  (20260926130000, NOW()),
+  (20260926140000, NOW());
 
 -- Database defaults from the migrated database -------------------------------
 DO $$

@@ -7,10 +7,11 @@ defmodule DeciduousMcp.MCP.AskGraphRelatedRouteTest do
   metadata.commit. The two nodes here have no edge between them, so the
   second can only be reached through the files they share.
 
-  Two shared paths, not one: Related scores one shared path as usefulness
-  0.5, and with no word of the question in the neighbour Retrieval's score
-  is (1.0 * 0.5 + 0.5 * edge weight 1.0) / 4.5 = 0.222, under its 0.25
-  admission threshold. Two paths give usefulness 0.667 and 0.259.
+  Two shared paths here, though one is now enough: Related scores one
+  ordinary shared path as usefulness 0.7, and with no word of the question
+  in the neighbour Retrieval's score is (0.7 + 0.5 * edge weight 1.0) / 4.5
+  = 0.267, over its 0.25 threshold. (It used to be 0.5 and 0.222, which is
+  why this fixture shares two.)
 
   Over real HTTP to the running listener.
   """

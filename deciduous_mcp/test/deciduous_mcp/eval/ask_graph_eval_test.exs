@@ -23,6 +23,32 @@ defmodule DeciduousMcp.Eval.AskGraphEvalTest do
     end
   end
 
+  test "the held-out set has at least 20 questions and no route cue word" do
+    held = AskGraphFixture.held_out()
+    assert length(held) >= 20
+
+    cues = AskGraphFixture.route_cues()
+
+    for q <- held,
+        w <- q.question |> String.downcase() |> String.split(~r/[^\w-]+/u, trim: true) do
+      refute MapSet.member?(cues, w), "#{q.id} uses cue word #{w}"
+    end
+  end
+
+  test "adversarial: the absent term named AND at most 3 results, or no results" do
+    # The old criterion passed a03 and a04 with 21 and 22 unrelated
+    # results because unmatched_terms named the absent word.
+    assert AskGraph.adversarial_pass?(0, [], ["graphql"])
+    assert AskGraph.adversarial_pass?(3, ["graphql"], ["graphql"])
+    refute AskGraph.adversarial_pass?(4, ["graphql"], ["graphql"])
+    refute AskGraph.adversarial_pass?(21, ["websocket"], ["websocket"])
+    refute AskGraph.adversarial_pass?(1, [], ["graphql"])
+    refute AskGraph.adversarial_pass?(2, ["oauth"], ["oauth", "google"])
+
+    # The old one, kept for the report.
+    assert AskGraph.adversarial_pass_old?(21, ["websocket"], ["websocket"])
+  end
+
   @tag :eval
   @tag timeout: 300_000
   test "ask_graph retrieval eval" do

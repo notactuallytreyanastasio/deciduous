@@ -27,7 +27,40 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
     * `:file`       -- asked by file path or commit
     * `:adversarial` -- about something never decided. `expect` is empty;
       `absent_terms` are the words the graph has nothing about. A good
-      answer returns nothing on-topic, or says those terms matched nothing.
+      answer returns nothing, or says those terms matched nothing and
+      returns at most three results (see `DeciduousMcp.Eval.AskGraph`).
+
+  ## The held-out set
+
+  `questions/0` was written alongside the retrieval routes, and the routes'
+  cue lists repeat its wording ("why", "replaced", "decide", "happened",
+  "touched"). A score on it partly measures that overlap. `held_out/0` is
+  a second set over the same graph, written afterwards, phrased as a user
+  would ask without any word that switches a route on. It is scored and
+  reported separately and must not be used to tune routes.
+
+  Words avoided, and checked by `validate!/0` with the same tokenisation
+  Retrieval uses: every cue of `Retrieval.default_routes/0`
+
+      rationale:  why reason reasons rationale decide decided decision
+                  decisions chose choose chosen pick picked rejected reject
+                  instead tradeoff tradeoffs motivation because problem
+                  cause caused
+      history:    history pivot pivoted pivots revisit revisited reconsider
+                  reconsidered superseded supersede changed evolve evolved
+                  evolution originally trace lineage replace replaced
+                  reverse reversed reversal undo undid earlier previous
+                  previously
+      dependency: blocked blocking blocks blocker blockers depends depend
+                  dependency dependencies requires require required
+                  prerequisite prerequisites waiting stuck enables
+      outcome:    outcome outcomes result results fix fixed work worked
+                  perform performed performance happened succeed succeeded
+                  fail failed effect
+
+  and every cue of `Related.route/0` (file files path paths module commit
+  sha touched changed). Paths themselves are allowed: naming a path is
+  how a user asks about one, and it is not a cue word.
   """
 
   @doc "Nodes as `{key, node_type, title, attrs}`, in creation order."
@@ -418,6 +451,123 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
     ]
   end
 
+  @doc """
+  The held-out questions (see the moduledoc): same shape as `questions/0`,
+  none of the route cue words. Run once after the fixes they were written
+  to check; never tuned against.
+  """
+  def held_out do
+    [
+      # --- single-hop -----------------------------------------------------------
+      q(:h01, :single_hop, "Where does the local CLI keep its data on disk?", [:d_sqlite]),
+      q(:h02, :single_hop, "How do we stop a single client from hogging the public API?", [
+        :d_bucket
+      ]),
+      q(:h03, :single_hop, "What layout engine draws the graph in the browser viewer?", [
+        :d_dagre
+      ]),
+      q(:h04, :single_hop, "How many milliseconds does the limiter cost at p99?", [:oc_limiter]),
+      q(:h05, :single_hop, "Which login mechanism does the viewer use now?", [:d_cookies]),
+      q(
+        :h06,
+        :single_hop,
+        "What goes wrong when the CLI and the server process both open the database?",
+        [:ob_busy]
+      ),
+      q(:h07, :single_hop, "How do teammates see each other's nodes after a git pull?", [
+        :d_graphjson
+      ]),
+      q(
+        :h08,
+        :single_hop,
+        "What stops GitHub from starting the release job when the bot pushes a tag?",
+        [:ob_bot_tags]
+      ),
+
+      # --- multi-hop ------------------------------------------------------------
+      q(
+        :h09,
+        :multi_hop,
+        "Which options for storing the graph on each machine were on the table, and which one won?",
+        [:o_sqlite, :o_pg_local, :d_sqlite]
+      ),
+      q(:h10, :multi_hop, "What did carrier NAT have to do with how we limit API traffic?", [
+        :ob_nat,
+        :d_bucket,
+        :o_nginx_ip
+      ]),
+      q(:h11, :multi_hop, "What middleware went into the API pipeline and how fast is it?", [
+        :a_limiter,
+        :oc_limiter
+      ]),
+      q(
+        :h12,
+        :multi_hop,
+        "After WAL mode went in, how many failures did the concurrent test still show?",
+        [:a_wal, :oc_wal]
+      ),
+      q(:h13, :multi_hop, "What was wrong with the force-directed D3 layout?", [
+        :o_force,
+        :d_dagre
+      ]),
+      q(:h14, :multi_hop, "Which goal does the session plug belong to?", [
+        :a_sessionplug,
+        :d_cookies,
+        :g_auth
+      ]),
+
+      # --- temporal -------------------------------------------------------------
+      q(
+        :h15,
+        :temporal,
+        "What did viewer login look like at first, and what does it look like today?",
+        [:d_jwt, :d_cookies]
+      ),
+      q(:h16, :temporal, "Which sync approach got abandoned, and what took its place?", [
+        :d_eventlog,
+        :d_graphjson
+      ]),
+      q(:h17, :temporal, "When did duplicate nodes after a rebase make us rethink sync?", [
+        :oc_eventlog,
+        :r_sync
+      ]),
+      q(:h18, :temporal, "Which choices are no longer in force?", [:d_eventlog, :d_jwt]),
+      q(
+        :h19,
+        :temporal,
+        "What did we move away from on the auth side, and what pushed us off it?",
+        [:d_jwt, :ob_jwt_size, :r_auth]
+      ),
+
+      # --- by path or hash -------------------------------------------------------
+      q(:h20, :file, "Anything recorded about src/events.rs?", [:a_eventlog]),
+      q(:h21, :file, "What went into lib/api/router.ex?", [:a_limiter]),
+      q(:h22, :file, "What do we know about migrations/2025-11-02-add-change-id/up.sql?", [
+        :a_changeid
+      ]),
+      q(:h23, :file, "What is .gitattributes for in this repo?", [:a_mergedriver]),
+      q(:h24, :file, "What landed in d1e2f3a?", [:a_wal]),
+
+      # --- adversarial ----------------------------------------------------------
+      adv(:h25, "Did we ever look at gRPC for the API?", ["grpc"]),
+      adv(:h26, "What caching layer sits in front of Elasticsearch?", ["elasticsearch"]),
+      adv(:h27, "How do we handle OAuth with Google for the viewer?", ["oauth", "google"]),
+      adv(:h28, "What is our backup schedule for the SQLite database?", ["backup", "schedule"])
+    ]
+  end
+
+  @doc "The route cue words the held-out set must not contain."
+  def route_cues do
+    routes = DeciduousMcp.Graph.Retrieval.default_routes() ++ [DeciduousMcp.Graph.Related.route()]
+
+    routes
+    |> Enum.flat_map(fn
+      %{cues: cues} when is_list(cues) -> cues
+      _ -> []
+    end)
+    |> MapSet.new()
+  end
+
   defp q(id, category, question, expect),
     do: %{id: id, category: category, question: question, expect: expect, absent_terms: []}
 
@@ -442,14 +592,25 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
       |> Kernel.<>(Enum.map_join(edges(), "\n", &(elem(&1, 3) || "")))
       |> String.downcase()
 
-    for q <- questions(), t <- q.absent_terms, String.contains?(text, t) do
+    all = questions() ++ held_out()
+
+    for q <- all, t <- q.absent_terms, String.contains?(text, t) do
       raise ArgumentError, "#{q.id}: absent term #{inspect(t)} appears in the fixture"
     end
 
-    ids = Enum.map(questions(), & &1.id)
+    ids = Enum.map(all, & &1.id)
     if ids != Enum.uniq(ids), do: raise(ArgumentError, "duplicate question ids")
 
-    for q <- questions() do
+    cues = route_cues()
+
+    # Retrieval.question_words/1's tokenisation: what a cue is compared with.
+    for q <- held_out(),
+        w <- q.question |> String.downcase() |> String.split(~r/[^\w-]+/u, trim: true),
+        MapSet.member?(cues, w) do
+      raise ArgumentError, "held-out #{q.id} uses the route cue word #{inspect(w)}"
+    end
+
+    for q <- all do
       for k <- q.expect, k not in keys do
         raise ArgumentError, "question #{q.id} expects unknown node #{inspect(k)}"
       end

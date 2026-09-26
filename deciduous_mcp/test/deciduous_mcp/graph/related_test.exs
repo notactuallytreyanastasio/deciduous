@@ -43,6 +43,77 @@ defmodule DeciduousMcp.Graph.RelatedTest do
     end
   end
 
+  describe "the SQL identity functions agree with the Elixir ones" do
+    # Related ranks in PostgreSQL through deciduous_node_files/1 and
+    # deciduous_commit_key/1 (migration 20260926020000) but reads the
+    # source node's own files with normalize_path/1. If the two disagreed,
+    # a path would silently stop matching itself.
+    test "deciduous_normalize_path == normalize_path on generated paths" do
+      :rand.seed(:exsss, {1, 2, 3})
+      alphabet = ~w(a b / / . . ./ // /./ .. - _) ++ [" ", "\t"]
+
+      paths =
+        for _ <- 1..3000 do
+          len = :rand.uniform(9)
+          Enum.map_join(1..len, fn _ -> Enum.random(alphabet) end)
+        end
+        |> Enum.concat(["./src//a/./b.rs ", "/./x", ".//a", "a/././/b", "a/.../b", "a/.b/./"])
+        |> Enum.uniq()
+
+      %{rows: rows} =
+        Repo.query!(
+          "SELECT p, public.deciduous_normalize_path(p) FROM unnest($1::text[]) AS u(p)",
+          [paths]
+        )
+
+      mismatches =
+        for [p, sql] <- rows,
+            elixir =
+              (try do
+                 Related.normalize_path(p)
+               rescue
+                 ArgumentError -> ""
+               end),
+            elixir != sql,
+            do: {p, elixir, sql}
+
+      assert mismatches == []
+    end
+
+    test "deciduous_node_files and deciduous_commit_key" do
+      cases = [
+        {%{"files" => ["./a.rs", "a.rs", "b//c.rs"]}, ["a.rs", "b/c.rs"]},
+        {%{"files" => ["a.rs", 1]}, nil},
+        {%{"files" => ["a.rs", "  "]}, nil},
+        {%{"files" => "a.rs"}, nil},
+        {%{"files" => []}, []},
+        {%{}, nil}
+      ]
+
+      for {meta, want} <- cases do
+        %{rows: [[got]]} = Repo.query!("SELECT public.deciduous_node_files($1::jsonb)", [meta])
+        assert got == want, inspect(meta)
+      end
+
+      for {c, want} <- [
+            {" ABC1234 ", "abc1234"},
+            {"HEAD~1", nil},
+            {"abc12", nil},
+            {1_234_567, nil}
+          ] do
+        %{rows: [[got]]} =
+          Repo.query!("SELECT public.deciduous_commit_key($1::jsonb)", [%{"commit" => c}])
+
+        assert got == want
+
+        case Related.commit_key(c) do
+          {:ok, key} -> assert key == got
+          {:error, _} -> assert got == nil
+        end
+      end
+    end
+  end
+
   describe "related/2" do
     test "ranks by shared paths, counts the same commit across hash lengths", %{wid: wid} do
       me =
@@ -115,6 +186,89 @@ defmodule DeciduousMcp.Graph.RelatedTest do
     end
   end
 
+  describe "cost does not grow with a hub file" do
+    # 30,000 nodes naming one file took ask_graph 22-41 s and show_node
+    # 1.1-1.4 s: every call loaded every node with files or a commit in the
+    # workspace, and ranking computed each shared path's rarity with
+    # length/1 over the list of nodes naming it, once per candidate.
+    # Timing is not asserted here (see the commit for the numbers); what is
+    # asserted is that the rows read from the database stay the same when
+    # the hub grows fourfold.
+    defp rows_read(fun) do
+      ref = make_ref()
+      me = self()
+
+      :telemetry.attach(
+        "rows-#{inspect(ref)}",
+        [:deciduous_mcp, :repo, :query],
+        fn _, _, meta, _ ->
+          case meta[:result] do
+            {:ok, %{num_rows: n}} when is_integer(n) -> send(me, {ref, n})
+            _ -> :ok
+          end
+        end,
+        nil
+      )
+
+      result = fun.()
+      :telemetry.detach("rows-#{inspect(ref)}")
+
+      rows =
+        Stream.repeatedly(fn ->
+          receive do
+            {^ref, n} -> n
+          after
+            0 -> nil
+          end
+        end)
+        |> Enum.take_while(& &1)
+        |> Enum.sum()
+
+      {result, rows}
+    end
+
+    defp bulk(wid, from, to) do
+      Repo.query!(
+        """
+        INSERT INTO decision_nodes (id, change_id, workspace_id, node_type, title, status,
+                                    metadata, inserted_at, updated_at)
+        SELECT gen_random_uuid(), gen_random_uuid()::text, $1, 'action', 'bulk ' || i,
+               'completed',
+               jsonb_build_object('files', jsonb_build_array('./src/hub.rs', 'src/n' || i || '.rs')),
+               now() - make_interval(secs => i), now()
+        FROM generate_series($2::int, $3::int) i
+        """,
+        [Ecto.UUID.dump!(wid), from, to]
+      )
+    end
+
+    test "related/2 and expand/3 read the same rows for a hub of 100 and of 400", %{wid: wid} do
+      me = node(wid, "me", %{"files" => ["src/hub.rs", "src/rare.rs"]})
+      rare = node(wid, "rare sharer", %{"files" => ["src/rare.rs"]})
+      bulk(wid, 1, 100)
+
+      {{:ok, %{related: small}}, rows_small} = rows_read(fn -> Related.related(me) end)
+      {exp_small, rows_exp_small} = rows_read(fn -> Related.expand(wid, [me.id]) end)
+
+      bulk(wid, 101, 400)
+
+      {{:ok, %{related: big}}, rows_big} = rows_read(fn -> Related.related(me) end)
+      {exp_big, rows_exp_big} = rows_read(fn -> Related.expand(wid, [me.id]) end)
+
+      assert rows_big == rows_small, "related/2 read #{rows_small} rows, then #{rows_big}"
+
+      assert rows_exp_big == rows_exp_small,
+             "expand/3 read #{rows_exp_small}, then #{rows_exp_big}"
+
+      # Ranking unchanged by the bound: the rare sharer first, then the
+      # newest hub sharers, rarity counting every node that names the hub.
+      for rels <- [small, big, exp_small[me.id], exp_big[me.id]] do
+        assert hd(rels).id == rare.id
+        assert Enum.map(tl(rels), & &1.title) |> Enum.take(3) == ["bulk 1", "bulk 2", "bulk 3"]
+      end
+    end
+  end
+
   describe "expand/3 and route/1" do
     test "one entry per live frontier node, visited excluded", %{wid: wid} do
       a = node(wid, "a", %{"files" => ["x.rs"]})
@@ -142,7 +296,7 @@ defmodule DeciduousMcp.Graph.RelatedTest do
       %{name: "shared_identifier", cues: cues, expand: expand} = Related.route()
       assert "file" in cues
 
-      assert [{from, %Node{id: to}, 0.5, %{shared_files: ["x.rs"], shared_commit: nil}}] =
+      assert [{from, %Node{id: to}, 0.7, %{shared_files: ["x.rs"], shared_commit: nil}}] =
                expand.(wid, [a.id], MapSet.new())
 
       assert {from, to} == {a.id, b.id}
