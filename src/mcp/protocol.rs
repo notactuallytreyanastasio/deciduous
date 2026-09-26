@@ -673,7 +673,10 @@ mod tests {
         // The protocol fuzz sent ids holding raw control characters. They
         // fail to decode, as a lone surrogate does, but echoing them
         // verbatim wrote a reply line that was not JSON itself.
-        for line in ["{\"id\":\"fz-\u{c}12340\",\"method\":\"ping\"}", "{\"id\":\"a\u{17}\"}"] {
+        for line in [
+            "{\"id\":\"fz-\u{c}12340\",\"method\":\"ping\"}",
+            "{\"id\":\"a\u{17}\"}",
+        ] {
             assert_eq!(undecodable_raw_id(line), None, "{line:?}");
         }
         // A lone surrogate next to a control character is still not JSON.
