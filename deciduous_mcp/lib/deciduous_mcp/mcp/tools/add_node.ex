@@ -19,7 +19,7 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
   use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.MCP.Scope
-  alias DeciduousMcp.Graph.{Edges, Nodes}
+  alias DeciduousMcp.Graph.{Candidates, Edges, Nodes, Query}
   alias DeciduousMcp.Repo
 
   def definition do
@@ -30,7 +30,9 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
           "decision (choice point), option (approach), action (implementation), " <>
           "outcome (result), observation (insight), revisit (pivot point). " <>
           "Pass parent_id to link it under an existing node in the same call; " <>
-          "do not send add_edge in the same batch with an id you have not received yet.",
+          "do not send add_edge in the same batch with an id you have not received yet. " <>
+          "A non-goal node written without parent_id comes back with suggested_parents: " <>
+          "ranked guesses, never linked for you.",
       input_schema: %{
         type: "object",
         properties: %{
@@ -141,6 +143,7 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
            }
            |> maybe_put(:edge_id, edge && edge.id)
            |> maybe_put(:parent_id, edge && edge.from_node_id)
+           |> put_suggestions(workspace_id, node, edge, created?, args)
          )}
 
       {:error, {:node_not_found, parent}} ->
@@ -318,6 +321,57 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
       end
     end)
   end
+
+  # Paper 3.2, write-time candidate discovery: a non-goal node written with
+  # no parent gets a ranked list of where it probably belongs. Only shown,
+  # never linked: the agent that wrote it knows, the ranking only guesses.
+  # A retry (created: false) of a node that already has a parent gets
+  # nothing, and its own descendants are never suggested (that edge would
+  # close a cycle).
+  defp put_suggestions(map, _ws, _node, edge, _created?, _args) when edge != nil, do: map
+  defp put_suggestions(map, _ws, %{node_type: "goal"}, _edge, _created?, _args), do: map
+
+  defp put_suggestions(map, workspace_id, node, nil, created?, args) do
+    if not created? and Edges.edges_to(node.id) != [] do
+      map
+    else
+      exclude =
+        if created? do
+          [node.id]
+        else
+          {descendants, _truncated} = Query.descendants_bounded(node.id)
+          [node.id | Enum.map(descendants, & &1.id)]
+        end
+
+      suggestions =
+        Candidates.suggest_parents(
+          workspace_id,
+          %{
+            node_type: node.node_type,
+            title: node.title,
+            description: node.description,
+            branch: args["branch"],
+            files: args["files"]
+          },
+          exclude: exclude
+        )
+
+      map
+      |> Map.put(:suggested_parents, suggestions)
+      |> Map.put(:suggested_parents_hint, suggestion_hint(node, suggestions))
+    end
+  end
+
+  defp suggestion_hint(node, []),
+    do:
+      "No parent_id and no node of a type that fits above a #{node.node_type}; it stays " <>
+        "an orphan until linked (find_orphans lists it)."
+
+  defp suggestion_hint(node, _),
+    do:
+      "Not linked. Ranked guesses (type fit, text similarity, branch, files, recency, " <>
+        "open status); if one is the parent: add_edge from_node_id=<its id> " <>
+        "to_node_id=#{node.id}."
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
