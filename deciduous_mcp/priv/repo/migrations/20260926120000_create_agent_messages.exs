@@ -50,13 +50,17 @@ defmodule DeciduousMcp.Repo.Migrations.CreateAgentMessages do
 
     # The tools hold these bounds first and say so in a sentence; these are
     # what a write that went round them would hit.
+    #
+    # One constraint per column, each a single BETWEEN. A single constraint
+    # ANDing three BETWEENs does not survive pg_dump and reload: the migrated
+    # database prints the nested ANDs with one more pair of parentheses than
+    # a database loaded from STRUCTURE.sql, so the integration and release
+    # acceptance structure checks can never both pass.
     execute("""
     ALTER TABLE agent_messages
-      ADD CONSTRAINT agent_messages_bounds CHECK (
-        char_length(author) BETWEEN 1 AND 100
-        AND char_length(subject) BETWEEN 1 AND 300
-        AND octet_length(body) BETWEEN 1 AND 65536
-      )
+      ADD CONSTRAINT agent_messages_author_bounds CHECK (char_length(author) BETWEEN 1 AND 100),
+      ADD CONSTRAINT agent_messages_subject_bounds CHECK (char_length(subject) BETWEEN 1 AND 300),
+      ADD CONSTRAINT agent_messages_body_bounds CHECK (octet_length(body) BETWEEN 1 AND 65536)
     """)
 
     execute("CREATE INDEX agent_messages_mentions_idx ON agent_messages USING GIN (mentions)")
