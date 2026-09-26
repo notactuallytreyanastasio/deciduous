@@ -2497,6 +2497,52 @@ impl Database {
             .collect())
     }
 
+    /// [`Self::remote_base`] of the database at `path`, read without opening
+    /// it as a [`Database`]: no schema migration, no graph.json attached, no
+    /// outbox drained. For the git merge driver, which runs inside a merge
+    /// and must not write anything but the file it merges. `Ok(None)` when
+    /// there is no database there, or it has never recorded a pull (a clone
+    /// without a remote, or one older than the table).
+    pub fn remote_base_at(
+        path: &Path,
+    ) -> Result<Option<std::collections::HashMap<String, serde_json::Value>>> {
+        #[derive(QueryableByName)]
+        struct Row {
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            change_id: String,
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            node_json: String,
+        }
+        #[derive(QueryableByName)]
+        struct Count {
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            n: i64,
+        }
+        if !path.is_file() {
+            return Ok(None);
+        }
+        let mut conn = SqliteConnection::establish(&path.to_string_lossy())
+            .map_err(|e| DbError::Connection(e.to_string()))?;
+        diesel::sql_query("PRAGMA busy_timeout = 5000").execute(&mut conn)?;
+        let table: Vec<Count> = diesel::sql_query(
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'remote_base'",
+        )
+        .load(&mut conn)?;
+        if table.first().map(|c| c.n).unwrap_or(0) == 0 {
+            return Ok(None);
+        }
+        let rows: Vec<Row> =
+            diesel::sql_query("SELECT change_id, node_json FROM remote_base").load(&mut conn)?;
+        if rows.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(
+            rows.into_iter()
+                .filter_map(|r| Some((r.change_id, serde_json::from_str(&r.node_json).ok()?)))
+                .collect(),
+        ))
+    }
+
     /// Replaces the base with the server's live nodes, as a pull saw them.
     pub fn set_remote_base(&self, nodes: &[(String, serde_json::Value)]) -> Result<()> {
         let mut conn = self.get_conn()?;

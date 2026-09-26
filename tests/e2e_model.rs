@@ -536,10 +536,17 @@ fn generate(
             let from = pick(rng)?;
             let to = pick(rng)?;
             let key = Key::Edge(from.clone(), to.clone());
+            // The reverse edge counts too: a link is refused while its
+            // reverse exists, and a reverse another location unlinked since
+            // the last barrier is still there here (seed
+            // 1790449958332896000: Cli2 unlinked a -> b, then Stdio1's
+            // b -> a was refused in clone 1, which still had a -> b).
+            let reverse = Key::Edge(to.clone(), from.clone());
             (from != to
                 && !m.edges.contains(&(from.clone(), to.clone()))
                 && !m.edges.contains(&(to.clone(), from.clone()))
-                && m.may_write(&key, loc))
+                && m.may_write(&key, loc)
+                && m.may_write(&reverse, loc))
             .then_some(Op::Link { actor, from, to })
         }
         82..=89 => {
@@ -749,7 +756,22 @@ fn run(server: Option<Server>, name: &str) {
         // `remote status` must not say clean when a difference is certain.
         if w.server.is_some() && rng.chance(15) {
             let loc = if rng.chance(50) { Loc::L1 } else { Loc::L2 };
-            let certain = m.offline_dirty.contains(&loc) || m.agent_dirty.contains(&loc);
+            // A write since the last push or pull does not by itself make
+            // the clone differ from the server: an agent's status set to
+            // the value it had, or a node the agent added and deleted before
+            // the clone saw it, leaves nothing to pull (seeds
+            // 1790447269828284000 and 1790447510053401000 failed here with
+            // the two copies equal field by field), and an offline write is
+            // pushed by the clone's next online write or reaches the server
+            // through the other clone. So the flags only say when to look;
+            // the difference itself is what is checked. The views compare a
+            // subset of what `remote status` compares, so a difference in
+            // them is one status must report.
+            let flagged = m.offline_dirty.contains(&loc) || m.agent_dirty.contains(&loc);
+            let certain = flagged
+                && w.server
+                    .as_ref()
+                    .is_some_and(|s| w.clone_of(loc).view() != s.view(&w.ws));
             if certain && !w.offline.contains(&loc) {
                 let st = w.clone_of(loc).dx(&["remote", "status"]);
                 if status_says_clean(&st) {

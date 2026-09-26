@@ -2560,6 +2560,7 @@ fn merge_record_maps(
     base: Option<&serde_json::Map<String, Value>>,
     ours: &serde_json::Map<String, Value>,
     theirs: &serde_json::Map<String, Value>,
+    known: Option<&KnownServer>,
 ) -> serde_json::Map<String, Value> {
     let mut keys: Vec<&String> = ours.keys().chain(theirs.keys()).collect();
     keys.sort();
@@ -2570,7 +2571,13 @@ fn merge_record_maps(
         let bv = base.and_then(|m| m.get(key));
         let merged = match (ours.get(key), theirs.get(key)) {
             (Some(o), Some(t)) if o == t => Some(o.clone()),
-            (Some(o), Some(t)) => Some(merge_record_values(bv, o, t)),
+            (Some(o), Some(t)) => match (bv, known.and_then(|k| k.get(key))) {
+                (None, Some(server)) => {
+                    let b = server_base(server, o, t);
+                    Some(merge_record_values(b.as_ref(), o, t))
+                }
+                _ => Some(merge_record_values(bv, o, t)),
+            },
             // Removed on one side. If the other side did not touch it since
             // the ancestor, the removal stands; otherwise the edit wins.
             (Some(o), None) => (bv != Some(o)).then(|| o.clone()),
@@ -2584,8 +2591,96 @@ fn merge_record_maps(
     out
 }
 
+/// What this clone last pulled from the server, per node change_id:
+/// `{"title", "description", "status", "metadata", "updated_at"}`, as
+/// `remote pull` records it (`Database::remote_base`), `updated_at` being
+/// the server's stamp.
+pub type KnownServer = HashMap<String, Value>;
+
+/// The ancestor to merge one node with when git's ancestor lacks it, from
+/// the server's copy this clone last pulled (`server`). `None` when that
+/// copy settles nothing, which merges the node as before, by stamps.
+///
+/// A node that reached both clones through `remote pull` is in neither
+/// side's git history before they forked, so git hands the driver no
+/// ancestor for it, and every differing field went to the later-stamped
+/// record: clone 2's prompt write, stamped after clone 1's status change,
+/// took clone 1's status back with it, and clone 1 then sent the old
+/// status to the server as a git-origin op.
+///
+/// The server's copy is only an ancestor of a side that saw it. This clone
+/// did (it pulled it); the other side may have pulled earlier and hold an
+/// older value that the server's copy already replaced. So a field is
+/// settled by the server's copy only when one side still holds the server's
+/// value and the other side's record was written at or after the server's
+/// stamp, i.e. its different value can be an edit made since, not a copy
+/// from before. Every other field is left out of the ancestor, which merges
+/// it exactly as with no ancestor at all. (Using the copy for every field
+/// reverted an agent's retitle whenever the other clone had pulled before
+/// it: its older title differed from the copy, so it read as an edit.)
+///
+/// Laying this clone's pushed edits over the copy, as `remote pull` does
+/// (`remote::known_server_state`), would be wrong here: the other clone
+/// descends from the server, not from this clone's pushes, so an edit this
+/// clone pushed would read as the ancestor and the other clone's older value
+/// as the change, which is the reported failure again.
+fn server_base(server: &Value, ours: &Value, theirs: &Value) -> Option<Value> {
+    let stamp = parse_ts(server.get("updated_at")?.as_str()?);
+    let (ours_ts, theirs_ts) = (record_ts(ours), record_ts(theirs));
+    let present = |v: Option<&Value>| v.filter(|v| !v.is_null()).cloned();
+    // The server's value for a field, when exactly one side moved off it
+    // and that side's record is not older than the server's copy.
+    let settle = |o: Option<Value>, t: Option<Value>, p: Option<Value>| -> Option<Value> {
+        let (o, t, p) = (o?, t?, p?);
+        let moved_ours = o != p && t == p && ours_ts >= stamp;
+        let moved_theirs = t != p && o == p && theirs_ts >= stamp;
+        (moved_ours || moved_theirs).then_some(p)
+    };
+    let mut out = serde_json::Map::new();
+    for key in ["title", "description", "status"] {
+        if let Some(p) = settle(
+            present(ours.get(key)),
+            present(theirs.get(key)),
+            present(server.get(key)),
+        ) {
+            out.insert(key.to_string(), p);
+        }
+    }
+    let meta = |v: &Value| v.get("metadata").and_then(Value::as_object).cloned();
+    let (om, tm, pm) = (meta(ours), meta(theirs), meta(server));
+    let mut keys: Vec<String> = om
+        .iter()
+        .chain(tm.iter())
+        .flat_map(|m| m.keys().cloned())
+        .collect();
+    keys.sort();
+    keys.dedup();
+    let mut settled_meta = serde_json::Map::new();
+    for k in keys {
+        let get = |m: &Option<serde_json::Map<String, Value>>| present(m.as_ref()?.get(&k));
+        if let Some(p) = settle(get(&om), get(&tm), get(&pm)) {
+            settled_meta.insert(k, p);
+        }
+    }
+    if !settled_meta.is_empty() {
+        out.insert("metadata".into(), Value::Object(settled_meta));
+    }
+    (!out.is_empty()).then_some(Value::Object(out))
+}
+
 /// Merge two whole graph documents, record by record.
 fn merge_docs(base: Option<&Value>, ours: &Value, theirs: &Value) -> io::Result<Value> {
+    merge_docs_knowing(base, ours, theirs, None)
+}
+
+/// [`merge_docs`], with what this clone last pulled from the server for the
+/// nodes git's ancestor lacks (see [`merge_record_files_knowing`]).
+fn merge_docs_knowing(
+    base: Option<&Value>,
+    ours: &Value,
+    theirs: &Value,
+    known: Option<&KnownServer>,
+) -> io::Result<Value> {
     let object = |v: &Value, what: &str| -> io::Result<serde_json::Map<String, Value>> {
         v.as_object().cloned().ok_or_else(|| {
             io::Error::new(
@@ -2617,6 +2712,7 @@ fn merge_docs(base: Option<&Value>, ours: &Value, theirs: &Value) -> io::Result<
             b.map(|m| map_of(m, kind)).as_ref(),
             &map_of(&o, kind),
             &map_of(&t, kind),
+            known.filter(|_| kind == "nodes"),
         );
         out.insert(kind.into(), Value::Object(merged));
     }
@@ -2636,7 +2732,7 @@ fn merge_docs(base: Option<&Value>, ours: &Value, theirs: &Value) -> io::Result<
         let merged = match (o.get(key), t.get(key)) {
             (Some(ov), Some(tv)) if ov == tv => Some(ov.clone()),
             (Some(Value::Object(om)), Some(Value::Object(tm))) => Some(Value::Object(
-                merge_record_maps(bv.and_then(Value::as_object), om, tm),
+                merge_record_maps(bv.and_then(Value::as_object), om, tm, None),
             )),
             (Some(ov), Some(tv)) => Some(if bv == Some(ov) {
                 tv.clone()
@@ -2746,6 +2842,21 @@ pub fn merge_record_files_with_notes(
     ours: &Path,
     theirs: &Path,
 ) -> io::Result<(String, Vec<String>)> {
+    merge_record_files_knowing(base, ours, theirs, None)
+}
+
+/// [`merge_record_files_with_notes`], for a clone that has pulled from a
+/// server: `known` is what it last pulled (`Database::remote_base`). A node
+/// both sides hold and git's ancestor lacks is merged against that copy
+/// where it settles a field (see [`server_base`]); with `None`, or for a
+/// node the copy does not have, the merge is exactly the plain one. A clone
+/// without a remote has no copy, so its merges do not change.
+pub fn merge_record_files_knowing(
+    base: &Path,
+    ours: &Path,
+    theirs: &Path,
+    known: Option<&KnownServer>,
+) -> io::Result<(String, Vec<String>)> {
     let read = |p: &Path, what: &str| -> io::Result<Option<Value>> {
         parse_version(
             &fs::read_to_string(p)?,
@@ -2759,7 +2870,7 @@ pub fn merge_record_files_with_notes(
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "ours is empty"))?;
     let theirs_v = read(theirs, "theirs")?
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "theirs is empty"))?;
-    let merged = merge_docs(base_v.as_ref(), &ours_v, &theirs_v)?;
+    let merged = merge_docs_knowing(base_v.as_ref(), &ours_v, &theirs_v, known)?;
     Ok((to_stable_json(&merged)?, notes))
 }
 

@@ -2662,7 +2662,10 @@ fn base_record(known: &Value) -> Value {
     Value::Object(out)
 }
 
-/// The base `remote pull` records: each live server node's fields.
+/// The base `remote pull` records: each live server node's fields, and the
+/// server's stamp for them (`updated_at`), which the git merge driver uses
+/// to tell whether a side could have seen this copy (see
+/// `records::merge_record_files_knowing`).
 pub fn base_of(graph: &RemoteGraph) -> Vec<(String, Value)> {
     graph
         .nodes
@@ -2676,6 +2679,7 @@ pub fn base_of(graph: &RemoteGraph) -> Vec<(String, Value)> {
                     "description": n.description,
                     "status": n.status,
                     "metadata": n.metadata.clone().unwrap_or(Value::Object(Default::default())),
+                    "updated_at": n.updated_at,
                 }),
             )
         })
