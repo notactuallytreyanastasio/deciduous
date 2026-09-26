@@ -2991,7 +2991,7 @@ fn main() {
                             Ok(op) => println!(
                                 "{} {} {} from {}",
                                 "Dropped".yellow(),
-                                &op.op_id,
+                                op.op_id,
                                 op.body.describe(),
                                 log.path().display()
                             ),

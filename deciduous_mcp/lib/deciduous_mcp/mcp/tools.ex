@@ -32,6 +32,10 @@ defmodule DeciduousMcp.MCP.Tools do
 
   ### Natural Language Query
   - `AskGraph` — Ask questions about the decision graph in plain English
+
+  ### Message board
+  - `PostMessage` — Post to the workspace's board for agents working in parallel
+  - `ReadMessages` — Read it: what is new, what is addressed to you and unanswered
   """
 
   @crud_tools [
@@ -65,7 +69,14 @@ defmodule DeciduousMcp.MCP.Tools do
     DeciduousMcp.MCP.Tools.AskGraph
   ]
 
-  @all_tools @crud_tools ++ @structure_tools ++ @analysis_tools ++ @capture_tools ++ @query_tools
+  @board_tools [
+    DeciduousMcp.MCP.Tools.PostMessage,
+    DeciduousMcp.MCP.Tools.ReadMessages
+  ]
+
+  @all_tools @crud_tools ++
+               @structure_tools ++
+               @analysis_tools ++ @capture_tools ++ @query_tools ++ @board_tools
 
   @doc "Returns the list of all tool component modules."
   def all_modules, do: @all_tools
@@ -82,7 +93,8 @@ defmodule DeciduousMcp.MCP.Tools do
       structure: @structure_tools,
       analysis: @analysis_tools,
       capture: @capture_tools,
-      query: @query_tools
+      query: @query_tools,
+      board: @board_tools
     }
   end
 end

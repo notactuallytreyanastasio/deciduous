@@ -70,4 +70,15 @@ defmodule DeciduousMcp.MCP.InstructionsTest do
     assert text =~ "change_id"
     assert text =~ "unknown argument"
   end
+
+  # Parallel agents coordinated through a markdown file one worktree could
+  # see and the next could not. The board is on the server they all share.
+  test "agents working in parallel are told to use the message board, not a scratch file" do
+    text = DeciduousMcp.MCP.Instructions.text()
+    assert text =~ "post_message"
+    assert text =~ "read_messages"
+    assert text =~ "unanswered_for"
+    assert text =~ "never in a scratch file"
+    assert text =~ "before touching shared files"
+  end
 end
