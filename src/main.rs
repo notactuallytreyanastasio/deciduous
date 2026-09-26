@@ -466,6 +466,21 @@ enum Command {
         action: TagAction,
     },
 
+    /// Message board for agents working at the same time
+    ///
+    /// Post interface changes, questions and answers here, never in a
+    /// scratch or markdown file. Read what is addressed to you with
+    /// `board read --unanswered LABEL` at start, before touching shared
+    /// files and before finishing; answer with `--reply-to ID`.
+    ///
+    /// Kept in the main worktree's .deciduous/deciduous.db, shared by all
+    /// worktrees; on the server when the project has a [remote]. Never in
+    /// graph.json, never exported or synced.
+    Board {
+        #[command(subcommand)]
+        action: BoardAction,
+    },
+
     /// Start MCP (Model Context Protocol) server on stdin/stdout
     ///
     /// Exposes the full deciduous API as MCP tools for AI assistants.
@@ -503,6 +518,62 @@ enum Command {
     LogLoop {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         _args: Vec<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum BoardAction {
+    /// Post a message; @label anywhere in subject or body addresses it
+    Post {
+        /// Your label, e.g. "lead" or "A-retrieval" (default: $DECIDUOUS_AGENT_LABEL)
+        #[arg(long = "as", value_name = "LABEL")]
+        author: Option<String>,
+        /// Subject line (at most 300 characters)
+        #[arg(short = 's', long)]
+        subject: String,
+        /// Body; read from stdin when omitted
+        #[arg(short = 'm', long = "message", value_name = "BODY")]
+        body: Option<String>,
+        /// The message this answers
+        #[arg(long = "reply-to", value_name = "ID")]
+        reply_to: Option<i64>,
+        /// Branch the message is about (default: the current one)
+        #[arg(long)]
+        branch: Option<String>,
+        /// Print the result as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Read messages, oldest first
+    Read {
+        /// Only messages after this id
+        #[arg(long = "since", value_name = "ID")]
+        since: Option<i64>,
+        /// Only messages by this label
+        #[arg(long = "from", value_name = "LABEL")]
+        from: Option<String>,
+        /// Only messages mentioning this label
+        #[arg(long = "to", value_name = "LABEL")]
+        to: Option<String>,
+        /// Messages mentioning LABEL that LABEL has not replied to
+        #[arg(long = "unanswered", value_name = "LABEL")]
+        unanswered: Option<String>,
+        /// Text in subject or body
+        #[arg(short = 'q', long = "query", value_name = "TEXT")]
+        query: Option<String>,
+        /// At most N messages (default 50, max 200)
+        #[arg(long)]
+        limit: Option<i64>,
+        /// Print the read_messages result as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show one message in full
+    Show {
+        id: i64,
+        /// Print the message as JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -1111,6 +1182,125 @@ fn exit(code: i32) -> ! {
     std::process::exit(code)
 }
 
+/// `deciduous board ...`. Returns the exit code.
+fn run_board(action: &BoardAction) -> i32 {
+    use deciduous::board::{self, Board, Filter, NewPost};
+    let fail = |e: String| {
+        eprintln!("{} {}", "Error:".red(), e);
+        1
+    };
+    let graph_db = Database::db_path();
+    let mut b = match Board::open_for(&graph_db) {
+        Ok(b) => b,
+        Err(e) => return fail(e),
+    };
+    match action {
+        BoardAction::Post {
+            author,
+            subject,
+            body,
+            reply_to,
+            branch,
+            json,
+        } => {
+            let Some(author) = author.clone().or_else(|| {
+                std::env::var(board::LABEL_ENV)
+                    .ok()
+                    .filter(|s| !s.is_empty())
+            }) else {
+                return fail(format!(
+                    "who is posting? Pass --as LABEL (or set {}).",
+                    board::LABEL_ENV
+                ));
+            };
+            let body = match body {
+                Some(b) => b.clone(),
+                None => {
+                    use std::io::{IsTerminal, Read};
+                    if std::io::stdin().is_terminal() {
+                        return fail("no body: pass -m BODY or pipe it on stdin".into());
+                    }
+                    let mut s = String::new();
+                    if let Err(e) = std::io::stdin().read_to_string(&mut s) {
+                        return fail(format!("reading the body from stdin: {e}"));
+                    }
+                    s
+                }
+            };
+            let post = NewPost {
+                branch: branch
+                    .clone()
+                    .or_else(deciduous::db::get_current_git_branch),
+                author,
+                subject: subject.clone(),
+                body,
+                reply_to: *reply_to,
+            };
+            match b.post(&post) {
+                Ok(p) if *json => {
+                    println!("{}", serde_json::to_string_pretty(&p).unwrap_or_default());
+                    0
+                }
+                Ok(p) => {
+                    println!("{}", board::render_posted(&p));
+                    0
+                }
+                Err(e) => fail(e),
+            }
+        }
+        BoardAction::Read {
+            since,
+            from,
+            to,
+            unanswered,
+            query,
+            limit,
+            json,
+        } => {
+            let f = Filter {
+                since_id: *since,
+                author: from.clone(),
+                to: to.clone(),
+                unanswered_for: unanswered.clone(),
+                query: query.clone(),
+                limit: *limit,
+                ..Default::default()
+            };
+            match b.read(&f) {
+                Ok(r) if *json => {
+                    println!("{}", serde_json::to_string_pretty(&r).unwrap_or_default());
+                    0
+                }
+                Ok(r) => {
+                    print!("{}", board::render_read(&r, &f));
+                    0
+                }
+                Err(e) => fail(e),
+            }
+        }
+        BoardAction::Show { id, json } => {
+            let f = Filter {
+                id: Some(*id),
+                ..Default::default()
+            };
+            match b.read(&f) {
+                Ok(r) => match r.messages.into_iter().next() {
+                    Some(m) if *json => {
+                        println!("{}", serde_json::to_string_pretty(&m).unwrap_or_default());
+                        0
+                    }
+                    Some(m) => {
+                        print!("{}", board::render_message(&m, None));
+                        0
+                    }
+                    None => fail(format!("no message {id} on the {}", b.describe())),
+                },
+                Err(e) => fail(e),
+            }
+        }
+    }
+}
+
 /// Where `sync --check` keeps the empty database it compares against when
 /// the project has none. Removed by `exit()`, which every path of that
 /// command ends in.
@@ -1489,6 +1679,13 @@ fn main() {
         return;
     }
 
+    // The board opens its own store: the main worktree's database, or the
+    // server. It never opens the graph database of this worktree.
+    if let Command::Board { action } = &args.command {
+        let code = run_board(action);
+        exit(code);
+    }
+
     // Handle MCP server separately - it manages its own database connection
     if let Command::Mcp {} = args.command {
         if let Err(e) = deciduous::mcp::run_server() {
@@ -1563,6 +1760,7 @@ fn main() {
         Command::MergeRecord { .. } => unreachable!(), // Handled above
         Command::CheckUpdate { .. } => unreachable!(), // Handled above
         Command::AutoUpdate { .. } => unreachable!(), // Handled above
+        Command::Board { .. } => unreachable!(),  // Handled above
         Command::Add {
             node_type,
             title,

@@ -57,6 +57,7 @@ What made it work is one server, reachable over MCP from every directory, with t
 - **Activity.** Every write, MCP or CLI, records who wrote which branch; none is refused because someone else is writing. `check_activity` lists who wrote in the last five minutes and the last node on each of the twenty most recent branches.
 - **Events.** Postgres triggers push every write over a WebSocket the moment it lands. `deciduous remote watch` prints one quoted line per write; Claude Code's `Monitor` tool can sit on the same URL.
 - **Provenance.** A `took_from` edge records a borrow across branches, and `log_observation` writes the observation and the edge in one call. In the arena the borrows lived in observation titles and had to be recovered with a regular expression; that is the wrong place for them.
+- **The message board.** Agents working at the same time post interface changes, questions and answers with `post_message` (or `deciduous board post`), address each other with `@label`, and answer with `reply_to`. `read_messages` with `unanswered_for` your own label (`deciduous board read --unanswered <label>`) is what is waiting for you. It replaces the scratch `board.md` agents otherwise invent: a file has no ids to answer and no way to ask what is addressed to you. Messages are coordination, not graph: never in `graph.json`, never exported or synced. See [The Message Board](#the-message-board).
 
 Set it up with `deciduous remote init <url>` once the server is running (`deciduous_mcp/DEPLOY.md`).
 
@@ -293,7 +294,7 @@ deciduous init --both --windsurf   # All three
 
 ### MCP Server
 
-Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 32 tools for managing and querying the decision graph. The [shared graph server](https://deciduous.dev/remote.html) is a second endpoint, over HTTP, with 18 tools of its own and the multi-agent ones (`check_activity`, `branch` on every write, `took_from`) live there.
+Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 34 tools for managing and querying the decision graph and for the agents' message board. The [shared graph server](https://deciduous.dev/remote.html) is a second endpoint, over HTTP, with 20 tools of its own (the board's two need server 1.0.9) and the multi-agent ones (`check_activity`, `branch` on every write, `took_from`) live there.
 
 > **Claude Cowork:** Coming soon. Cowork agents can't yet load custom MCP servers — track progress on [anthropics/claude-code#48909](https://github.com/anthropics/claude-code/issues/48909).
 
@@ -340,10 +341,38 @@ Once configured, the AI gets tools for:
 | **Analysis** | `trace_chain`, `get_node_context`, `get_pulse`, ... | Traverse chains, get neighborhood context, find orphans |
 | **Sessions** | `start_session`, `end_session`, `resume_session`, ... | Each conversation gets its own decision tree |
 | **Export** | `export_dot`, `generate_writeup` | DOT visualization and PR writeups |
+| **Message board** | `post_message`, `read_messages` | Parallel agents coordinate: questions, answers, interface changes, with ids and `reply_to` |
 
 Sessions persist to disk and auto-resume across server restarts, so long-running conversations keep their decision trees intact.
 
 **[Full MCP documentation and tutorial](https://deciduous.dev/mcp)**
+
+---
+
+## The Message Board
+
+When more than one agent works at once, they coordinate through deciduous, never through a scratch or markdown file.
+
+```bash
+$ deciduous board post --as lead -s "port for the api?" -m "@w1 @w2 which port, 4000?"
+Posted #1, to w1, w2
+$ deciduous board post --as w1 -s "re port" -m "4000. @lead" --reply-to 1
+Posted #2 (reply to #1), to lead
+$ deciduous board read --unanswered w2
+#1  lead -> w1, w2  2026-09-26T17:39:56.706026Z
+    port for the api?
+    | @w1 @w2 which port, 4000?
+$ deciduous board read --unanswered w1
+Nothing addressed to w1 is waiting for an answer.
+```
+
+- **Post** with `post_message` or `deciduous board post --as LABEL -s SUBJECT [-m BODY | stdin] [--reply-to ID]`. `@label` anywhere in the subject or body addresses it (an email address is not a mention).
+- **Read** with `read_messages` or `deciduous board read [--since ID] [--from LABEL] [--to LABEL] [--unanswered LABEL] [-q TEXT] [--limit N] [--json]`, oldest first; `deciduous board show ID` prints one in full.
+- **Unanswered** means: mentions the label, and no message by that label has `reply_to` its id. A reply takes a question off the list; a new post does not. Read it at start, before touching a file another agent may be changing, and before finishing.
+
+Where it lives: in a local project, the `agent_messages` table of the **main worktree's** `.deciduous/deciduous.db`, so every git worktree of the repository shares one board (the graph database stays per worktree, because `graph.json` belongs to a branch). In a project with a `[remote]`, on the server (`POST`/`GET /messages`, server 1.0.9 or later; an older server is an error that says so, never a quiet fall back to the local table). Never in `graph.json`, never exported, never synced.
+
+Set `DECIDUOUS_AGENT_LABEL` in a session's environment and `board post` uses it for `--as`, and the `board-mentions.sh` hook `init` installs shows that label's unanswered messages at session start and as new ones arrive. Without the variable the hook does nothing.
 
 ---
 
@@ -636,6 +665,8 @@ The `update` command auto-detects which assistants are installed and updates the
 | `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/decision-graph`, `/sync`) |
 | `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
 | `.claude/hooks/version-check.sh` | Once-a-day update check (the logging hooks earlier versions installed are removed) |
+| `.claude/hooks/board-mentions.sh` | Shows a session with `DECIDUOUS_AGENT_LABEL` its unanswered board messages; silent otherwise |
+| `.claude/settings.json` | Gains the board-mentions hook entries if they are missing; everything else in it is kept |
 | `.claude/agents.toml` | Subagent configurations |
 | `CLAUDE.md` | Decision Graph Workflow section (preserves custom content) |
 
@@ -685,8 +716,9 @@ until it wrote to the graph. It could leave a session unable to do anything:
 a graph write sent beside the next action did not count, a session whose
 settings changed underneath it could not reset the count, and an environment
 variable typed into the session never reached the hook. 1.0.3 removes it, and
-`deciduous update` takes it out of projects that have it. The only hook left is
-the once-a-day version check, which never blocks.
+`deciduous update` takes it out of projects that have it. The hooks left are
+the once-a-day version check and, since 1.0.9, the board-mentions hook, which
+prints a labelled session's unanswered messages. Neither ever blocks.
 
 Logging is encouraged by what the agent reads anyway: the `CLAUDE.md` section,
 and the MCP tools' own descriptions and replies.
@@ -764,6 +796,13 @@ deciduous sync               # Reconcile .deciduous/graph.json with the DB, expo
 deciduous sync --check       # Anything pending? (exit 1 if so)
 deciduous writeup -t "Title" # Generate PR writeup
 deciduous backup             # Create database backup
+
+# Message board (parallel agents; not part of the graph)
+deciduous board post --as <label> -s "subject" -m "@other body"  # Post
+deciduous board post --as <label> -s "re" -m "..." --reply-to <id>  # Answer
+deciduous board read --unanswered <label>      # What is waiting for you
+deciduous board read --since <id> --json       # Everything newer than <id>
+deciduous board show <id>                      # One message in full
 
 # Document attachments
 deciduous doc attach <node_id> <file>          # Attach file to node

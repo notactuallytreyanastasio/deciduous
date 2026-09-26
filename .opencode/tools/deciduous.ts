@@ -7,13 +7,15 @@
 import { tool } from "@opencode-ai/plugin"
 
 export default tool({
-  description: "Manage the deciduous decision graph - add nodes, create edges, query the graph, and sync",
+  description: "Manage the deciduous decision graph - add nodes, create edges, query the graph, sync - and post to or read the agent message board",
   args: {
     command: tool.schema.string().describe(
       "The deciduous subcommand and arguments to run. Examples: " +
       "'add goal \"Title\" -c 90', " +
       "'link 1 2 -r \"reason\"', " +
-      "'nodes', 'edges', 'graph', 'pulse', 'sync'"
+      "'nodes', 'edges', 'graph', 'pulse', 'sync', " +
+      "'board read --unanswered <label>', 'board post --as <label> -s \"subject\" -m \"@other body\"'. " +
+      "Parallel agents coordinate with 'board', never through a scratch file."
     ),
   },
   async execute(args, context) {

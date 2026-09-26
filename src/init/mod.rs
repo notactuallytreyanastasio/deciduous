@@ -14,9 +14,9 @@ use std::path::Path;
 
 use templates::{
     BUILD_TEST_MD, CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW,
-    DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEMO_SWARM_MD, DOCUMENT_MD, HOOK_VERSION_CHECK,
-    RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, SYNC_MD,
-    WINDSURF_HOOKS_JSON, WINDSURF_RULES_DECIDUOUS, WORK_MD,
+    DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEMO_SWARM_MD, DOCUMENT_MD,
+    HOOK_BOARD_MENTIONS, HOOK_VERSION_CHECK, RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY,
+    SKILL_NARRATIVES, SKILL_PULSE, SYNC_MD, WINDSURF_HOOKS_JSON, WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
 
 /// Initialize a new deciduous project with AI assistant integration
@@ -154,13 +154,25 @@ pub fn init_project(
             ".claude/hooks/version-check.sh",
         )?;
 
-        // Write settings.json with hooks configuration
-        let settings_path = claude_base.join("settings.json");
-        write_file_if_missing(
-            &settings_path,
-            CLAUDE_SETTINGS_JSON,
-            ".claude/settings.json",
+        // Board mentions: shows a labelled session what it has not answered
+        write_executable_if_missing(
+            &hooks_dir.join("board-mentions.sh"),
+            HOOK_BOARD_MENTIONS,
+            ".claude/hooks/board-mentions.sh",
         )?;
+
+        // Write settings.json with hooks configuration; an existing one gets
+        // the board hook's entries added and keeps everything else.
+        let settings_path = claude_base.join("settings.json");
+        if settings_path.exists() {
+            ensure_board_hook_settings(&settings_path)?;
+        } else {
+            write_file_if_missing(
+                &settings_path,
+                CLAUDE_SETTINGS_JSON,
+                ".claude/settings.json",
+            )?;
+        }
 
         // Create .claude/skills directory and write skill files
         let skills_dir = claude_base.join("skills");
@@ -403,6 +415,7 @@ pub fn update_tooling() -> Result<(), String> {
     if has_claude {
         println!("  - Agent configurations (agents.toml)");
         println!("  - No logging hooks: the ones earlier versions installed are removed");
+        println!("  - Board-mentions hook (silent unless DECIDUOUS_AGENT_LABEL is set)");
     }
     if has_opencode {
         println!("  - OpenCode version-check plugin (the logging plugins are removed)");
@@ -523,7 +536,14 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
         ".claude/hooks/version-check.sh",
     )?;
 
+    write_executable_overwrite(
+        &hooks_dir.join("board-mentions.sh"),
+        HOOK_BOARD_MENTIONS,
+        ".claude/hooks/board-mentions.sh",
+    )?;
+
     strip_retired_hook_settings(&claude_base.join("settings.json"))?;
+    ensure_board_hook_settings(&claude_base.join("settings.json"))?;
 
     // Overwrite agents.toml
     let agents_path = claude_base.join("agents.toml");
@@ -728,6 +748,86 @@ pub fn strip_retired_hook_settings(path: &Path) -> Result<(), String> {
             "Updated".green()
         );
     }
+    Ok(())
+}
+
+/// The events the board-mentions hook runs on, and the argument it gets.
+const BOARD_HOOK_EVENTS: [(&str, &str); 2] =
+    [("SessionStart", "start"), ("UserPromptSubmit", "prompt")];
+
+/// Adds the board-mentions hook to `.claude/settings.json` for each event
+/// that does not run it yet. Everything already there, the user's hooks
+/// included, is kept in its order; a file that is not valid JSON is reported
+/// and left alone, and a missing file is written from the template.
+pub fn ensure_board_hook_settings(path: &Path) -> Result<(), String> {
+    let raw = match fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return write_file_if_missing(path, CLAUDE_SETTINGS_JSON, ".claude/settings.json");
+        }
+        Err(e) => return Err(format!("Could not read {}: {}", path.display(), e)),
+    };
+    let mut settings: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(e) => {
+            println!(
+                "   {} .claude/settings.json (not valid JSON: {e}); add the board-mentions.sh hook by hand",
+                "Skipped".yellow()
+            );
+            return Ok(());
+        }
+    };
+    let Some(root) = settings.as_object_mut() else {
+        println!(
+            "   {} .claude/settings.json (not a JSON object); add the board-mentions.sh hook by hand",
+            "Skipped".yellow()
+        );
+        return Ok(());
+    };
+    let hooks = root.entry("hooks").or_insert_with(|| serde_json::json!({}));
+    let Some(events) = hooks.as_object_mut() else {
+        return Ok(());
+    };
+    let mut added = Vec::new();
+    for (event, arg) in BOARD_HOOK_EVENTS {
+        let list = events.entry(event).or_insert_with(|| serde_json::json!([]));
+        let Some(list) = list.as_array_mut() else {
+            continue;
+        };
+        let present = list.iter().any(|entry| {
+            entry["hooks"].as_array().is_some_and(|hs| {
+                hs.iter().any(|h| {
+                    h["command"]
+                        .as_str()
+                        .is_some_and(|c| c.contains("board-mentions.sh"))
+                })
+            })
+        });
+        if !present {
+            list.push(serde_json::json!({
+                "hooks": [{
+                    "type": "command",
+                    "command": format!("\"$CLAUDE_PROJECT_DIR/.claude/hooks/board-mentions.sh\" {arg}"),
+                    "timeout": 10
+                }]
+            }));
+            added.push(event);
+        }
+    }
+    if added.is_empty() {
+        return Ok(());
+    }
+    if let Some(root) = path.parent().and_then(|p| p.parent()) {
+        guard::backup(root, ".claude/settings.json")?;
+    }
+    let body = render_in_original_order(&settings, &raw);
+    fs::write(path, body + "\n")
+        .map_err(|e| format!("Could not write {}: {}", path.display(), e))?;
+    println!(
+        "   {} .claude/settings.json (board-mentions hook on {})",
+        "Updated".green(),
+        added.join(", ")
+    );
     Ok(())
 }
 
@@ -1755,5 +1855,147 @@ mod tests {
             result.contains("<!-- deciduous:end -->"),
             "End marker present for future safety"
         );
+    }
+
+    /// Every file deciduous writes to tell an agent how to work says how
+    /// parallel agents coordinate: on the board, never in a scratch file.
+    /// Fails naming the template that lost it.
+    #[test]
+    fn every_agent_facing_template_teaches_the_board() {
+        use crate::opencode as o;
+        use templates as t;
+        // (name, text, also has to name unanswered and forbid scratch files)
+        let all: &[(&str, &str, bool)] = &[
+            ("CLAUDE_MD_SECTION", t::CLAUDE_MD_SECTION, true),
+            ("DECISION_MD", t::DECISION_MD, true),
+            ("RECOVER_MD", t::RECOVER_MD, true),
+            ("WORK_MD", t::WORK_MD, true),
+            ("CLAUDE_AGENTS_TOML", t::CLAUDE_AGENTS_TOML, true),
+            (
+                "WINDSURF_RULES_DECIDUOUS",
+                t::WINDSURF_RULES_DECIDUOUS,
+                true,
+            ),
+            ("SKILL_PULSE", t::SKILL_PULSE, true),
+            ("SKILL_NARRATIVES", t::SKILL_NARRATIVES, true),
+            ("SKILL_ARCHAEOLOGY", t::SKILL_ARCHAEOLOGY, true),
+            ("DECISION_GRAPH_MD", t::DECISION_GRAPH_MD, true),
+            ("SYNC_MD", t::SYNC_MD, false),
+            ("DEMO_SWARM_MD", t::DEMO_SWARM_MD, false),
+            ("HOOK_BOARD_MENTIONS", t::HOOK_BOARD_MENTIONS, false),
+            ("opencode COMMAND_WORK", o::COMMAND_WORK, true),
+            ("opencode COMMAND_RECOVER", o::COMMAND_RECOVER, true),
+            ("opencode COMMAND_DECISION", o::COMMAND_DECISION, true),
+            ("opencode COMMAND_SYNC", o::COMMAND_SYNC, false),
+            (
+                "opencode COMMAND_DECISION_GRAPH",
+                o::COMMAND_DECISION_GRAPH,
+                true,
+            ),
+            ("opencode SKILL_PULSE", o::SKILL_PULSE, true),
+            ("opencode SKILL_NARRATIVES", o::SKILL_NARRATIVES, true),
+            ("opencode SKILL_ARCHAEOLOGY", o::SKILL_ARCHAEOLOGY, true),
+            (
+                "opencode SKILL_PULSE_OPENCODE",
+                o::SKILL_PULSE_OPENCODE,
+                true,
+            ),
+            (
+                "opencode SKILL_NARRATIVES_OPENCODE",
+                o::SKILL_NARRATIVES_OPENCODE,
+                true,
+            ),
+            (
+                "opencode SKILL_ARCHAEOLOGY_OPENCODE",
+                o::SKILL_ARCHAEOLOGY_OPENCODE,
+                true,
+            ),
+            ("opencode AGENT_DECIDUOUS", o::AGENT_DECIDUOUS, true),
+            ("opencode TOOL_DECIDUOUS", o::TOOL_DECIDUOUS, true),
+            ("demo-swarm.zsh", crate::demo_swarm::SCRIPT, true),
+        ];
+        let mut lost = Vec::new();
+        for (name, text, full) in all {
+            let board = text.contains("deciduous board")
+                || text.contains("board post")
+                || text.contains("post_message");
+            let full_ok = !full || (text.contains("unanswered") && text.contains("scratch"));
+            if !board || !full_ok {
+                lost.push(*name);
+            }
+        }
+        assert!(
+            lost.is_empty(),
+            "templates that no longer teach the board: {lost:?}"
+        );
+        // The swarm's record is the board; SendMessage is for interrupts.
+        assert!(crate::demo_swarm::SCRIPT.contains("for\n   interrupts only"));
+        // The session checklist in CLAUDE.md reads the board.
+        assert!(t::CLAUDE_MD_SECTION.contains("deciduous board read --unanswered <label>"));
+    }
+
+    #[test]
+    fn board_hook_is_added_to_settings_once_and_the_users_hooks_stay() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        let p = tmp.path().join(".claude/settings.json");
+        let mine = r#"{
+  "permissions": {"allow": ["Bash(ls:*)"]},
+  "hooks": {
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": "my-own.sh"}]}
+    ]
+  }
+}
+"#;
+        fs::write(&p, mine).unwrap();
+        ensure_board_hook_settings(&p).unwrap();
+        let once = fs::read_to_string(&p).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&once).unwrap();
+        assert_eq!(v["permissions"]["allow"][0], "Bash(ls:*)");
+        let ups = v["hooks"]["UserPromptSubmit"].as_array().unwrap();
+        assert_eq!(ups[0]["hooks"][0]["command"], "my-own.sh");
+        assert!(ups[1]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("board-mentions.sh\" prompt"));
+        assert!(v["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .ends_with("board-mentions.sh\" start"));
+        // The user's key order survives: permissions still comes first.
+        assert!(once.find("permissions").unwrap() < once.find("hooks").unwrap());
+        ensure_board_hook_settings(&p).unwrap();
+        assert_eq!(
+            fs::read_to_string(&p).unwrap(),
+            once,
+            "second run changed the file"
+        );
+
+        // "{}" (what earlier updates left once they stripped the logging
+        // hooks) gets both entries.
+        fs::write(&p, "{}\n").unwrap();
+        ensure_board_hook_settings(&p).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(&p).unwrap()).unwrap();
+        assert_eq!(v["hooks"].as_object().unwrap().len(), 2);
+
+        // Not JSON: left alone.
+        fs::write(&p, "{ nope").unwrap();
+        ensure_board_hook_settings(&p).unwrap();
+        assert_eq!(fs::read_to_string(&p).unwrap(), "{ nope");
+    }
+
+    #[test]
+    fn the_settings_template_runs_the_board_hook() {
+        let v: serde_json::Value = serde_json::from_str(CLAUDE_SETTINGS_JSON).unwrap();
+        for (event, arg) in BOARD_HOOK_EVENTS {
+            let cmd = v["hooks"][event][0]["hooks"][0]["command"]
+                .as_str()
+                .unwrap();
+            assert!(
+                cmd.ends_with(&format!("board-mentions.sh\" {arg}")),
+                "{event}: {cmd}"
+            );
+        }
     }
 }

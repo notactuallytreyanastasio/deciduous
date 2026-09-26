@@ -5,6 +5,14 @@
 # "general-purpose" and include the relevant agent's context in the prompt.
 #
 # Customize this file for YOUR project's structure. The domains below are examples.
+#
+# Agents from these domains that run at the same time coordinate on the
+# deciduous message board, never in a scratch or markdown file: post interface
+# changes and questions with `deciduous board post --as <label>` (or the
+# post_message MCP tool) addressed to @label, read
+# `deciduous board read --unanswered <label>` at start, before touching shared
+# files and before finishing, and answer with --reply-to <id>. Give each
+# agent its label in its instructions.
 
 # Example: Backend/Core agent
 # [agents.backend]

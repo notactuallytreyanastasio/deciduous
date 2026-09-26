@@ -393,3 +393,7 @@ Sources:
 ## Output
 
 When done, run `deciduous graph > graph.json` to export.
+
+## Working Alongside Other Agents
+
+If other agents work on this at the same time (one narrative each, say), split the work and hand off on the deciduous message board, never in a scratch file: post with `deciduous board post --as <label> -s "..." -m "@other ..."` (or the `post_message` MCP tool), read `deciduous board read --unanswered <label>` before you start and before you finish, and answer with `--reply-to <id>`.

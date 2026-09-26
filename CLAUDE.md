@@ -177,6 +177,11 @@ CONNECT immediately -> Link every node to its parent
 AUDIT regularly -> Check for missing connections
 ```
 
+Through the MCP tools, create and link in one call: `add_node` with
+`parent_id` set to the node it belongs under. Never send `add_edge` in the
+same batch as the `add_node` whose id it needs: the id does not exist yet,
+and whatever stands in for it (a placeholder, a guess) is refused.
+
 ### Behavioral Triggers - MUST LOG WHEN:
 
 | Trigger | Log Type | Example |
@@ -305,7 +310,7 @@ deciduous add goal "Title" -c 90 -p "User's original request"
 deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
-deciduous sync    # Export for static hosting
+deciduous sync    # Reconcile .deciduous/graph.json with teammates
 
 # Metadata flags
 # -c, --confidence 0-100   Confidence level
@@ -374,8 +379,19 @@ deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected? Any gaps?
 deciduous doc list        # Any attached documents to review?
+deciduous board read --unanswered <label>  # parallel agents: anything waiting for you?
 git status                # Current state
 ```
+
+### Parallel Agents: The Message Board
+
+When more than one agent works at once, coordinate through deciduous, never through a scratch or markdown file. A file has no ids to answer, no way to ask what is waiting for you, and it is gone with the worktree it was written in.
+
+- **Post** interface changes, questions and answers: `post_message` (MCP) or `deciduous board post --as <your-label> -s "subject" -m "body"`. Address other agents with `@label`.
+- **Read** what is waiting for you: `read_messages` with `unanswered_for: "<your-label>"`, or `deciduous board read --unanswered <your-label>`. Do it at start, before touching a file another agent may be changing, and before finishing.
+- **Reply** with `reply_to: <id>` (`--reply-to <id>`). A reply is what takes a question off the asker's list; a new post does not.
+
+One board serves every git worktree of the repository, or the server when the project has a `[remote]`. Messages are not graph nodes: not in `graph.json`, not exported, not synced. With `DECIDUOUS_AGENT_LABEL` set in a session's environment, `board post` uses it for `--as`, and the `board-mentions.sh` hook shows that label's unanswered messages at session start and as new ones arrive.
 
 ### Multi-User Sync
 

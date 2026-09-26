@@ -39,6 +39,8 @@ deciduous add action "What you're about to implement" -c 85 -f "file1.rs,file2.r
 deciduous link <goal_id> <action_id> -r "Implementation step"
 ```
 
+**Other agents working at the same time?** Before editing a file another agent may be changing, read `deciduous board read --unanswered <your-label>`, and post an interface change on the board (`deciduous board post --as <your-label> -s "..." -m "@owner ..."`) before you make it. Never coordinate through a scratch or markdown file.
+
 ## Step 4: After Completion
 
 When the work is done:
@@ -51,6 +53,8 @@ deciduous link <action_id> <outcome_id> -r "Implementation complete"
 # Sync the graph
 deciduous sync
 ```
+
+Before you report the work finished, check the board once more (`deciduous board read --unanswered <your-label>`) and answer what is there with `--reply-to <id>`.
 
 ## Step 5: Attach Supporting Documents (Optional)
 
@@ -114,6 +118,10 @@ deciduous link <action> <outcome> -r "Complete"
 
 # Attach documents (optional)
 deciduous doc attach <goal> diagram.png -d "Description"
+
+# Parallel agents: coordinate on the board, not in a file
+deciduous board read --unanswered <label>
+deciduous board post --as <label> -s "subject" -m "@other body" [--reply-to <id>]
 
 # Always sync
 deciduous sync

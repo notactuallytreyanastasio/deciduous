@@ -40,6 +40,7 @@
 
 pub mod api;
 pub mod archaeology;
+pub mod board;
 pub mod changelog;
 pub mod config;
 pub mod db;

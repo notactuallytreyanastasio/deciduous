@@ -1117,6 +1117,15 @@ deciduous writeup -t "PR Title"    # Generate PR writeup</code></pre>
 deciduous diff apply patches/teammate.json
 deciduous diff apply --dry-run patches/teammate.json  # Preview first</code></pre>
             </div>
+
+            <h3>Parallel Agents</h3>
+            <div class="command-example">
+                <div class="description">Coordinate on the message board, never in a scratch file</div>
+                <pre><code>deciduous board post --as lead -s "port?" -m "@w1 which port"   # Post; @label addresses
+deciduous board post --as w1 -s "re" -m "4000" --reply-to 1   # Answer
+deciduous board read --unanswered w1                          # What is waiting for w1
+deciduous board show 1                                        # One message in full</code></pre>
+            </div>
         </section>
 
         <section id="troubleshooting">
