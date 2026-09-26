@@ -16,7 +16,7 @@ defmodule DeciduousMcp.Graph.RetrievalTest do
   """
   use DeciduousMcp.DataCase, async: false
 
-  alias DeciduousMcp.Graph.{Edges, Nodes, Retrieval}
+  alias DeciduousMcp.Graph.{Edges, Nodes, Related, Retrieval}
   alias DeciduousMcp.MCP.Tools.AskGraph
 
   setup do
@@ -179,6 +179,113 @@ defmodule DeciduousMcp.Graph.RetrievalTest do
     assert {:error, _} = Retrieval.run(ctx.ws.id, "redis", budget: 0)
     assert {:error, msg} = Retrieval.run(ctx.ws.id, "redis", extra_routes: [%{name: "x"}])
     assert msg =~ "invalid route"
+  end
+
+  test "a path in the question switches shared_identifier on, with no cue word", ctx do
+    # The route's cues listed ".rs" and ".ex", but question words are split
+    # on anything that is not a word character or "-", so "db.rs" arrived
+    # as "db" and "rs" and an extension cue could never match.
+    active = fn q ->
+      {:ok, r} = Retrieval.run(ctx.ws.id, q, extra_routes: [Related.route()])
+      Enum.map(r.routes, & &1.name)
+    end
+
+    assert "shared_identifier" in active.("what did we decide about src/db.rs")
+    assert "shared_identifier" in active.("anything on CLAUDE.md?")
+    assert "shared_identifier" in active.("notes on lib/api/")
+    refute "shared_identifier" in active.("why did we pick postgres")
+    refute "shared_identifier" in active.("see e.g. the end")
+  end
+
+  describe "one shared file is enough, unless the file is a hub" do
+    # Related gave one shared path usefulness 0.5, and with no question
+    # word in the neighbour Retrieval scored that (0.5 + 0.5) / 4.5 = 0.222,
+    # under its 0.25 threshold: one shared file never admitted anything.
+    setup ctx do
+      a =
+        ctx.node.("action", "Put a redis cache in front of the lookup", %{
+          metadata: %{"files" => ["src/lookup.rs"]}
+        })
+
+      # Same file, spelled so that no ILIKE on "src/lookup.rs" finds it: it
+      # can only be reached as the same path after normalisation.
+      b =
+        ctx.node.("action", "Tune eviction thresholds", %{
+          metadata: %{"files" => ["src//lookup.rs"]}
+        })
+
+      %{a: a, b: b}
+    end
+
+    defp via_files(ctx, q) do
+      {:ok, r} = Retrieval.run(ctx.ws.id, q, extra_routes: [Related.route()])
+      hit(r, ctx.b)
+    end
+
+    test "a node sharing the exact file the question names is admitted", ctx do
+      assert %{reached_by: "shared_identifier"} = via_files(ctx, "what happened to src/lookup.rs")
+    end
+
+    test "a node sharing one file with an anchor, when files are asked about", ctx do
+      assert %{reached_by: "shared_identifier"} =
+               via_files(ctx, "which files did the redis cache touch")
+    end
+
+    test "a file more than 20 nodes name is a hub: sharing it alone admits nothing", ctx do
+      for i <- 1..20,
+          do:
+            ctx.node.("action", "hub toucher #{i}", %{metadata: %{"files" => ["src/lookup.rs"]}})
+
+      refute via_files(ctx, "which files did the redis cache touch")
+    end
+  end
+
+  describe "scope applies to every route's neighbours" do
+    # An extra route supplies neighbours through its own expand/3, not
+    # through the edge query that carries the scope's WHERE. Before the
+    # scope was applied in one place, ask_graph scope=decisions returned an
+    # action and scope=active a completed node whenever the question had a
+    # cue word ("files") that switched shared_identifier on.
+    setup ctx do
+      meta = %{metadata: %{"files" => ["src/store.rs", "src/evict.rs"]}}
+      d = ctx.node.("decision", "Choose the lookup cache", meta)
+      a = ctx.node.("action", "Tune eviction thresholds", Map.put(meta, :status, "completed"))
+      %{d: d, a: a}
+    end
+
+    test "Related's shared_identifier route under scope=decisions and scope=active", ctx do
+      q = "which files did the lookup cache touch"
+
+      {:ok, all} = Retrieval.run(ctx.ws.id, q, extra_routes: [Related.route()])
+      assert hit(all, ctx.a).reached_by == "shared_identifier"
+
+      for scope <- ["decisions", "active"] do
+        {:ok, r} = Retrieval.run(ctx.ws.id, q, scope: scope, extra_routes: [Related.route()])
+        assert hit(r, ctx.d), "#{scope}: the decision anchor is in scope"
+        refute hit(r, ctx.a), "#{scope}: completed action reached by #{inspect(hit(r, ctx.a))}"
+      end
+    end
+
+    test "any extra route, not only Related's", ctx do
+      stub = %{
+        name: "stub",
+        # A cue route, so expansion runs until it has admitted something.
+        cues: ~w(stubcue),
+        weight: 1.0,
+        expand: fn _ws, frontier, _visited ->
+          for from <- frontier, do: {from, ctx.a, 1.0, %{}}
+        end
+      }
+
+      {:ok, r} =
+        Retrieval.run(ctx.ws.id, "stubcue lookup cache", scope: "decisions", extra_routes: [stub])
+
+      assert hit(r, ctx.d)
+      refute hit(r, ctx.a)
+
+      {:ok, r} = Retrieval.run(ctx.ws.id, "stubcue lookup cache", extra_routes: [stub])
+      assert hit(r, ctx.a)
+    end
   end
 
   test "an extra route's expand/3 is budgeted and scored like an edge route", ctx do
