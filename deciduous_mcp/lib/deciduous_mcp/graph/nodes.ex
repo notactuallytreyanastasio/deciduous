@@ -270,6 +270,7 @@ defmodule DeciduousMcp.Graph.Nodes do
     |> maybe_filter_status(opts[:status])
     |> maybe_filter_branch(opts[:branch])
     |> maybe_search(opts[:search])
+    |> maybe_filter_ids(opts[:ids])
     |> order_by([n], desc: n.inserted_at)
     |> limit(^(opts[:limit] || 100))
     |> offset(^(opts[:offset] || 0))
@@ -324,6 +325,11 @@ defmodule DeciduousMcp.Graph.Nodes do
   defp maybe_filter_branch(query, branch) do
     where(query, [n], fragment("? ->> 'branch' = ?", n.metadata, ^branch))
   end
+
+  # Restricts to a precomputed id set (query_nodes' `file` filter). An empty
+  # list matches nothing; it is not the same as no filter.
+  defp maybe_filter_ids(query, nil), do: query
+  defp maybe_filter_ids(query, ids), do: where(query, [n], n.id in ^ids)
 
   defp maybe_search(query, nil), do: query
   defp maybe_search(query, ""), do: query
