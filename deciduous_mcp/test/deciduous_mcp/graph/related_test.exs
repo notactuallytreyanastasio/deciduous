@@ -296,7 +296,7 @@ defmodule DeciduousMcp.Graph.RelatedTest do
       %{name: "shared_identifier", cues: cues, expand: expand} = Related.route()
       assert "file" in cues
 
-      assert [{from, %Node{id: to}, 0.5, %{shared_files: ["x.rs"], shared_commit: nil}}] =
+      assert [{from, %Node{id: to}, 0.7, %{shared_files: ["x.rs"], shared_commit: nil}}] =
                expand.(wid, [a.id], MapSet.new())
 
       assert {from, to} == {a.id, b.id}

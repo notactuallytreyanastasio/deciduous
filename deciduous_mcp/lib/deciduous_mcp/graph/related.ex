@@ -153,6 +153,7 @@ defmodule DeciduousMcp.Graph.Related do
         node.workspace_id
         |> neighbours([{node.id, files, commit}], [], opts[:limit] || 10)
         |> Map.fetch!(node.id)
+        |> Enum.map(&Map.delete(&1, :strength))
 
       {:ok, %{related: rels, commit_ignored: commit_ignored}}
     end
@@ -213,8 +214,21 @@ defmodule DeciduousMcp.Graph.Related do
       %{name:, cues:, weight:, expand: fn workspace_id, frontier_ids, visited_ids ->
           [{from_id, neighbour_node, usefulness, step_extra_map}] end}
 
-  usefulness is score / (score + 1): one shared path 0.5, two paths or the
-  same commit 0.67, three 0.75. step_extra carries `shared_files` and
+  usefulness is 1 - 0.3^strength, where strength counts 1 per shared path,
+  0.5 per shared hub path (a path more than 20 nodes name) and 2 for the
+  same commit: one path 0.7, one hub path 0.45, two paths or the commit
+  0.91. Retrieval admits a neighbour with no question word in it at
+  usefulness 0.625 and up, so one ordinary shared file is enough and one
+  hub file alone is not.
+
+  The old scale, score / (score + 1), gave one path 0.5 and Retrieval
+  scored that 0.222 against its 0.25 threshold: a single shared file never
+  admitted a node, not even one naming the exact file the question asked
+  about. Hubs are measured, not guessed: on the dev database (29,853
+  nodes) 1,883 paths are named in some workspace; 1,221 by one node, 616
+  by 2-9, 34 by 10-17 and 12 by 20 or more (vale-spec/docs/index.md 54,
+  src/main.rs 22), and those twelve say little about a node.
+  step_extra carries `shared_files` and
   `shared_commit`, so a result can say which identifier it was reached by.
   Under `:global` the frontier is split by each node's own workspace: a
   path is never compared across repositories.
@@ -237,6 +251,9 @@ defmodule DeciduousMcp.Graph.Related do
     }
   end
 
+  @doc false
+  def usefulness(strength), do: Float.round(1 - :math.pow(0.3, strength), 4)
+
   defp route_expand(_workspace, [], _visited, _limit), do: []
 
   defp route_expand(:global, frontier, visited, limit) do
@@ -257,7 +274,7 @@ defmodule DeciduousMcp.Graph.Related do
         else: from(n in Node, where: n.id in ^ids) |> Repo.all() |> Map.new(&{&1.id, &1})
 
     for {from_id, rels} <- by_node, rel <- rels do
-      {from_id, Map.fetch!(nodes, rel.id), rel.score / (rel.score + 1),
+      {from_id, Map.fetch!(nodes, rel.id), usefulness(rel.strength),
        %{shared_files: rel.shared_files, shared_commit: rel.shared_commit}}
     end
   end
@@ -498,6 +515,8 @@ defmodule DeciduousMcp.Graph.Related do
 
   @per_path 50
   @count_cap 1_000
+  # A path more nodes than this name counts half toward route strength.
+  @hub_path 20
 
   # sources: [{id, normalised files, commit key | nil}]. Returns
   # %{source_id => [rel]}, best first, at most `limit` each; neither a
@@ -675,6 +694,11 @@ defmodule DeciduousMcp.Graph.Related do
       sha = Map.get(shas, id)
       rarity = Enum.reduce(shared, 0.0, &(&2 + 1 / Map.fetch!(named_by, &1)))
 
+      strength =
+        Enum.reduce(shared, if(sha, do: @commit_score, else: 0), fn f, acc ->
+          acc + if Map.fetch!(named_by, f) > @hub_path, do: 0.5, else: 1
+        end)
+
       %{
         id: id,
         node_type: row.node_type,
@@ -684,6 +708,7 @@ defmodule DeciduousMcp.Graph.Related do
         shared_files: shared,
         shared_commit: sha,
         rarity: rarity,
+        strength: strength,
         inserted_at: row.inserted_at
       }
     end)

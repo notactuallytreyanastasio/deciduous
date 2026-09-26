@@ -197,6 +197,49 @@ defmodule DeciduousMcp.Graph.RetrievalTest do
     refute "shared_identifier" in active.("see e.g. the end")
   end
 
+  describe "one shared file is enough, unless the file is a hub" do
+    # Related gave one shared path usefulness 0.5, and with no question
+    # word in the neighbour Retrieval scored that (0.5 + 0.5) / 4.5 = 0.222,
+    # under its 0.25 threshold: one shared file never admitted anything.
+    setup ctx do
+      a =
+        ctx.node.("action", "Put a redis cache in front of the lookup", %{
+          metadata: %{"files" => ["src/lookup.rs"]}
+        })
+
+      # Same file, spelled so that no ILIKE on "src/lookup.rs" finds it: it
+      # can only be reached as the same path after normalisation.
+      b =
+        ctx.node.("action", "Tune eviction thresholds", %{
+          metadata: %{"files" => ["src//lookup.rs"]}
+        })
+
+      %{a: a, b: b}
+    end
+
+    defp via_files(ctx, q) do
+      {:ok, r} = Retrieval.run(ctx.ws.id, q, extra_routes: [Related.route()])
+      hit(r, ctx.b)
+    end
+
+    test "a node sharing the exact file the question names is admitted", ctx do
+      assert %{reached_by: "shared_identifier"} = via_files(ctx, "what happened to src/lookup.rs")
+    end
+
+    test "a node sharing one file with an anchor, when files are asked about", ctx do
+      assert %{reached_by: "shared_identifier"} =
+               via_files(ctx, "which files did the redis cache touch")
+    end
+
+    test "a file more than 20 nodes name is a hub: sharing it alone admits nothing", ctx do
+      for i <- 1..20,
+          do:
+            ctx.node.("action", "hub toucher #{i}", %{metadata: %{"files" => ["src/lookup.rs"]}})
+
+      refute via_files(ctx, "which files did the redis cache touch")
+    end
+  end
+
   describe "scope applies to every route's neighbours" do
     # An extra route supplies neighbours through its own expand/3, not
     # through the edge query that carries the scope's WHERE. Before the
