@@ -35,6 +35,14 @@ defmodule DeciduousMcp.Eval.AskGraphEvalTest do
     end
   end
 
+  test "the probe set: 12+ adversarial, 12+ answerable with a rare in-graph word" do
+    probe = AskGraphFixture.probe_set()
+    {adv, ans} = Enum.split_with(probe, &(&1.category == :adversarial))
+    assert length(adv) >= 12
+    assert length(ans) >= 12
+    assert Enum.all?(ans, &is_binary(&1[:rare_term]))
+  end
+
   test "adversarial: the absent term named AND at most 3 results, or no results" do
     # The old criterion passed a03 and a04 with 21 and 22 unrelated
     # results because unmatched_terms named the absent word.

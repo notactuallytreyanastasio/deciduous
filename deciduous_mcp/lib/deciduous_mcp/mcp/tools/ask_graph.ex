@@ -39,7 +39,9 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
           "questions follow choices and revisits, history/pivot questions follow revisits and " <>
           "superseded nodes, blocked/depends questions follow requires/blocks. Each result says " <>
           "how it was reached (reached_by, path); unmatched_terms lists question words nothing " <>
-          "in the graph contains.",
+          "in the graph contains. When one of those is a name or not a common English word " <>
+          "(distinctive_unmatched_terms), the graph has nothing on the question's subject: " <>
+          "stop_reason is distinctive_term_unmatched and at most 3 nearest matches come back.",
       input_schema: %{
         type: "object",
         properties: %{
@@ -132,6 +134,7 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
       route_terms: r.route_terms,
       term_hits: r.term_hits,
       unmatched_terms: r.unmatched_terms,
+      distinctive_unmatched_terms: r.distinctive_unmatched_terms,
       routes: r.routes,
       depth_cap: r.depth_cap,
       rounds: r.rounds,

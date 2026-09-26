@@ -67,7 +67,18 @@ defmodule DeciduousMcp.Graph.Retrieval do
   share it contains that no evidence so far contains. With a recency cue
   ("latest", "recent", ...) eq. 24-25 adjusts it by age in days.
 
-  Retrieval stops, and says which in `stop_reason`, when: every term is
+  Before any expansion, a question that names something the graph does not
+  have stops with `distinctive_term_unmatched`: some term matches no node
+  in scope and is distinctive, meaning the question writes it as a name
+  ("GraphQL", "IPv6", "Stripe" mid-sentence) or it is not a common English
+  word (`DeciduousMcp.Graph.CommonWords`: "websocket", a path). The answer
+  is then at most three anchors, no expansion, and the terms are listed in
+  `distinctive_unmatched_terms`. An unmatched common word ("algorithm",
+  "trying") does not stop retrieval: its absence from a small graph says
+  nothing, and workspace document frequency cannot tell the two apart
+  (every unmatched word has df 0).
+
+  Otherwise retrieval stops, and says which in `stop_reason`, when: every term is
   covered, every active cue route has admitted a node and, on a history
   question, the last round brought in no revisit whose other side is still
   unexplored (`evidence_sufficient`); no candidate scores above the threshold
@@ -77,6 +88,9 @@ defmodule DeciduousMcp.Graph.Retrieval do
 
   What the model estimated in the paper and nothing estimates here:
   whether the evidence actually answers the question, and contradiction.
+  An absent topic that is itself a common English word ("notifications",
+  "security", "backup") is not caught: nothing here knows that the rest
+  of the question hinges on it.
   `evidence_sufficient` is term coverage plus route coverage, not a
   judgement that the answer is present.
 
@@ -105,7 +119,7 @@ defmodule DeciduousMcp.Graph.Retrieval do
 
   import Ecto.Query
 
-  alias DeciduousMcp.Graph.Nodes
+  alias DeciduousMcp.Graph.{CommonWords, Nodes}
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Edge, Node}
 
@@ -120,6 +134,7 @@ defmodule DeciduousMcp.Graph.Retrieval do
   @depth_single 2
   @depth_multi 4
   @max_terms 8
+  @insufficient_anchors 3
 
   @lambda_lex 2.0
   @lambda_route 1.0
@@ -245,7 +260,11 @@ defmodule DeciduousMcp.Graph.Retrieval do
   The search terms of a question: lowercased, split on whitespace, each word
   cut down to letters, digits and `- _ / .` with leading and trailing
   punctuation removed, stop words and words under three characters dropped,
-  at most #{@max_terms}.
+  at most #{@max_terms}. When there are more, words that are not common
+  English (`CommonWords`) are kept before common ones, in question order:
+  "... the background workers, Kafka or RabbitMQ?" cut at the first eight
+  kept "workers" and "background" and dropped "rabbitmq", so it was never
+  searched and never reported as unmatched.
 
   `/` and `.` survive inside a word so a path stays a path: the old
   extraction deleted every non-word character, so "src/db.rs" became
@@ -267,7 +286,15 @@ defmodule DeciduousMcp.Graph.Retrieval do
     |> Enum.reject(&(&1 in @stop_words))
     |> Enum.reject(&(String.length(&1) < 3))
     |> Enum.uniq()
-    |> Enum.take(@max_terms)
+    |> cap_terms()
+  end
+
+  defp cap_terms(terms) when length(terms) <= @max_terms, do: terms
+
+  defp cap_terms(terms) do
+    {rare, common} = Enum.split_with(terms, &(not CommonWords.common?(&1)))
+    keep = MapSet.new(Enum.take(rare ++ common, @max_terms))
+    Enum.filter(terms, &MapSet.member?(keep, &1))
   end
 
   @doc """
@@ -280,8 +307,9 @@ defmodule DeciduousMcp.Graph.Retrieval do
 
   Returns `{:ok, map}` with `:anchors` and `:expanded` (lists of
   `%{node, reached_by, path, score, ranks}`), `:terms`, `:term_hits`,
-  `:unmatched_terms`, `:routes`, `:depth_cap`, `:stop_reason`, `:rounds`
-  and `:truncated_rounds`; or `{:error, message}`.
+  `:unmatched_terms`, `:distinctive_unmatched_terms`, `:routes`,
+  `:depth_cap`, `:stop_reason`, `:rounds` and `:truncated_rounds`; or
+  `{:error, message}`.
   """
   def run(workspace_id, question, opts \\ [])
 
@@ -377,6 +405,7 @@ defmodule DeciduousMcp.Graph.Retrieval do
     anchors = anchors(terms, hint, recency, scope_dyn, anchor_limit)
     term_hits = term_hits(terms, scope_dyn)
     unmatched = for t <- terms, Map.get(term_hits, t, 0) == 0, do: t
+    distinctive = distinctive_unmatched(unmatched, question)
 
     ctx = %{
       workspace_id: workspace_id,
@@ -387,22 +416,38 @@ defmodule DeciduousMcp.Graph.Retrieval do
       now: DateTime.utc_now()
     }
 
-    loop =
-      expand(ctx, %{
-        depth: 0,
-        depth_cap: depth_cap,
-        frontier: Enum.map(anchors, & &1.node.id),
-        visited: MapSet.new(anchors, & &1.node.id),
-        nodes: Map.new(anchors, &{&1.node.id, &1.node}),
-        last_admitted: Enum.map(anchors, & &1.node),
-        paths: Map.new(anchors, &{&1.node.id, []}),
-        covered: covered_terms(Enum.map(anchors, & &1.node), terms),
-        budgets: budgets,
-        spent: Map.new(budgets, fn {k, _} -> {k, 0} end),
-        reached_routes: MapSet.new(),
-        expanded: [],
-        truncated: []
-      })
+    initial = %{
+      depth: 0,
+      depth_cap: depth_cap,
+      frontier: Enum.map(anchors, & &1.node.id),
+      visited: MapSet.new(anchors, & &1.node.id),
+      nodes: Map.new(anchors, &{&1.node.id, &1.node}),
+      last_admitted: Enum.map(anchors, & &1.node),
+      paths: Map.new(anchors, &{&1.node.id, []}),
+      covered: covered_terms(Enum.map(anchors, & &1.node), terms),
+      budgets: budgets,
+      spent: Map.new(budgets, fn {k, _} -> {k, 0} end),
+      reached_routes: MapSet.new(),
+      expanded: [],
+      truncated: []
+    }
+
+    # Insufficient evidence, known before any expansion (paper eq. 19, the
+    # missing-evidence estimate): the question names something no node in
+    # scope contains, and it is a word whose absence means something (see
+    # distinctive_unmatched/2). Expanding from the anchors that matched
+    # the rest of the question only adds nodes about the rest of the
+    # question: "What rate limiting did we pick for websocket connections?"
+    # answered with 21 nodes about rate limiting, none about websockets.
+    # The answer is the few anchors nearest the rest of the question, so a
+    # reader sees what the graph does have, and the stop reason says why.
+    {anchors, loop} =
+      if distinctive != [] do
+        {Enum.take(anchors, @insufficient_anchors),
+         Map.put(initial, :stop_reason, "distinctive_term_unmatched")}
+      else
+        {anchors, expand(ctx, initial)}
+      end
 
     {:ok,
      %{
@@ -412,6 +457,7 @@ defmodule DeciduousMcp.Graph.Retrieval do
        route_terms: route_terms,
        term_hits: term_hits,
        unmatched_terms: unmatched,
+       distinctive_unmatched_terms: distinctive,
        routes:
          Enum.map(active, fn r ->
            %{
@@ -455,6 +501,49 @@ defmodule DeciduousMcp.Graph.Retrieval do
       hint != nil -> {[], route_terms}
       true -> {terms, []}
     end
+  end
+
+  # The unmatched terms whose absence is evidence (paper eq. 19): a term no
+  # node in scope contains, which the question writes as a name (a capital
+  # after the first letter, a digit, or a capital on a word that does not
+  # start a sentence: "GraphQL", "IPv6", "Stripe") or which is not a common
+  # English word (CommonWords: "websocket", "sharding", a path). Workspace
+  # document frequency cannot make this call: every unmatched word has
+  # df 0, and 13 of the 36 answerable eval questions contain one
+  # ("algorithm", "much", "trying"), so "the rarest term is unmatched"
+  # would refuse all of them.
+  defp distinctive_unmatched([], _question), do: []
+
+  defp distinctive_unmatched(unmatched, question) do
+    names = name_words(question)
+    Enum.filter(unmatched, &(MapSet.member?(names, &1) or not CommonWords.common?(&1)))
+  end
+
+  # Lowercased terms the question writes as names, cleaned the way
+  # extract_terms/1 cleans a word so the two compare.
+  defp name_words(question) do
+    question
+    |> String.split()
+    |> Enum.map_reduce(true, fn raw, sentence_start? ->
+      word =
+        raw
+        |> String.replace(~r/[^\w\/.-]/u, "")
+        |> String.trim_leading(".")
+        |> String.trim_trailing(".")
+        |> String.trim("-")
+        |> String.trim("/")
+
+      name? =
+        word != "" and
+          (String.match?(String.slice(word, 1..-1//1), ~r/\p{Lu}/u) or
+             (String.match?(word, ~r/\d/u) and String.match?(word, ~r/\p{L}/u)) or
+             (not sentence_start? and String.match?(word, ~r/^\p{Lu}/u)))
+
+      {if(name?, do: String.downcase(word)), String.match?(raw, ~r/[.?!]$/u)}
+    end)
+    |> elem(0)
+    |> Enum.reject(&is_nil/1)
+    |> MapSet.new()
   end
 
   defp question_words(question) do

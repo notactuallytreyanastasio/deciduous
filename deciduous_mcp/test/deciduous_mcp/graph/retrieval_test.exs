@@ -99,11 +99,99 @@ defmodule DeciduousMcp.Graph.RetrievalTest do
     assert r.unmatched_terms == ["kubernetes"]
     assert r.term_hits == %{"kubernetes" => 0}
     assert all_hits(r) == []
-    assert r.stop_reason == "no_anchors"
+    assert r.stop_reason == "distinctive_term_unmatched"
 
     {:ok, r} = Retrieval.run(ctx.ws.id, "redis kubernetes")
     assert r.unmatched_terms == ["kubernetes"]
     assert hit(r, ctx.redis)
+  end
+
+  describe "a distinctive word the graph never recorded stops retrieval" do
+    test "an uncommon word: no expansion, at most three anchors", ctx do
+      # "session" matches four nodes and the chain behind them; the
+      # question is about websockets, which nothing mentions.
+      {:ok, r} = Retrieval.run(ctx.ws.id, "why did we pick a session cache for websocket clients")
+
+      assert "websocket" in r.unmatched_terms
+      assert r.distinctive_unmatched_terms == ["websocket"]
+      assert r.stop_reason == "distinctive_term_unmatched"
+      assert r.expanded == []
+      assert r.rounds == 0
+      assert length(r.anchors) in 1..3
+      assert Enum.all?(r.routes, &(&1.spent == 0))
+
+      # The same question without the absent word expands as before.
+      {:ok, r} = Retrieval.run(ctx.ws.id, "why did we pick a session cache")
+      assert r.distinctive_unmatched_terms == []
+      assert r.expanded != []
+    end
+
+    test "a common English word nothing contains does not stop it", ctx do
+      # "algorithm" and "trying" are in no node; they are ordinary words, so
+      # their absence says nothing about the subject.
+      {:ok, r} =
+        Retrieval.run(ctx.ws.id, "why the session cache algorithm we were trying")
+
+      assert "algorithm" in r.unmatched_terms
+      assert "trying" in r.unmatched_terms
+      assert r.distinctive_unmatched_terms == []
+      refute r.stop_reason == "distinctive_term_unmatched"
+      assert r.expanded != []
+    end
+
+    test "a common word written as a name is distinctive", ctx do
+      # "stripe" is common English; "Stripe" mid-sentence is a name.
+      {:ok, r} = Retrieval.run(ctx.ws.id, "Which session cache does Stripe use?")
+      assert r.distinctive_unmatched_terms == ["stripe"]
+      assert r.stop_reason == "distinctive_term_unmatched"
+
+      # Capitalised as the first word of a sentence is not a name.
+      {:ok, r} = Retrieval.run(ctx.ws.id, "Stripe the session cache? Why")
+      assert r.distinctive_unmatched_terms == []
+
+      # An inner capital or a digit is, wherever it stands.
+      {:ok, r} = Retrieval.run(ctx.ws.id, "IPv6 session cache")
+      assert r.distinctive_unmatched_terms == ["ipv6"]
+    end
+
+    test "a matched rare word is not a stop, however rare", ctx do
+      # "memcached" is in one node and in no English word list.
+      {:ok, r} = Retrieval.run(ctx.ws.id, "why was memcached for the session cache rejected")
+      assert r.unmatched_terms == []
+      assert r.distinctive_unmatched_terms == []
+      assert hit(r, ctx.memcached)
+    end
+
+    test "ask_graph reports it", _ctx do
+      {:ok, json} =
+        AskGraph.call(%{
+          arguments: %{
+            "workspace" => "retrieval-ws",
+            "question" => "session cache for websocket clients"
+          },
+          server: %Hermes.Server.Frame{private: %{session_id: "retr"}, assigns: %{}}
+        })
+
+      answer = Jason.decode!(json)
+      assert answer["stop_reason"] == "distinctive_term_unmatched"
+      assert answer["distinctive_unmatched_terms"] == ["websocket"]
+      assert answer["result_count"] <= 3
+    end
+  end
+
+  test "past eight terms, uncommon words are kept before common ones" do
+    terms =
+      Retrieval.extract_terms(
+        "What message queue sits between the API and the background workers, Kafka or RabbitMQ?"
+      )
+
+    assert length(terms) == 8
+    assert "kafka" in terms
+    assert "rabbitmq" in terms
+    # Common words go first ("workers"), and the rest stay in question order.
+    refute "workers" in terms
+    assert Enum.take(terms, 2) == ["message", "queue"]
+    assert List.last(terms) == "rabbitmq"
   end
 
   test "a structural question with no content words is answered by type and status", ctx do

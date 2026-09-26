@@ -26,7 +26,9 @@ defmodule DeciduousMcp.Eval.AskGraph do
 
   The held-out questions (`AskGraphFixture.held_out/0`, written without
   any route cue word) are asked in the same run and reported in a table of
-  their own.
+  their own, and so is the probe set (`AskGraphFixture.probe_set/0`):
+  adversarial questions wrapped in generic words the graph does contain,
+  and answerable ones that carry one rare word it contains.
 
   The caller owns the database: run it inside a shared sandbox that is
   rolled back afterwards (the ExUnit test and `mix deciduous.eval` do).
@@ -63,8 +65,15 @@ defmodule DeciduousMcp.Eval.AskGraph do
         cats -> Enum.filter(Fixture.held_out(), &(&1.category in cats))
       end
 
+    probe =
+      case opts[:only] do
+        nil -> Fixture.probe_set()
+        cats -> Enum.filter(Fixture.probe_set(), &(&1.category in cats))
+      end
+
     rows = Enum.map(questions, &ask_and_score(client, ws, ids, &1))
     held_rows = Enum.map(held, &ask_and_score(client, ws, ids, &1))
+    probe_rows = Enum.map(probe, &ask_and_score(client, ws, ids, &1))
 
     %{
       summary: aggregate(rows) |> Map.put(:load_ms, load_ms) |> Map.put(:nodes, map_size(ids)),
@@ -74,6 +83,11 @@ defmodule DeciduousMcp.Eval.AskGraph do
         summary: aggregate(held_rows),
         by_category: by_category(held_rows),
         questions: held_rows
+      },
+      probe: %{
+        summary: aggregate(probe_rows),
+        by_category: by_category(probe_rows),
+        questions: probe_rows
       }
     }
   end
@@ -175,6 +189,8 @@ defmodule DeciduousMcp.Eval.AskGraph do
       result_count: length(results),
       # Diagnostic only, when the tool reports them; never scored.
       search_terms: answer["search_terms"],
+      term_hits: answer["term_hits"],
+      stop_reason: answer["stop_reason"],
       top5: Enum.take(ranked_keys, 5)
     }
 
@@ -254,18 +270,28 @@ defmodule DeciduousMcp.Eval.AskGraph do
 
     main = table(s, by_cat) <> "\n\nper question:\n" <> detail(rows) <> "\n"
 
-    case result[:held_out] do
-      %{questions: [_ | _] = hrows, summary: hs, by_category: hcat} ->
-        header <>
-          main <>
-          "\nheld-out set: #{hs.questions} questions written without any route cue word " <>
-          "(reported separately; not used to tune routes)\n\n" <>
-          table(hs, hcat) <> "\n\nper question:\n" <> detail(hrows) <> "\n"
-
-      _ ->
-        header <> main
-    end
+    header <>
+      main <>
+      section(
+        result[:held_out],
+        "held-out set: QUESTIONS questions written without any route cue word " <>
+          "(reported separately; not used to tune routes)"
+      ) <>
+      section(
+        result[:probe],
+        "probe set: QUESTIONS questions without any route cue word; adversarial ones wrap an " <>
+          "absent word in generic words the graph contains, answerable ones carry one rare " <>
+          "word it contains (not used to tune)"
+      )
   end
+
+  defp section(%{questions: [_ | _] = rows, summary: s, by_category: cat}, title) do
+    "\n" <>
+      String.replace(title, "QUESTIONS", to_string(s.questions)) <>
+      "\n\n" <> table(s, cat) <> "\n\nper question:\n" <> detail(rows) <> "\n"
+  end
+
+  defp section(_, _), do: ""
 
   defp table(s, by_cat) do
     [

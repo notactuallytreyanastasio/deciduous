@@ -61,6 +61,14 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
   and every cue of `Related.route/0` (file files path paths module commit
   sha touched changed). Paths themselves are allowed: naming a path is
   how a user asks about one, and it is not a cue word.
+
+  ## The probe set
+
+  `probe_set/0` is a third set, written after the held-out set showed
+  adversarial questions answered from their generic words, and before
+  anything was changed to stop that. Same wording rule. Its answerable
+  half each carries one rare word the graph does contain, so a stop rule
+  that refuses whenever a word is rare is caught (see `probe_set/0`).
   """
 
   @doc "Nodes as `{key, node_type, title, attrs}`, in creation order."
@@ -556,6 +564,129 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
     ]
   end
 
+  @doc """
+  The probe set: a third set over the same graph, written before the
+  evidence-sufficiency stop and never tuned against, in two halves that
+  pull in opposite directions.
+
+    * Adversarial (`p01`-`p15`): one or two words the graph never recorded,
+      wrapped in generic words it does contain ("viewer", "API", "SQLite",
+      "staging", "export"). A rule that answers from the generic words
+      fails them.
+    * Answerable (`p16`-`p28`): each carries one rare word that IS in the
+      graph (`rare_term`, in at most three fixture nodes), next to the same
+      kind of generic words. A rule that refuses whenever the rarest word is
+      rare fails them.
+
+  Same wording rule as `held_out/0`: no route cue word (checked by
+  `validate!/0`).
+  """
+  def probe_set do
+    [
+      # --- adversarial ------------------------------------------------------------
+      adv(
+        :p01,
+        "What message queue sits between the API and the background workers, Kafka or RabbitMQ?",
+        ["kafka", "rabbitmq"]
+      ),
+      adv(:p02, "Is the viewer bundled with webpack?", ["webpack"]),
+      adv(:p03, "Which Terraform modules provision the staging servers?", ["terraform"]),
+      adv(:p04, "How do we encrypt the SQLite database at rest?", ["encrypt"]),
+      adv(:p05, "What Prometheus metrics does the API export?", ["prometheus"]),
+      adv(:p06, "Which Sentry alerts page the on-call engineer?", ["sentry"]),
+      adv(:p07, "How does the web viewer support dark mode?", ["dark"]),
+      adv(:p08, "What is the retention period for deleted nodes?", ["retention"]),
+      adv(:p09, "How do we localize the CLI into Japanese?", ["japanese"]),
+      adv(:p10, "What load balancer sits in front of the Postgres session table?", ["balancer"]),
+      adv(:p11, "Which Stripe plan do heavy users of the public API pay for?", ["stripe"]),
+      adv(:p12, "How does the rate limiter treat IPv6 clients?", ["ipv6"]),
+      adv(:p13, "What did the accessibility audit say about the web viewer?", ["accessibility"]),
+      adv(:p14, "Is there a Homebrew formula for installing the CLI?", ["homebrew"]),
+      adv(:p15, "What came out of the security review of the login flow?", ["security"]),
+
+      # --- answerable, with one rare word the graph does contain ------------------
+      rare(
+        :p16,
+        :single_hop,
+        "Where does Redis come into API rate limiting?",
+        [:o_bucket],
+        "redis"
+      ),
+      rare(:p17, :single_hop, "How does carrier NAT affect per-IP limits?", [:ob_nat], "carrier"),
+      rare(:p18, :single_hop, "What is Diesel used for in the CLI?", [:d_sqlite], "diesel"),
+      rare(
+        :p19,
+        :single_hop,
+        "What would nginx limit_req have given us?",
+        [:o_nginx_ip],
+        "nginx"
+      ),
+      rare(
+        :p20,
+        :single_hop,
+        "What does GITHUB_TOKEN have to do with our releases?",
+        [:ob_bot_tags],
+        "github_token"
+      ),
+      rare(
+        :p21,
+        :single_hop,
+        "What was the localStorage idea for the viewer?",
+        [:x_layout_cache],
+        "localstorage"
+      ),
+      rare(
+        :p22,
+        :single_hop,
+        "What does the LISTEN connection do after Postgres restarts?",
+        [:x_listener],
+        "listen"
+      ),
+      rare(
+        :p23,
+        :single_hop,
+        "Does the newer updated_at win when graph.json edits collide?",
+        [:d_graphjson],
+        "updated_at"
+      ),
+      rare(
+        :p24,
+        :single_hop,
+        "How many patches did the import replay a second time?",
+        [:oc_eventlog],
+        "patches"
+      ),
+      rare(
+        :p25,
+        :single_hop,
+        "How many anonymous Docker Hub pulls do we get in CI?",
+        [:x_dockerhub],
+        "docker"
+      ),
+      rare(
+        :p26,
+        :single_hop,
+        "What does the changelog script have to do with the GitHub API?",
+        [:x_gh_ratelimit],
+        "changelog"
+      ),
+      rare(
+        :p27,
+        :multi_hop,
+        "What does the rollback journal have to do with SQLITE_BUSY, and what turned it off?",
+        [:ob_busy, :a_wal],
+        "rollback"
+      ),
+      rare(
+        :p28,
+        :single_hop,
+        "What role did refresh token rotation play in viewer login?",
+        [:o_jwt],
+        "rotation"
+      )
+    ]
+  end
+
   @doc "The route cue words the held-out set must not contain."
   def route_cues do
     routes = DeciduousMcp.Graph.Retrieval.default_routes() ++ [DeciduousMcp.Graph.Related.route()]
@@ -570,6 +701,9 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
 
   defp q(id, category, question, expect),
     do: %{id: id, category: category, question: question, expect: expect, absent_terms: []}
+
+  defp rare(id, category, question, expect, rare_term),
+    do: Map.put(q(id, category, question, expect), :rare_term, rare_term)
 
   defp adv(id, question, absent),
     do: %{id: id, category: :adversarial, question: question, expect: [], absent_terms: absent}
@@ -592,7 +726,7 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
       |> Kernel.<>(Enum.map_join(edges(), "\n", &(elem(&1, 3) || "")))
       |> String.downcase()
 
-    all = questions() ++ held_out()
+    all = questions() ++ held_out() ++ probe_set()
 
     for q <- all, t <- q.absent_terms, String.contains?(text, t) do
       raise ArgumentError, "#{q.id}: absent term #{inspect(t)} appears in the fixture"
@@ -604,10 +738,31 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
     cues = route_cues()
 
     # Retrieval.question_words/1's tokenisation: what a cue is compared with.
-    for q <- held_out(),
+    for q <- held_out() ++ probe_set(),
         w <- q.question |> String.downcase() |> String.split(~r/[^\w-]+/u, trim: true),
         MapSet.member?(cues, w) do
-      raise ArgumentError, "held-out #{q.id} uses the route cue word #{inspect(w)}"
+      raise ArgumentError, "#{q.id} uses the route cue word #{inspect(w)}"
+    end
+
+    # An answerable probe's rare word must be in the graph, and rare in it:
+    # in at least one fixture node and at most three.
+    node_texts =
+      Enum.map(nodes(), fn {_, _, title, attrs} ->
+        [title, attrs[:description], attrs[:commit] | attrs[:files] || []]
+        |> Enum.join(" ")
+        |> String.downcase()
+      end)
+
+    for %{rare_term: t} = q <- probe_set() do
+      n = Enum.count(node_texts, &String.contains?(&1, t))
+
+      unless n in 1..3 do
+        raise ArgumentError, "#{q.id}: rare term #{inspect(t)} is in #{n} fixture nodes, not 1..3"
+      end
+
+      unless String.contains?(String.downcase(q.question), t) do
+        raise ArgumentError, "#{q.id}: rare term #{inspect(t)} is not in the question"
+      end
     end
 
     for q <- all do
