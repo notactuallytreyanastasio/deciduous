@@ -142,7 +142,7 @@ defmodule DeciduousMcp.MCP.Component do
   # to know. Said after a read's refusal ("max_depth must be at least 1,
   # got 0; nothing was written") it suggested the read might have written.
   @reads ~w(show_node query_nodes get_graph find_orphans get_ancestors get_descendants
-            ask_graph list_workspaces check_activity)
+            ask_graph list_workspaces check_activity read_messages)
 
   defp refused(module, message) do
     if module.definition()[:name] in @reads,
@@ -311,6 +311,9 @@ defmodule DeciduousMcp.MCP.Component do
       not DeciduousMcp.MCP.Scope.node_scoped?(definition[:name])
   end
 
+  # A message counts: without it, the first post_message to a new
+  # workspace answered with its id and was then rolled back with the
+  # workspace it had created.
   defp has_nodes?(name) do
     import Ecto.Query
 
@@ -318,7 +321,7 @@ defmodule DeciduousMcp.MCP.Component do
       {:ok, workspace} ->
         DeciduousMcp.Repo.exists?(
           from n in DeciduousMcp.Schema.Node, where: n.workspace_id == ^workspace.id
-        )
+        ) or DeciduousMcp.Board.any?(workspace.id)
 
       {:error, :not_found} ->
         false

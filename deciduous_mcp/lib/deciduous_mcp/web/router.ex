@@ -20,6 +20,9 @@ defmodule DeciduousMcp.Web.Router do
     * `PUT  /blob/:hash` — raw document bytes, verified against the hash.
     * `GET  /documents/:id` — a document's bytes, by its id or content hash.
     * `GET  /export` — one workspace's whole graph, for refreshing a local cache.
+    * `POST /messages`, `GET /messages` — the message board, for the CLI in
+      remote mode (`DeciduousMcp.Board`); the post_message and read_messages
+      tools over plain HTTP.
     * `GET  /events` — a WebSocket stream of writes as they happen, one frame per
       trigger firing (see `DeciduousMcp.Events.Listener` for the payload and
       `DeciduousMcp.Web.GraphSocket` for why the server pings).
@@ -32,8 +35,11 @@ defmodule DeciduousMcp.Web.Router do
   """
   use Plug.Router
 
+  alias DeciduousMcp.Board
   alias DeciduousMcp.Graph.{Documents, Query, Workspaces}
   alias DeciduousMcp.MCP.Scope
+  alias DeciduousMcp.MCP.Tools.{PostMessage, ReadMessages}
+  alias DeciduousMcp.Repo
   alias DeciduousMcp.Web.SessionGuard
 
   @session_guard SessionGuard.init(server: DeciduousMcp.MCP.Server)
@@ -325,6 +331,43 @@ defmodule DeciduousMcp.Web.Router do
     end
   end
 
+  # The message board, for the CLI in remote mode: `deciduous board post`
+  # and `deciduous board read`. The same arguments, checks and answers as
+  # the post_message and read_messages tools (DeciduousMcp.Board), and the
+  # same auth and pinning as /export and /ops.
+  post "/messages" do
+    conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      conn = fetch_query_params(conn)
+
+      case read_whole_body(conn) do
+        {:ok, body, conn} ->
+          handle_post_message(conn, body)
+
+        {:too_large, conn} ->
+          json(conn, 413, %{error: "message exceeds #{@max_import_bytes} bytes"})
+
+        {:error, _} ->
+          json(conn, 400, %{error: "could not read body"})
+      end
+    end
+  end
+
+  get "/messages" do
+    conn = Auth.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      conn = conn |> WorkspacePlug.call([]) |> fetch_query_params()
+      if conn.halted, do: conn, else: handle_read_messages(conn)
+    end
+  end
+
   match _ do
     send_resp(conn, 404, "not found")
   end
@@ -549,6 +592,119 @@ defmodule DeciduousMcp.Web.Router do
       reason: "claimed_by_other_repository",
       held_by_roots: held
     })
+  end
+
+  # --- Message board ----------------------------------------------------------
+
+  defp handle_post_message(conn, body) do
+    with {:ok, payload} when is_map(payload) <- Jason.decode(body),
+         payload = with_query_workspace(payload, conn.query_params),
+         {:ok, payload} <- held_to_pin(conn, payload),
+         :ok <- Board.check_args(PostMessage, payload) |> unprocessable() do
+      frame = cli_frame(conn)
+
+      result =
+        Repo.transaction(fn ->
+          with :ok <- PostMessage.not_global(frame, payload),
+               {:ok, workspace_id} <- Scope.write_workspace_id(frame, payload),
+               {:ok, posted} <- Board.post(workspace_id, payload) do
+            posted
+          else
+            {:error, message} -> Repo.rollback(message)
+          end
+        end)
+
+      case result do
+        {:ok, posted} ->
+          Scope.flush_activity()
+          json(conn, 201, posted)
+
+        {:error, message} ->
+          Scope.discard_activity()
+          json(conn, 422, %{error: message})
+      end
+    else
+      {:ok, _not_an_object} ->
+        json(conn, 400, %{error: "body must be a JSON object: the post_message arguments"})
+
+      {:error, %Jason.DecodeError{} = err} ->
+        json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
+
+      {:error, {:pinned, message}} ->
+        json(conn, 403, %{error: message})
+
+      {:error, {:unprocessable, message}} ->
+        json(conn, 422, %{error: message})
+
+      {:error, reason} ->
+        json(conn, 422, %{error: to_string_reason(reason)})
+    end
+  end
+
+  defp handle_read_messages(conn) do
+    with {:ok, args} <- integer_params(conn.query_params, ~w(since_id id limit)),
+         :ok <- Board.check_args(ReadMessages, args) |> unprocessable(),
+         {:ok, workspace_id} <- ReadMessages.scope(conn_frame(conn), args) |> unprocessable() do
+      {:ok, result} = Board.read(workspace_id, args)
+      json(conn, 200, result)
+    else
+      {:error, {:unprocessable, message}} -> json(conn, 422, %{error: message})
+      {:error, message} -> json(conn, 400, %{error: message})
+    end
+  end
+
+  defp unprocessable({:error, message}), do: {:error, {:unprocessable, message}}
+  defp unprocessable(other), do: other
+
+  # The workspace may be named in the body, as /ops takes it, or as
+  # ?workspace=, as /export takes it. The body wins.
+  defp with_query_workspace(payload, %{"workspace" => ws}) when is_binary(ws),
+    do: Map.put_new(payload, "workspace", ws)
+
+  defp with_query_workspace(payload, _query), do: payload
+
+  # A query string holds text; these three are integers in the tool's
+  # schema, and are refused here if they are not one.
+  defp integer_params(params, keys) do
+    Enum.reduce_while(keys, {:ok, params}, fn key, {:ok, acc} ->
+      case Map.fetch(acc, key) do
+        :error ->
+          {:cont, {:ok, acc}}
+
+        {:ok, text} when is_binary(text) ->
+          case Integer.parse(text) do
+            {n, ""} ->
+              {:cont, {:ok, Map.put(acc, key, n)}}
+
+            _ ->
+              {:halt, {:error, "#{key} must be an integer, got #{inspect(text)}"}}
+          end
+
+        {:ok, other} ->
+          {:halt, {:error, "#{key} must be an integer, got #{inspect(other)}"}}
+      end
+    end)
+  end
+
+  # Who posted, for check_activity: the CLI, named by the repository's
+  # first root commit when it sends one, as /ops records it.
+  defp cli_frame(conn) do
+    session =
+      case get_req_header(conn, "x-deciduous-repo-roots") do
+        [header | _] ->
+          case String.split(header, ",", trim: true) do
+            [root | _] -> "cli:" <> String.slice(String.trim(root), 0, 12)
+            [] -> "cli"
+          end
+
+        [] ->
+          "cli"
+      end
+
+    %{
+      assigns: conn.assigns,
+      private: %{session_id: session, client_info: %{"name" => "deciduous CLI"}}
+    }
   end
 
   # --- Documents --------------------------------------------------------------

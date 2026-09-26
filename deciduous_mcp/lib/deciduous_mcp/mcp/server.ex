@@ -22,6 +22,9 @@ defmodule DeciduousMcp.MCP.Server do
   ### Natural Language Query
   ask_graph
 
+  ### Message board
+  post_message, read_messages
+
   ## Prompts
 
   deciduous_always_on — injects always-on capture instructions into any client
@@ -69,6 +72,10 @@ defmodule DeciduousMcp.MCP.Server do
   # --- Cross-project ---
   component DeciduousMcp.MCP.Tools.ListWorkspaces
   component DeciduousMcp.MCP.Tools.CheckActivity
+
+  # --- Message board (coordination between parallel agents) ---
+  component DeciduousMcp.MCP.Tools.PostMessage
+  component DeciduousMcp.MCP.Tools.ReadMessages
 
   # --- Prompts ---
   component DeciduousMcp.MCP.Prompts.AlwaysCapture

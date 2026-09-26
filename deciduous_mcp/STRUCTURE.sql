@@ -109,6 +109,48 @@ $$;
 
 
 --
+-- Name: notify_agent_message(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.notify_agent_message() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  ws_name text;
+  body jsonb;
+  new_seq bigint;
+BEGIN
+  SELECT name INTO ws_name FROM workspaces WHERE id = NEW.workspace_id;
+
+  new_seq := nextval(pg_get_serial_sequence('graph_events', 'seq'));
+  body := jsonb_build_object(
+    'table', 'agent_messages',
+    'op', 'INSERT',
+    'event', 'message_posted',
+    'workspace', ws_name,
+    'id', NEW.id,
+    'author', left(NEW.author, 200),
+    'subject', left(NEW.subject, 200),
+    'mentions', to_jsonb(NEW.mentions),
+    'reply_to', NEW.reply_to,
+    'branch', left(NEW.branch, 200),
+    'seq', new_seq,
+    'at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+  );
+  INSERT INTO graph_events (seq, workspace, payload)
+    VALUES (new_seq, coalesce(ws_name, ''), body);
+
+  IF new_seq % 1000 = 0 THEN
+    DELETE FROM graph_events WHERE inserted_at < (now() AT TIME ZONE 'UTC') - interval '7 days';
+  END IF;
+
+  PERFORM pg_notify('graph_events', body::text);
+  RETURN NULL;
+END;
+$$;
+
+
+--
 -- Name: notify_graph_event(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -192,6 +234,43 @@ $$;
 
 
 SET default_table_access_method = heap;
+
+--
+-- Name: agent_messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.agent_messages (
+    id bigint NOT NULL,
+    workspace_id uuid NOT NULL,
+    branch text,
+    author text NOT NULL,
+    subject text NOT NULL,
+    body text NOT NULL,
+    mentions text[] DEFAULT ARRAY[]::text[] NOT NULL,
+    reply_to bigint,
+    created_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'UTC'::text) NOT NULL,
+    CONSTRAINT agent_messages_bounds CHECK ((((char_length(author) >= 1) AND (char_length(author) <= 100)) AND ((char_length(subject) >= 1) AND (char_length(subject) <= 300)) AND ((octet_length(body) >= 1) AND (octet_length(body) <= 65536))))
+);
+
+
+--
+-- Name: agent_messages_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.agent_messages_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: agent_messages_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.agent_messages_id_seq OWNED BY public.agent_messages.id;
+
 
 --
 -- Name: applied_ops; Type: TABLE; Schema: public; Owner: -
@@ -467,10 +546,25 @@ CREATE TABLE public.write_activity (
 
 
 --
+-- Name: agent_messages id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_messages ALTER COLUMN id SET DEFAULT nextval('public.agent_messages_id_seq'::regclass);
+
+
+--
 -- Name: graph_events seq; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.graph_events ALTER COLUMN seq SET DEFAULT nextval('public.graph_events_seq_seq'::regclass);
+
+
+--
+-- Name: agent_messages agent_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_messages
+    ADD CONSTRAINT agent_messages_pkey PRIMARY KEY (id);
 
 
 --
@@ -591,6 +685,34 @@ ALTER TABLE ONLY public.workspaces
 
 ALTER TABLE ONLY public.write_activity
     ADD CONSTRAINT write_activity_pkey PRIMARY KEY (workspace_id, branch, session_id);
+
+
+--
+-- Name: agent_messages_mentions_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_messages_mentions_idx ON public.agent_messages USING gin (mentions);
+
+
+--
+-- Name: agent_messages_search_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_messages_search_idx ON public.agent_messages USING gin (to_tsvector('english'::regconfig, ((subject || ' '::text) || body)));
+
+
+--
+-- Name: agent_messages_workspace_id_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX agent_messages_workspace_id_id_index ON public.agent_messages USING btree (workspace_id, id);
+
+
+--
+-- Name: agent_messages_workspace_id_reply_to_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_messages_workspace_id_reply_to_index ON public.agent_messages USING btree (workspace_id, reply_to);
 
 
 --
@@ -867,6 +989,13 @@ CREATE INDEX write_activity_workspace_id_last_seen_at_index ON public.write_acti
 
 
 --
+-- Name: agent_messages agent_messages_notify_insert; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER agent_messages_notify_insert AFTER INSERT ON public.agent_messages FOR EACH ROW EXECUTE FUNCTION public.notify_agent_message();
+
+
+--
 -- Name: decision_edges decision_edges_notify_delete; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -913,6 +1042,22 @@ CREATE TRIGGER decision_nodes_notify_insert AFTER INSERT ON public.decision_node
 --
 
 CREATE TRIGGER decision_nodes_notify_update AFTER UPDATE ON public.decision_nodes FOR EACH ROW WHEN ((old.* IS DISTINCT FROM new.*)) EXECUTE FUNCTION public.notify_graph_event();
+
+
+--
+-- Name: agent_messages agent_messages_reply_to_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_messages
+    ADD CONSTRAINT agent_messages_reply_to_fkey FOREIGN KEY (workspace_id, reply_to) REFERENCES public.agent_messages(workspace_id, id);
+
+
+--
+-- Name: agent_messages agent_messages_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_messages
+    ADD CONSTRAINT agent_messages_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 
 --
@@ -1098,7 +1243,8 @@ INSERT INTO public.schema_migrations (version, inserted_at) VALUES
   (20260924010000, NOW()),
   (20260924020000, NOW()),
   (20260924100000, NOW()),
-  (20260924110000, NOW());
+  (20260924110000, NOW()),
+  (20260926120000, NOW());
 
 -- Database defaults from the migrated database -------------------------------
 DO $$

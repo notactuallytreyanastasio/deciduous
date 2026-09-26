@@ -497,7 +497,7 @@ trace_chain({ node_id: 1361 })             &rarr; 13 nodes, 14 edges</div>
           <p>
             Everything above is the embedded server: <code>deciduous mcp</code> over stdio, one SQLite
             file, one project. The <a href="remote.html">shared graph server</a> is a second MCP
-            endpoint, over HTTP, with one Postgres for every project. Its tool set is smaller (18)
+            endpoint, over HTTP, with one Postgres for every project. Its tool set is smaller (20)
             and it is the one that knows about other agents. Register it once at user scope and it is
             present in every directory:
           </p>
@@ -528,13 +528,13 @@ trace_chain({ node_id: 1361 })             &rarr; 13 nodes, 14 edges</div>
             --claude-code</code> prints.
           </p>
           <p>
-            All 18 tools: <code>add_node</code>, <code>add_edge</code>, <code>update_node</code>,
+            All 20 tools: <code>add_node</code>, <code>add_edge</code>, <code>update_node</code>,
             <code>delete_node</code>, <code>delete_edge</code>, <code>log_decision</code>,
             <code>log_observation</code>, <code>capture_conversation_turn</code>,
             <code>close_thread</code>, <code>check_activity</code>, <code>query_nodes</code>,
             <code>show_node</code>, <code>get_graph</code>, <code>get_ancestors</code>,
             <code>get_descendants</code>, <code>find_orphans</code>, <code>ask_graph</code>,
-            <code>list_workspaces</code>. The sessions tools on this page
+            <code>list_workspaces</code>, <code>post_message</code>, <code>read_messages</code>. The sessions tools on this page
             (<code>start_session</code>, <code>resume_session</code>) belong to the embedded server
             only; on the shared server a conversation is scoped by <code>workspace</code> and
             <code>branch</code> instead.
