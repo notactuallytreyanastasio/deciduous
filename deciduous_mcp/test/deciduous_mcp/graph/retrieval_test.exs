@@ -16,7 +16,7 @@ defmodule DeciduousMcp.Graph.RetrievalTest do
   """
   use DeciduousMcp.DataCase, async: false
 
-  alias DeciduousMcp.Graph.{Edges, Nodes, Retrieval}
+  alias DeciduousMcp.Graph.{Edges, Nodes, Related, Retrieval}
   alias DeciduousMcp.MCP.Tools.AskGraph
 
   setup do
@@ -179,6 +179,54 @@ defmodule DeciduousMcp.Graph.RetrievalTest do
     assert {:error, _} = Retrieval.run(ctx.ws.id, "redis", budget: 0)
     assert {:error, msg} = Retrieval.run(ctx.ws.id, "redis", extra_routes: [%{name: "x"}])
     assert msg =~ "invalid route"
+  end
+
+  describe "scope applies to every route's neighbours" do
+    # An extra route supplies neighbours through its own expand/3, not
+    # through the edge query that carries the scope's WHERE. Before the
+    # scope was applied in one place, ask_graph scope=decisions returned an
+    # action and scope=active a completed node whenever the question had a
+    # cue word ("files") that switched shared_identifier on.
+    setup ctx do
+      meta = %{metadata: %{"files" => ["src/store.rs", "src/evict.rs"]}}
+      d = ctx.node.("decision", "Choose the lookup cache", meta)
+      a = ctx.node.("action", "Tune eviction thresholds", Map.put(meta, :status, "completed"))
+      %{d: d, a: a}
+    end
+
+    test "Related's shared_identifier route under scope=decisions and scope=active", ctx do
+      q = "which files did the lookup cache touch"
+
+      {:ok, all} = Retrieval.run(ctx.ws.id, q, extra_routes: [Related.route()])
+      assert hit(all, ctx.a).reached_by == "shared_identifier"
+
+      for scope <- ["decisions", "active"] do
+        {:ok, r} = Retrieval.run(ctx.ws.id, q, scope: scope, extra_routes: [Related.route()])
+        assert hit(r, ctx.d), "#{scope}: the decision anchor is in scope"
+        refute hit(r, ctx.a), "#{scope}: completed action reached by #{inspect(hit(r, ctx.a))}"
+      end
+    end
+
+    test "any extra route, not only Related's", ctx do
+      stub = %{
+        name: "stub",
+        # A cue route, so expansion runs until it has admitted something.
+        cues: ~w(stubcue),
+        weight: 1.0,
+        expand: fn _ws, frontier, _visited ->
+          for from <- frontier, do: {from, ctx.a, 1.0, %{}}
+        end
+      }
+
+      {:ok, r} =
+        Retrieval.run(ctx.ws.id, "stubcue lookup cache", scope: "decisions", extra_routes: [stub])
+
+      assert hit(r, ctx.d)
+      refute hit(r, ctx.a)
+
+      {:ok, r} = Retrieval.run(ctx.ws.id, "stubcue lookup cache", extra_routes: [stub])
+      assert hit(r, ctx.a)
+    end
   end
 
   test "an extra route's expand/3 is budgeted and scored like an edge route", ctx do

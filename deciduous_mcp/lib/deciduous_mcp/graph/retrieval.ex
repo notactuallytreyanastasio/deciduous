@@ -91,8 +91,10 @@ defmodule DeciduousMcp.Graph.Retrieval do
 
   An edge route's `edge` is `fn edge_type, neighbour, from_node -> usefulness | nil`.
 
-  Pass it in `opts[:extra_routes]`. Its neighbours are scored and budgeted
-  like any other; the extra map is merged into the path step.
+  Pass it in `opts[:extra_routes]`. Its neighbours are scope-checked,
+  scored and budgeted like any other (the scope is applied once, to every
+  route's neighbours together, so a route need not know about scopes); the
+  extra map is merged into the path step.
   """
 
   import Ecto.Query
@@ -913,8 +915,10 @@ defmodule DeciduousMcp.Graph.Retrieval do
   end
 
   # Every live, in-scope, unvisited neighbour of the frontier: two queries
-  # for stored edges (out and in), plus each extra route's expand/3.
-  # Returns {[{kind, from_id, node, edge_or_nil, direction, extra}], truncated?}.
+  # for stored edges (out and in), plus each extra route's expand/3, then
+  # one scope check over all of them (in_scope/2).
+  # Returns {[{:edge, from, node, edge, direction} | {:custom, route, from,
+  # node, usefulness, extra}], truncated?}.
   defp neighbours(ctx, frontier, visited) do
     visited_list = MapSet.to_list(visited)
 
@@ -934,8 +938,33 @@ defmodule DeciduousMcp.Graph.Retrieval do
         {:custom, r, from, node, u, extra}
       end
 
-    {out ++ inc ++ extra, t1 or t2}
+    {in_scope(ctx, out ++ inc ++ extra), t1 or t2}
   end
+
+  # The one place the scope is enforced on expansion. An extra route's
+  # expand/3 gets only the workspace, so it cannot apply scope=decisions or
+  # scope=active itself, and asking every route to re-implement the scope
+  # is how shared_identifier came to return actions under scope=decisions
+  # and completed nodes under scope=active. edge_neighbours/4 also filters
+  # in SQL, but only so out-of-scope edges do not use up the per-round cap;
+  # correctness does not depend on it.
+  defp in_scope(_ctx, []), do: []
+
+  defp in_scope(ctx, raw) do
+    ids = raw |> Enum.map(&neighbour_id/1) |> Enum.uniq()
+
+    keep =
+      nodes_in_scope(ctx.scope_dyn)
+      |> where([node: n], n.id in type(^ids, {:array, :binary_id}))
+      |> select([node: n], n.id)
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.filter(raw, &MapSet.member?(keep, neighbour_id(&1)))
+  end
+
+  defp neighbour_id({:edge, _from, node, _e, _dir}), do: node.id
+  defp neighbour_id({:custom, _r, _from, node, _u, _extra}), do: node.id
 
   defp edge_neighbours(ctx, frontier, visited_list, direction) do
     base =
