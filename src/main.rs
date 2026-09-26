@@ -1571,7 +1571,25 @@ fn main() {
         // unmerged, so the file parses and looks clean. `deciduous sync`
         // (and `sync --check`) look for that unmerged state and finish the
         // merge from git's own three versions.
-        match deciduous::records::merge_record_files_with_notes(base, ours, theirs) {
+        // What this clone last pulled from the server: the ancestor of a
+        // node that reached both sides by `remote pull` and so is not in
+        // git's. Git runs the driver at the top of the work tree, so the
+        // database is the one beside the graph file being merged (or
+        // DECIDUOUS_DB_PATH's). Unreadable, the merge goes on without it,
+        // as it did before, and says so.
+        let db_path = deciduous::Database::db_path();
+        let known = match deciduous::Database::remote_base_at(&db_path) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!(
+                    "deciduous merge-record: could not read what {} last pulled from the server ({}); nodes that came only from the server are merged by timestamp",
+                    db_path.display(),
+                    e
+                );
+                None
+            }
+        };
+        match deciduous::records::merge_record_files_knowing(base, ours, theirs, known.as_ref()) {
             Ok((merged, notes)) => {
                 for note in notes {
                     eprintln!("deciduous merge-record: {}", note);

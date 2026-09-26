@@ -859,6 +859,192 @@ fn pull_keeps_an_agents_retitle_when_a_later_local_write_touched_another_field()
     );
 }
 
+// ---------------------------------------------------------------------------
+// The git merge driver and nodes that came only from the server. An agent
+// adds a node over MCP; both clones get it by `remote pull`, so it is in
+// neither side's git history before they forked, and git hands the driver
+// no ancestor for it. Clone 1 sets the status, clone 2 later writes a
+// prompt. Merged by stamps alone, clone 2's record is newer and takes the
+// status back with it (model battery, seed 1790447430110168000: "model
+// status completed, clone 1 pending"). The copy this clone last pulled
+// says which side moved.
+// ---------------------------------------------------------------------------
+
+const AGENT_NODE: &str = "5a1e0000-0000-4000-8000-00000000a9e7";
+
+/// The server's export holding the agent's node, as `title` at `updated_at`.
+fn agent_node_export(title: &str, updated_at: &str) -> Value {
+    serde_json::json!({"nodes": [{
+        "id": "srv-1", "change_id": AGENT_NODE, "node_type": "decision", "title": title,
+        "description": null, "status": "pending", "metadata": {"branch": "main"},
+        "created_at": "2026-01-01T00:00:00Z", "updated_at": updated_at,
+        "deleted_at": null
+    }], "edges": [], "documents": []})
+}
+
+/// graph.json as three merge inputs: the ancestor without the agent's node,
+/// and each side with `edit` applied to its copy of it.
+fn merge_inputs(
+    dir: &Path,
+    doc: &Value,
+    ours: impl Fn(&mut Value),
+    theirs: impl Fn(&mut Value),
+) -> (PathBuf, PathBuf, PathBuf) {
+    let mut base = doc.clone();
+    base["nodes"].as_object_mut().unwrap().remove(AGENT_NODE);
+    let side = |edit: &dyn Fn(&mut Value)| {
+        let mut d = doc.clone();
+        edit(&mut d["nodes"][AGENT_NODE]);
+        d
+    };
+    let paths = (
+        dir.join("merge-base.json"),
+        dir.join("merge-ours.json"),
+        dir.join("merge-theirs.json"),
+    );
+    for (p, v) in [
+        (&paths.0, base),
+        (&paths.1, side(&ours)),
+        (&paths.2, side(&theirs)),
+    ] {
+        std::fs::write(p, serde_json::to_string_pretty(&v).unwrap()).unwrap();
+    }
+    paths
+}
+
+fn merge_record(sb: &Sandbox, dir: &Path, (b, o, t): &(PathBuf, PathBuf, PathBuf)) -> Value {
+    let args = [
+        "merge-record",
+        b.to_str().unwrap(),
+        o.to_str().unwrap(),
+        t.to_str().unwrap(),
+    ];
+    sb.dx_ok(dir, &args);
+    let merged: Value = serde_json::from_str(&std::fs::read_to_string(o).unwrap()).unwrap();
+    merged["nodes"][AGENT_NODE].clone()
+}
+
+/// A repository that has pulled the agent's node from a stub server.
+fn pulled_agent_node(sb: &Sandbox, rel: &str, title: &str, updated_at: &str) -> (PathBuf, Value) {
+    let dir = sb.repo(rel);
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!(
+            "[remote]\nurl = \"{}\"\nworkspace = \"stub\"\n",
+            stub_server(agent_node_export(title, updated_at))
+        ),
+    )
+    .unwrap();
+    sb.dx_ok(&dir, &["remote", "pull"]);
+    let doc: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join(".deciduous").join("graph.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        doc["nodes"][AGENT_NODE].is_object(),
+        "the pull brought the agent's node: {doc}"
+    );
+    (dir, doc)
+}
+
+fn set_status(status: &'static str, at: &'static str) -> impl Fn(&mut Value) {
+    move |n: &mut Value| {
+        n["status"] = status.into();
+        n["updated_at"] = at.into();
+    }
+}
+
+fn set_prompt(prompt: &'static str, at: &'static str) -> impl Fn(&mut Value) {
+    move |n: &mut Value| {
+        n["metadata"]["prompt"] = prompt.into();
+        n["updated_at"] = at.into();
+    }
+}
+
+#[test]
+fn the_merge_driver_keeps_a_status_set_here_on_a_node_that_came_only_from_the_server() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let (dir, doc) = pulled_agent_node(&sb, "driver", "added by the agent", "2026-01-01T00:00:00Z");
+    // Clone 1 (this one) completes it; clone 2, later, writes a prompt.
+    let files = merge_inputs(
+        &dir,
+        &doc,
+        set_status("completed", "2026-01-02T00:00:00Z"),
+        set_prompt("from clone 2", "2026-01-03T00:00:00Z"),
+    );
+    let n = merge_record(&sb, &dir, &files);
+    assert_eq!(
+        (n["status"].as_str(), n["metadata"]["prompt"].as_str()),
+        (Some("completed"), Some("from clone 2")),
+        "{n}"
+    );
+
+    // The same merge seen from clone 2's side of a rebase (the sides
+    // swapped): the same answer.
+    let files = merge_inputs(
+        &dir,
+        &doc,
+        set_prompt("from clone 2", "2026-01-03T00:00:00Z"),
+        set_status("completed", "2026-01-02T00:00:00Z"),
+    );
+    let n = merge_record(&sb, &dir, &files);
+    assert_eq!(
+        (n["status"].as_str(), n["metadata"]["prompt"].as_str()),
+        (Some("completed"), Some("from clone 2")),
+        "{n}"
+    );
+}
+
+#[test]
+fn the_merge_driver_does_not_take_a_stale_copy_for_an_edit() {
+    // This clone pulled the agent's retitle. The other clone pulled the
+    // node before it and has not touched it since: its older title is not
+    // an edit, and must not replace the retitle.
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let (dir, doc) = pulled_agent_node(
+        &sb,
+        "stale",
+        "retitled by the agent",
+        "2026-01-05T00:00:00Z",
+    );
+    let files = merge_inputs(
+        &dir,
+        &doc,
+        |_| {},
+        |n| {
+            n["title"] = "added by the agent".into();
+            n["updated_at"] = "2026-01-02T00:00:00Z".into();
+        },
+    );
+    let n = merge_record(&sb, &dir, &files);
+    assert_eq!(n["title"].as_str(), Some("retitled by the agent"), "{n}");
+}
+
+#[test]
+fn the_merge_driver_in_a_clone_without_a_remote_merges_by_timestamp_as_before() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let (_, doc) = pulled_agent_node(&sb, "source", "added by the agent", "2026-01-01T00:00:00Z");
+    // A plain git user: no remote, no pull, nothing known about a server.
+    let dir = sb.repo("plain");
+    let files = merge_inputs(
+        &dir,
+        &doc,
+        set_status("completed", "2026-01-02T00:00:00Z"),
+        set_prompt("from clone 2", "2026-01-03T00:00:00Z"),
+    );
+    let n = merge_record(&sb, &dir, &files);
+    // With no ancestor the newer record takes every field it differs on.
+    assert_eq!(
+        (n["status"].as_str(), n["metadata"]["prompt"].as_str()),
+        (Some("pending"), Some("from clone 2")),
+        "{n}"
+    );
+    assert!(
+        !dir.join(".deciduous").join("remote-log.jsonl").exists(),
+        "the driver wrote nothing beside the merge"
+    );
+}
+
 // C4 (the push half): a node an agent deleted is not re-sent by later
 // writes, and an edit to it made before the delete is refused by the server
 // loudly, not applied to the tombstone or silently dropped. (An edit made
