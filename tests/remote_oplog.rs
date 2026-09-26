@@ -797,6 +797,68 @@ fn pull_removes_a_node_the_server_deleted() {
     assert!(out.contains("imported 1"), "{out}");
 }
 
+// The model battery's seed 1790209979051348620: an agent retitles a node on
+// the server, then this clone writes the node's status to the value it
+// already has. The server applies that op as a no-op and keeps the
+// retitle's stamp; the local row is restamped by the write, so it is the
+// newer record. Pull merged the two without a base, every differing field
+// went to the newer stamp, and the agent's title was replaced by the one it
+// had replaced. The server's copy from the last pull says which side moved.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pull_keeps_an_agents_retitle_when_a_later_local_write_touched_another_field() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("retitle");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{}\"\nworkspace = \"stub\"\n", dead_url()),
+    )
+    .unwrap();
+    sb.dx_ok(&dir, &["add", "goal", "as written here"]);
+    let cid = local_change_id(&sb, &dir, 1);
+    let node = |title: &str, updated_at: &str| {
+        serde_json::json!({"nodes": [{
+            "id": "srv-1", "change_id": cid, "node_type": "goal", "title": title,
+            "description": null, "status": "pending", "metadata": {"branch": "main"},
+            "created_at": "2026-01-01T00:00:00Z", "updated_at": updated_at,
+            "deleted_at": null
+        }], "edges": [], "documents": []})
+    };
+
+    // The last pull: the server holds the node as written here.
+    set_remote_url(
+        &dir,
+        &stub_server(node("as written here", "2026-01-01T00:00:00Z")),
+    );
+    sb.dx_ok(&dir, &["remote", "pull"]);
+
+    // The agent retitles it; the server stamps that now.
+    let retitled_at = chrono::Utc::now().to_rfc3339();
+    set_remote_url(
+        &dir,
+        &stub_server(node("retitled by the agent", &retitled_at)),
+    );
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    // Then this clone sets the status it already has. The server's copy
+    // does not change (a no-op), this clone's row is restamped.
+    sb.dx_ok(&dir, &["status", "1", "pending"]);
+
+    let out = sb.dx_ok(&dir, &["remote", "pull"]);
+    let local: Value = serde_json::from_str(&sb.dx_ok(&dir, &["graph"])).unwrap();
+    let n = &local["nodes"][0];
+    assert_eq!(
+        (n["title"].as_str(), n["status"].as_str()),
+        (Some("retitled by the agent"), Some("pending")),
+        "pull said: {out}"
+    );
+    let file = std::fs::read_to_string(dir.join(".deciduous").join("graph.json")).unwrap();
+    assert!(
+        file.contains("retitled by the agent"),
+        "graph.json, which git carries to the other clones, has it too:\n{file}"
+    );
+}
+
 // C4 (the push half): a node an agent deleted is not re-sent by later
 // writes, and an edit to it made before the delete is refused by the server
 // loudly, not applied to the tombstone or silently dropped. (An edit made
