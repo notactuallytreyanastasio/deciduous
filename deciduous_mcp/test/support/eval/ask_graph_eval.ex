@@ -17,8 +17,16 @@ defmodule DeciduousMcp.Eval.AskGraph do
       including the `connects_to` / `connected_from` neighbours listed
       under each result: what a reader of the whole answer could find
     * adversarial pass -- the question is about something the graph never
-      decided. It passes when no results come back, or when the answer has
-      a top-level `unmatched_terms` list naming every absent term.
+      decided. It passes when no results come back, or when the answer's
+      top-level `unmatched_terms` names every absent term AND at most
+      three results come back. The old criterion (the terms named, any
+      number of results) passed "websocket" with 21 unrelated results; it
+      is still computed and reported as "adv old" so the two can be
+      compared.
+
+  The held-out questions (`AskGraphFixture.held_out/0`, written without
+  any route cue word) are asked in the same run and reported in a table of
+  their own.
 
   The caller owns the database: run it inside a shared sandbox that is
   rolled back afterwards (the ExUnit test and `mix deciduous.eval` do).
@@ -49,14 +57,50 @@ defmodule DeciduousMcp.Eval.AskGraph do
         cats -> Enum.filter(Fixture.questions(), &(&1.category in cats))
       end
 
+    held =
+      case opts[:only] do
+        nil -> Fixture.held_out()
+        cats -> Enum.filter(Fixture.held_out(), &(&1.category in cats))
+      end
+
     rows = Enum.map(questions, &ask_and_score(client, ws, ids, &1))
+    held_rows = Enum.map(held, &ask_and_score(client, ws, ids, &1))
 
     %{
       summary: aggregate(rows) |> Map.put(:load_ms, load_ms) |> Map.put(:nodes, map_size(ids)),
-      by_category:
-        rows |> Enum.group_by(& &1.category) |> Map.new(fn {c, rs} -> {c, aggregate(rs)} end),
-      questions: rows
+      by_category: by_category(rows),
+      questions: rows,
+      held_out: %{
+        summary: aggregate(held_rows),
+        by_category: by_category(held_rows),
+        questions: held_rows
+      }
     }
+  end
+
+  defp by_category(rows),
+    do: rows |> Enum.group_by(& &1.category) |> Map.new(fn {c, rs} -> {c, aggregate(rs)} end)
+
+  @adversarial_max_results 3
+
+  @doc """
+  The adversarial criterion: no results, or every absent term named in
+  `unmatched_terms` and at most #{@adversarial_max_results} results.
+  Naming the term while returning a page of loosely related nodes is not a
+  pass: a reader sees the page, not the list.
+  """
+  def adversarial_pass?(result_count, unmatched, absent) do
+    result_count == 0 or
+      (named_all?(unmatched, absent) and result_count <= @adversarial_max_results)
+  end
+
+  @doc "The criterion before it was tightened: no results, or every absent term named."
+  def adversarial_pass_old?(result_count, unmatched, absent),
+    do: result_count == 0 or named_all?(unmatched, absent)
+
+  defp named_all?(unmatched, absent) do
+    got = Enum.map(unmatched, &String.downcase/1)
+    Enum.all?(absent, &(&1 in got))
   end
 
   # --- loading --------------------------------------------------------------
@@ -137,17 +181,18 @@ defmodule DeciduousMcp.Eval.AskGraph do
     if q.category == :adversarial do
       unmatched =
         case answer["unmatched_terms"] do
-          l when is_list(l) -> Enum.map(l, &String.downcase/1)
+          l when is_list(l) -> l
           _ -> []
         end
 
-      reported? = Enum.all?(q.absent_terms, &(&1 in unmatched))
+      n = length(results)
 
       Map.merge(base, %{
         expect: [],
         absent_terms: q.absent_terms,
-        adversarial_pass: results == [] or reported?,
-        reported_unmatched: reported?
+        adversarial_pass: adversarial_pass?(n, unmatched, q.absent_terms),
+        adversarial_pass_old: adversarial_pass_old?(n, unmatched, q.absent_terms),
+        reported_unmatched: named_all?(unmatched, q.absent_terms)
       })
     else
       rank = Enum.find_index(ranked, &(&1 in expect_ids))
@@ -178,6 +223,7 @@ defmodule DeciduousMcp.Eval.AskGraph do
       context_recall: mean(ret, :context_recall),
       adversarial: length(adv),
       adversarial_pass: Enum.count(adv, & &1.adversarial_pass),
+      adversarial_pass_old: Enum.count(adv, & &1.adversarial_pass_old),
       mean_results: mean(rows, :result_count),
       latency_ms_p50: percentile(lat, 0.5),
       latency_ms_max: List.last(lat)
@@ -201,44 +247,71 @@ defmodule DeciduousMcp.Eval.AskGraph do
   # --- report ---------------------------------------------------------------
 
   @doc "Formats a `run/1` result as plain text."
-  def format(%{summary: s, by_category: by_cat, questions: rows}) do
+  def format(%{summary: s, by_category: by_cat, questions: rows} = result) do
     header =
       "ask_graph retrieval eval: #{s.questions} questions over #{s.nodes} nodes " <>
         "(fixture loaded through MCP in #{s.load_ms}ms)\n\n"
 
-    table =
-      [
-        pad(["category", "n", "R@5", "R@10", "MRR", "ctxR", "adv pass", "avg results", "p50 ms"])
-        | for cat <- [:single_hop, :multi_hop, :temporal, :file, :adversarial, :all],
-              a = if(cat == :all, do: s, else: by_cat[cat]),
-              a != nil do
-            pad([
-              to_string(cat),
-              a.questions,
-              f(a.recall5),
-              f(a.recall10),
-              f(a.mrr),
-              f(a.context_recall),
-              if(a.adversarial > 0, do: "#{a.adversarial_pass}/#{a.adversarial}", else: "-"),
-              f(a.mean_results),
-              a.latency_ms_p50
-            ])
-          end
-      ]
-      |> Enum.join("\n")
+    main = table(s, by_cat) <> "\n\nper question:\n" <> detail(rows) <> "\n"
 
-    detail =
-      rows
-      |> Enum.map_join("\n", fn r ->
-        score =
-          if r.category == :adversarial,
-            do: "#{if r.adversarial_pass, do: "PASS", else: "FAIL"} (#{r.result_count} results)",
-            else: "R@10 #{f(r.recall10)} RR #{f(r.rr)}" <> missed(r.missed)
+    case result[:held_out] do
+      %{questions: [_ | _] = hrows, summary: hs, by_category: hcat} ->
+        header <>
+          main <>
+          "\nheld-out set: #{hs.questions} questions written without any route cue word " <>
+          "(reported separately; not used to tune routes)\n\n" <>
+          table(hs, hcat) <> "\n\nper question:\n" <> detail(hrows) <> "\n"
 
-        "  #{r.id} #{String.pad_trailing(score, 44)} #{r.question}"
-      end)
+      _ ->
+        header <> main
+    end
+  end
 
-    header <> table <> "\n\nper question:\n" <> detail <> "\n"
+  defp table(s, by_cat) do
+    [
+      pad([
+        "category",
+        "n",
+        "R@5",
+        "R@10",
+        "MRR",
+        "ctxR",
+        "adv pass",
+        "adv old",
+        "avg results",
+        "p50 ms"
+      ])
+      | for cat <- [:single_hop, :multi_hop, :temporal, :file, :adversarial, :all],
+            a = if(cat == :all, do: s, else: by_cat[cat]),
+            a != nil do
+          pad([
+            to_string(cat),
+            a.questions,
+            f(a.recall5),
+            f(a.recall10),
+            f(a.mrr),
+            f(a.context_recall),
+            if(a.adversarial > 0, do: "#{a.adversarial_pass}/#{a.adversarial}", else: "-"),
+            if(a.adversarial > 0, do: "#{a.adversarial_pass_old}/#{a.adversarial}", else: "-"),
+            f(a.mean_results),
+            a.latency_ms_p50
+          ])
+        end
+    ]
+    |> Enum.join("\n")
+  end
+
+  defp detail(rows) do
+    Enum.map_join(rows, "\n", fn r ->
+      score =
+        if r.category == :adversarial,
+          do:
+            "#{if r.adversarial_pass, do: "PASS", else: "FAIL"} " <>
+              "(#{r.result_count} results; old #{if r.adversarial_pass_old, do: "PASS", else: "FAIL"})",
+          else: "R@10 #{f(r.recall10)} RR #{f(r.rr)}" <> missed(r.missed)
+
+      "  #{r.id} #{String.pad_trailing(score, 44)} #{r.question}"
+    end)
   end
 
   defp missed([]), do: ""
