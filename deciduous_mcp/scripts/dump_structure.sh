@@ -73,12 +73,17 @@ END
 $$;
 SQL
 
+# Only settings the migrations make belong here (random_page_cost, work_mem).
+# TimeZone comes from whoever created the database: the integration job's
+# migrated database carries Etc/UTC, release acceptance's fresh one carries
+# none, so no STRUCTURE.sql could satisfy both while it was exported.
 psql -X --no-password -v ON_ERROR_STOP=1 -Atc "
   SELECT format('  EXECUTE format(''ALTER DATABASE %%I SET %%I = %%L'', current_database(), %L, %L);',
                 split_part(entry.setting, '=', 1), substr(entry.setting, strpos(entry.setting, '=') + 1))
   FROM pg_db_role_setting d, unnest(d.setconfig) AS entry(setting)
   WHERE d.setdatabase = (SELECT oid FROM pg_database WHERE datname = current_database())
     AND d.setrole = 0
+    AND split_part(entry.setting, '=', 1) <> 'TimeZone'
   ORDER BY entry.setting" > "$structure_work/settings"
 
 {

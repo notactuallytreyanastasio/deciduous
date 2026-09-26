@@ -249,7 +249,7 @@ CREATE TABLE public.agent_messages (
     mentions text[] DEFAULT ARRAY[]::text[] NOT NULL,
     reply_to bigint,
     created_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'UTC'::text) NOT NULL,
-    CONSTRAINT agent_messages_bounds CHECK ((((char_length(author) >= 1) AND (char_length(author) <= 100)) AND ((char_length(subject) >= 1) AND (char_length(subject) <= 300)) AND ((octet_length(body) >= 1) AND (octet_length(body) <= 65536))))
+    CONSTRAINT agent_messages_bounds CHECK (((char_length(author) >= 1) AND (char_length(author) <= 100) AND ((char_length(subject) >= 1) AND (char_length(subject) <= 300)) AND ((octet_length(body) >= 1) AND (octet_length(body) <= 65536))))
 );
 
 
