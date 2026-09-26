@@ -192,9 +192,17 @@ pub fn request_id(input: &str) -> Value {
 /// and replacing the half with U+FFFD, as the rest of the message is,
 /// answers an id the client never sent. The reply must carry the original
 /// text instead; see [`splice_raw_id`].
+///
+/// Only a lone surrogate qualifies: the raw text must decode once its
+/// halves are replaced. A string that fails for any other reason (a raw
+/// control character) is not JSON, and echoing it would make the reply line
+/// unparseable too; that request is answered under a null id instead.
 pub fn undecodable_raw_id(input: &str) -> Option<&str> {
     let raw = raw_member(input, "id")?;
-    (raw.starts_with('"') && serde_json::from_str::<String>(raw).is_err()).then_some(raw)
+    (raw.starts_with('"')
+        && serde_json::from_str::<String>(raw).is_err()
+        && serde_json::from_str::<String>(&replace_lone_surrogates(raw)).is_ok())
+    .then_some(raw)
 }
 
 /// Serialize `response` with its `id` written as `raw_id`, verbatim.
@@ -658,6 +666,18 @@ mod tests {
         assert_eq!(undecodable_raw_id(r#"{"id":7}"#), None);
         assert_eq!(undecodable_raw_id("not json"), None);
         assert_eq!(request_id("{\"id\":9,\"method\":\"ping\"}\u{0}"), json!(9));
+    }
+
+    #[test]
+    fn an_id_that_is_not_json_is_never_echoed() {
+        // The protocol fuzz sent ids holding raw control characters. They
+        // fail to decode, as a lone surrogate does, but echoing them
+        // verbatim wrote a reply line that was not JSON itself.
+        for line in ["{\"id\":\"fz-\u{c}12340\",\"method\":\"ping\"}", "{\"id\":\"a\u{17}\"}"] {
+            assert_eq!(undecodable_raw_id(line), None, "{line:?}");
+        }
+        // A lone surrogate next to a control character is still not JSON.
+        assert_eq!(undecodable_raw_id("{\"id\":\"\\ud800\u{1}\"}"), None);
     }
 
     #[test]
