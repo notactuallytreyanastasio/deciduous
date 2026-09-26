@@ -53,14 +53,16 @@ defmodule DeciduousMcp.Web.GraphSocket do
 
   # Each event has a `seq` from graph_events (see the 20260924020000
   # migration). One already sent, from the backlog, is not sent again.
+  # `last` is where the backlog ended and stays there: live events are
+  # already deduplicated by Events.Listener, and they do not arrive in seq
+  # order (a transaction that took its seq early can commit late, and the
+  # listener's catch-up fills such holes afterwards), so raising `last` on
+  # each live event would drop exactly those.
   @impl true
   def handle_info({:graph_event, event}, state) do
     case event["seq"] do
       seq when is_integer(seq) and seq <= state.last ->
         {:ok, state}
-
-      seq when is_integer(seq) ->
-        {:push, {:text, Jason.encode!(event)}, %{state | last: seq}}
 
       _ ->
         {:push, {:text, Jason.encode!(event)}, state}

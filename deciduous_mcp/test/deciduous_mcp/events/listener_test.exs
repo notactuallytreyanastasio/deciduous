@@ -11,6 +11,7 @@ defmodule DeciduousMcp.Events.ListenerTest do
 
   alias DeciduousMcp.Events.Listener
   alias DeciduousMcp.Graph.{Nodes, Workspaces}
+  alias DeciduousMcp.Web.GraphSocket
 
   setup do
     test = self()
@@ -117,7 +118,8 @@ defmodule DeciduousMcp.Events.ListenerTest do
     assert received() == []
   end
 
-  test "a seq that commits after a higher one is still broadcast", %{ws: ws, state: state} do
+  test "a seq that commits after a higher one is still broadcast, and the socket pushes it",
+       %{ws: ws, state: state} do
     [[early]] = Repo.query!("SELECT nextval(pg_get_serial_sequence('graph_events', 'seq'))").rows
     node!(ws, "later")
     [late] = seqs(ws)
@@ -145,6 +147,15 @@ defmodule DeciduousMcp.Events.ListenerTest do
     assert received() == [early]
     _ = tick(state)
     assert received() == []
+
+    # A socket that already pushed `late` live still pushes `early`.
+    {:ok, socket} = GraphSocket.init(%{topic: "graph:" <> ws.name, since: nil})
+    {:push, _, socket} = GraphSocket.handle_info({:graph_event, payload(late)}, socket)
+
+    assert {:push, {:text, text}, _} =
+             GraphSocket.handle_info({:graph_event, payload(early)}, socket)
+
+    assert Jason.decode!(text)["seq"] == early
   end
 
   test "a backlog larger than a batch is read in batches, and says so", %{ws: ws} do
