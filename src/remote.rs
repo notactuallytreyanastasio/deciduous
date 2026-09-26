@@ -2644,6 +2644,24 @@ pub fn known_server_state(
     Ok(base)
 }
 
+/// One node of [`known_server_state`] shaped as a record, for the merge's
+/// base. Absent, null and `{}` all mean "nothing" (a record skips a `None`
+/// field, the server sends `null` and `{}`); left in, a base `null` against
+/// a record's missing key read as a change on both sides.
+fn base_record(known: &Value) -> Value {
+    let mut out = serde_json::Map::new();
+    for key in ["title", "description", "status", "metadata"] {
+        match known.get(key) {
+            None | Some(Value::Null) => {}
+            Some(Value::Object(m)) if m.is_empty() => {}
+            Some(v) => {
+                out.insert(key.to_string(), v.clone());
+            }
+        }
+    }
+    Value::Object(out)
+}
+
 /// The base `remote pull` records: each live server node's fields.
 pub fn base_of(graph: &RemoteGraph) -> Vec<(String, Value)> {
     graph
@@ -2847,6 +2865,8 @@ fn pull_server_rows(
         None => Default::default(),
     };
 
+    let known = known_server_state(db, log)?;
+
     let result = store.batch(|| -> Result<usize, String> {
         for n in graph.nodes.iter().filter(|n| n.deleted_at.is_none()) {
             let Some(fields) = refused.get(&n.change_id) else {
@@ -2906,7 +2926,20 @@ fn pull_server_rows(
                 deleted_at: n.deleted_at.clone(),
                 extra: Default::default(),
             };
-            if store.absorb_node(&rec).map_err(|e| e.to_string())? {
+            // Merged against what the server held when this clone last
+            // knew, so a field only the server changed is taken even when
+            // this copy's stamp is newer: a later local write to another
+            // field, or a no-op the server did not restamp, is not a newer
+            // title. Tombstones keep the stamp rule (see below).
+            let base = n
+                .deleted_at
+                .is_none()
+                .then(|| known.get(&n.change_id).map(base_record))
+                .flatten();
+            if store
+                .absorb_node(&rec, base.as_ref())
+                .map_err(|e| e.to_string())?
+            {
                 *written += 1;
             }
         }

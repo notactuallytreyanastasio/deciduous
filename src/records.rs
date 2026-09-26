@@ -1111,15 +1111,23 @@ impl RecordStore {
     /// since it is not a local write. Fields only the file has (a newer
     /// version's, a cascade marker) survive, and the newer side wins a
     /// field both have. [`Self::write_node`] would replace the record.
-    pub fn absorb_node(&self, rec: &NodeRecord) -> io::Result<bool> {
-        self.absorb(|d| &mut d.nodes, rec.change_id.clone(), rec)
+    ///
+    /// `base` is what the server held when this clone last knew (the last
+    /// pull, with its delivered edits laid over: `remote::known_server_state`),
+    /// as the fields it tracks. With it, a field only one side changed takes
+    /// that side's value whatever the stamps say; only a field both changed
+    /// goes to the newer record. Without it every differing field did, so a
+    /// local write to one field (even a no-op, which restamps here and not on
+    /// the server) reverted an agent's edit to another.
+    pub fn absorb_node(&self, rec: &NodeRecord, base: Option<&Value>) -> io::Result<bool> {
+        self.absorb(|d| &mut d.nodes, rec.change_id.clone(), rec, base)
     }
 
     /// Like [`Self::absorb_node`], for an edge. A local tombstone newer than
     /// the incoming copy stays a tombstone, and a local relink keeps its
     /// rationale over an older copy of the edge.
     pub fn absorb_edge(&self, rec: &EdgeRecord) -> io::Result<bool> {
-        self.absorb(|d| &mut d.edges, rec.edge_id.clone(), rec)
+        self.absorb(|d| &mut d.edges, rec.edge_id.clone(), rec, None)
     }
 
     fn absorb<T>(
@@ -1127,6 +1135,7 @@ impl RecordStore {
         pick: impl FnOnce(&mut GraphDoc) -> &mut BTreeMap<String, T>,
         key: String,
         rec: &T,
+        base: Option<&Value>,
     ) -> io::Result<bool>
     where
         T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone,
@@ -1138,7 +1147,7 @@ impl RecordStore {
                 Some(existing) => {
                     let ours = serde_json::to_value(existing).map_err(io::Error::other)?;
                     let theirs = serde_json::to_value(rec).map_err(io::Error::other)?;
-                    let merged = merge_record_values(None, &ours, &theirs);
+                    let merged = merge_record_values(base, &ours, &theirs);
                     if same_but_stamp(&ours, &merged) {
                         // Nothing but updated_at would change. The server
                         // stamps a node when it applies the op, ~50 ms after
