@@ -1,6 +1,27 @@
 # Changelog
 
-## [1.0.10] - 2026-09-26
+## [1.0.11] - 2026-09-28
+
+1.0.10 was tagged but never published: after 1.0.9 shipped, three security advisories were published against `mint` 1.10.1, and every self-contained server build refuses packages with advisories. 1.0.11 carries everything 1.0.10 had, plus the fix for that, a branch-scoped local graph, and a local server that no longer needs Docker.
+
+### Changed
+- **A server on this machine needs PostgreSQL, not Docker.** `remote setup --local` (and `init` with no remote) now runs the release's self-contained server as a background service (a launchd LaunchAgent on macOS, a systemd user unit on Linux) against the system PostgreSQL on localhost:5432, as the current user, database `deciduous`. The executable is verified against the release's `checksums.txt`, listens on 127.0.0.1 only, and creates its database and migrates before it listens. The wizard offers a PostgreSQL URL of your own (the password asked separately and never printed), a new PostgreSQL and server in Docker, or someone else's server; a database that refuses is reported in its own words and the menu comes back. Flags: `--database-url`, `--docker-postgres`, `--docker`. `update` upgrades an older native server in place. Installs made by earlier versions are recognised and stay on Docker (#301).
+- **The local database follows graph.json.** A node added on one branch no longer appears on every branch after `sync`. A checkout, reset, pull or stash is followed by every command; writes the file never got (on a detached HEAD) are kept and published later. `sync --check` no longer fails after every branch switch (#280).
+
+### Fixed
+- **`mint` 1.11.0** clears EEF-CVE-2026-91043 (HIGH), -92103 and -94194 in the server's HTTP client (#297).
+- **`sync` refuses what `add` and `link` refuse**: unknown node types, statuses and edge types, self-loops and 2-cycles in a hand-edited graph.json are skipped and named; `feedback` and `done` are still accepted because the server holds them (#298).
+- **Ops that arrive through git carry the time of the edit**, not of the sync that queued them, so an edit made before a delete no longer brings the node back, and a delete arriving through git no longer makes the server refuse edits made after it (#300).
+- **`/events?since=` replays an event that committed after a higher one**, and neither the socket nor `deciduous remote watch` drops it as a duplicate (#299).
+
+### Not done
+- A write made on a branch while a server is configured is on the server for every branch: the server has no branches.
+- Server compare-and-set can refuse a revival whose op says it replaced a value set before the delete.
+- The model battery still fails intermittently with a status mismatch on some seeds (3 of 12 on the commit before #300); under investigation.
+
+## [1.0.10] - 2026-09-26 (tagged, not published)
+
+The v1.0.10 release run stopped at the self-contained server builds (security advisories against `mint`, fixed in 1.0.11), so no binaries, crate or Homebrew formula were published. Everything below ships in 1.0.11.
 
 `ask_graph` used to match question words with ILIKE, rank by insert time and return 25 nodes whatever it found: recall@10 0.611 and MRR 0.264 on a 43-question eval, 0 of 7 questions about things never recorded answered as such. 1.0.10 rebuilds it on ideas from the Jev-Mem paper (arXiv 2609.23986), deterministically, with no model calls, and fixes five convergence bugs the integration battery kept hitting.
 
