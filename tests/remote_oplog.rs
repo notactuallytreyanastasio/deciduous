@@ -3413,3 +3413,228 @@ fn a_git_edit_made_before_an_agents_delete_does_not_revive_the_node_on_the_serve
         "made after the delete"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Chapter 61: a write says where it went. A linked worktree whose committed
+// config predates the main checkout's `[remote]` (or never had it) sends to
+// the main checkout's server; a project with no server anywhere says so.
+// ---------------------------------------------------------------------------
+
+type Posted = std::sync::Arc<std::sync::Mutex<Vec<(String, Value)>>>;
+
+/// A stub that records every POST it is sent, as (path, body).
+fn recording_stub() -> (String, Posted) {
+    let seen: Posted = Default::default();
+    let log = seen.clone();
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    std::thread::spawn(move || {
+        for mut req in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            let path = req.url().split('?').next().unwrap_or("").to_string();
+            let parsed: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+            if *req.method() == tiny_http::Method::Post {
+                log.lock().unwrap().push((path.clone(), parsed.clone()));
+            }
+            let reply = match path.as_str() {
+                "/health" => "ok".to_string(),
+                "/claim" => r#"{"workspace":"stub","claim":"unchecked"}"#.to_string(),
+                "/locate" => r#"{"workspaces":[]}"#.to_string(),
+                "/ops" => {
+                    let results: Vec<Value> = parsed["ops"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|op| serde_json::json!({"op_id": op["op_id"], "result": "applied"}))
+                        .collect();
+                    serde_json::json!({"workspace": "stub", "results": results}).to_string()
+                }
+                "/import" => {
+                    let n = parsed["graph"]["nodes"].as_array().map_or(0, |a| a.len());
+                    let e = parsed["graph"]["edges"].as_array().map_or(0, |a| a.len());
+                    serde_json::json!({
+                        "nodes": {"received": n, "upserted": n},
+                        "edges": {"received": e, "upserted": e, "unresolved": 0}
+                    })
+                    .to_string()
+                }
+                "/export" => r#"{"nodes": [], "edges": [], "documents": []}"#.to_string(),
+                _ => {
+                    let _ = req.respond(tiny_http::Response::empty(404));
+                    continue;
+                }
+            };
+            let _ = req.respond(tiny_http::Response::from_string(reply));
+        }
+    });
+    (format!("http://127.0.0.1:{port}"), seen)
+}
+
+/// Every title the stub was sent, through /ops or /import.
+fn titles_sent(seen: &Posted) -> Vec<String> {
+    let mut out = Vec::new();
+    for (path, body) in seen.lock().unwrap().iter() {
+        match path.as_str() {
+            "/ops" => {
+                for op in body["ops"].as_array().into_iter().flatten() {
+                    if let Some(t) = op["title"].as_str() {
+                        out.push(t.to_string());
+                    }
+                }
+            }
+            "/import" => {
+                for n in body["graph"]["nodes"].as_array().into_iter().flatten() {
+                    if let Some(t) = n["title"].as_str() {
+                        out.push(t.to_string());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// A repository with its config committed without `[remote]`, and a linked
+/// worktree of it checked out from that commit.
+fn repo_and_worktree(sb: &Sandbox, rel: &str) -> (PathBuf, PathBuf) {
+    let main = sb.repo(rel);
+    sb.git(&main, &["add", ".deciduous/config.toml"]);
+    sb.git(&main, &["commit", "-q", "-m", "config without a remote"]);
+    let wt_rel = format!("{rel}-feature");
+    sb.git(
+        &main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            &format!("../{wt_rel}"),
+            "-b",
+            "feature",
+        ],
+    );
+    (main, sb.path().join(wt_rel))
+}
+
+fn own_remote_url(dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join(".deciduous").join("config.toml")).ok()?;
+    let doc: toml::Value = toml::from_str(&text).ok()?;
+    Some(doc.get("remote")?.get("url")?.as_str()?.to_string())
+}
+
+#[test]
+fn a_worktree_without_a_remote_of_its_own_writes_to_the_main_checkouts_server() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let (url, seen) = recording_stub();
+    let (main, wt) = repo_and_worktree(&sb, "wt-inherit");
+    // Added in the main checkout after the branch was cut, and not
+    // committed: the worktree's own config never gets it.
+    sb.dx_ok(
+        &main,
+        &["remote", "init", &url, "--workspace", "wt-inherit"],
+    );
+    assert_eq!(
+        own_remote_url(&wt),
+        None,
+        "the worktree has a [remote] of its own"
+    );
+
+    let out = sb.dx_ok(&wt, &["add", "goal", "made in the worktree"]);
+    assert!(
+        titles_sent(&seen).contains(&"made in the worktree".to_string()),
+        "the worktree's write did not reach the main checkout's server: {out}\nsent: {:?}",
+        seen.lock().unwrap()
+    );
+    assert!(
+        !out.contains("remote setup"),
+        "a sent write was called local-only: {out}"
+    );
+    // Sent as the main checkout's workspace.
+    let ops_ws: Vec<String> = seen
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(p, _)| p == "/ops")
+        .filter_map(|(_, b)| b["workspace"].as_str().map(str::to_string))
+        .collect();
+    assert!(
+        !ops_ws.is_empty() && ops_ws.iter().all(|w| w == "wt-inherit"),
+        "{ops_ws:?}"
+    );
+    // The worktree's config is not rewritten, and status says where the
+    // server came from.
+    assert_eq!(own_remote_url(&wt), None);
+    let status = sb.dx(&wt, &["remote", "status"]);
+    let status = format!("{}{}", text(&status.stdout), text(&status.stderr));
+    assert!(status.contains(&url), "{status}");
+    assert!(status.contains("main checkout"), "{status}");
+}
+
+#[test]
+fn nodes_written_in_a_worktree_before_the_remote_existed_are_seeded_from_it() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let (url, seen) = recording_stub();
+    let (main, wt) = repo_and_worktree(&sb, "wt-seed");
+    // No server anywhere yet: the write is local, and says so.
+    let out = sb.dx(&wt, &["add", "goal", "stranded in the worktree"]);
+    assert!(out.status.success());
+    assert!(
+        text(&out.stderr).contains("remote setup"),
+        "a local-only write said nothing: {}",
+        text(&out.stderr)
+    );
+
+    sb.dx_ok(&main, &["remote", "init", &url, "--workspace", "wt-seed"]);
+    let out = sb.dx_ok(&wt, &["remote", "push", "--seed"]);
+    assert!(
+        titles_sent(&seen).contains(&"stranded in the worktree".to_string()),
+        "push --seed from the worktree did not send its node: {out}\nsent: {:?}",
+        seen.lock().unwrap()
+    );
+}
+
+#[test]
+fn a_write_with_no_server_anywhere_says_so_on_stderr_only() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("no-server");
+    let out = sb.dx(&dir, &["add", "goal", "only here"]);
+    assert!(out.status.success());
+    assert_eq!(
+        text(&out.stdout).lines().collect::<Vec<_>>(),
+        ["Created node 1 (type: goal, title: only here) [branch: main]"],
+        "stdout changed"
+    );
+    let err = text(&out.stderr);
+    assert_eq!(
+        err.matches("remote setup").count(),
+        1,
+        "the note is said once per command: {err}"
+    );
+    assert!(!dir.join(".deciduous").join("remote-log.jsonl").exists());
+
+    // Reads say nothing, and `graph` stays parseable JSON.
+    let graph = sb.dx(&dir, &["graph"]);
+    assert!(
+        !text(&graph.stderr).contains("remote setup"),
+        "a read was noted"
+    );
+    serde_json::from_slice::<Value>(&graph.stdout).expect("graph stdout is JSON");
+
+    // Silenced for scripts and tests that know.
+    let quiet = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["add", "goal", "quietly"])
+        .current_dir(&dir)
+        .env("HOME", sb.path().join("home"))
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env("DECIDUOUS_QUIET_LOCAL_ONLY", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .output()
+        .unwrap();
+    assert!(quiet.status.success());
+    assert!(
+        !text(&quiet.stderr).contains("remote setup"),
+        "{}",
+        text(&quiet.stderr)
+    );
+}

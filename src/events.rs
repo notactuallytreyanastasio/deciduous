@@ -309,6 +309,9 @@ pub struct MaterializedNode {
     pub status: String,
     pub metadata_json: Option<String>,
     pub created_at: DateTime<Utc>,
+    /// `created_at` as the checkpoint spelled it, carried to the record
+    /// byte for byte; RFC 3339 of `created_at` when an event made it.
+    pub created_text: String,
     pub updated_at: DateTime<Utc>,
     pub author: Option<String>,
 }
@@ -321,6 +324,8 @@ pub struct MaterializedEdge {
     pub edge_type: String,
     pub rationale: Option<String>,
     pub created_at: DateTime<Utc>,
+    /// As for [`MaterializedNode::created_text`].
+    pub created_text: String,
     pub author: Option<String>,
 }
 
@@ -340,6 +345,7 @@ impl MaterializedState {
                     status: node.status.clone(),
                     metadata_json: node.metadata_json.clone(),
                     created_at: parse(&node.created_at),
+                    created_text: node.created_at.clone(),
                     updated_at: parse(&node.updated_at),
                     author: None,
                 },
@@ -356,6 +362,7 @@ impl MaterializedState {
                     edge_type: edge.edge_type.clone(),
                     rationale: edge.rationale.clone(),
                     created_at: parse(&edge.created_at),
+                    created_text: edge.created_at.clone(),
                     author: None,
                 },
             );
@@ -376,7 +383,20 @@ impl MaterializedState {
                 timestamp,
                 author,
             } => {
-                self.tombstoned_nodes.remove(change_id);
+                // An add_node for a node already known is a re-emit (`events
+                // emit`, a second machine's copy), stamped when it was
+                // emitted: the node keeps the date it was made. Taking the
+                // event's stamp re-dated every checkpointed node the old
+                // log mentioned again to the moment of the re-emit.
+                let known = self
+                    .tombstoned_nodes
+                    .remove(change_id)
+                    .map(|(n, _)| n)
+                    .or_else(|| self.nodes.get(change_id).cloned());
+                let (created_at, created_text) = match known {
+                    Some(n) if n.created_at <= *timestamp => (n.created_at, n.created_text),
+                    _ => (*timestamp, timestamp.to_rfc3339()),
+                };
                 self.nodes.insert(
                     change_id.clone(),
                     MaterializedNode {
@@ -386,7 +406,8 @@ impl MaterializedState {
                         description: description.clone(),
                         status: status.clone(),
                         metadata_json: metadata_json.clone(),
-                        created_at: *timestamp,
+                        created_at,
+                        created_text,
                         updated_at: *timestamp,
                         author: Some(author.clone()),
                     },
@@ -439,6 +460,13 @@ impl MaterializedState {
                 author,
             } => {
                 self.tombstoned_edges.remove(edge_id);
+                // A re-emit of a live edge keeps its date. A link after an
+                // unlink is a new link and takes the event's: an edge's
+                // created_at is what orders it against the unlink.
+                let (created_at, created_text) = match self.edges.get(edge_id) {
+                    Some(e) if e.created_at <= *timestamp => (e.created_at, e.created_text.clone()),
+                    _ => (*timestamp, timestamp.to_rfc3339()),
+                };
                 self.edges.insert(
                     edge_id.clone(),
                     MaterializedEdge {
@@ -447,7 +475,8 @@ impl MaterializedState {
                         to_change_id: to_change_id.clone(),
                         edge_type: edge_type.clone(),
                         rationale: rationale.clone(),
-                        created_at: *timestamp,
+                        created_at,
+                        created_text,
                         author: Some(author.clone()),
                     },
                 );
@@ -471,6 +500,56 @@ impl MaterializedState {
             | Event::UntagNode { .. }
             | Event::AttachDocument { .. }
             | Event::DetachDocument { .. } => {}
+        }
+    }
+
+    /// Dates a node or edge from events the checkpoint already folded in.
+    ///
+    /// Replay skips events older than the checkpoint (they would regress its
+    /// fields), but an add_node among them is still evidence of when the
+    /// node existed: a checkpoint written from a database that had itself
+    /// been rebuilt from the log carries the rebuild's time, and the add in
+    /// the log is the only earlier date left. Only ever moves a date
+    /// earlier. An edge the log also unlinked is left alone, because its
+    /// date orders the link against the unlink.
+    pub fn date_from(&mut self, events: &[Event]) {
+        let unlinked: std::collections::HashSet<&str> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::DeleteEdge { edge_id, .. } => Some(edge_id.as_str()),
+                _ => None,
+            })
+            .collect();
+        for event in events {
+            match event {
+                Event::AddNode {
+                    change_id,
+                    timestamp,
+                    ..
+                } => {
+                    let node = match self.nodes.get_mut(change_id) {
+                        Some(n) => Some(n),
+                        None => self.tombstoned_nodes.get_mut(change_id).map(|(n, _)| n),
+                    };
+                    if let Some(n) = node.filter(|n| *timestamp < n.created_at) {
+                        n.created_at = *timestamp;
+                        n.created_text = timestamp.to_rfc3339();
+                    }
+                }
+                Event::AddEdge {
+                    edge_id, timestamp, ..
+                } if !unlinked.contains(edge_id.as_str()) => {
+                    if let Some(e) = self
+                        .edges
+                        .get_mut(edge_id)
+                        .filter(|e| *timestamp < e.created_at)
+                    {
+                        e.created_at = *timestamp;
+                        e.created_text = timestamp.to_rfc3339();
+                    }
+                }
+                _ => {}
+            }
         }
     }
 

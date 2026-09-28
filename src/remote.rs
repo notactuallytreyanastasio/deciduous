@@ -436,13 +436,85 @@ pub const QUICK_OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// The config of the project whose database lives in `data_dir` (its
 /// `.deciduous/`), read from `data_dir/config.toml`, not found by walking up
 /// from the current directory. Default when there is none.
+///
+/// A linked worktree whose own config has no `[remote]` url takes the main
+/// checkout's (see [`inherited_remote`]).
 pub fn config_at(data_dir: &Path) -> Result<Config, String> {
+    let mut config = own_config_at(data_dir)?;
+    if !config.remote.is_configured() {
+        if let Some(inherited) = inherited_remote(data_dir) {
+            config.remote = inherited.remote;
+        }
+    }
+    Ok(config)
+}
+
+/// `data_dir/config.toml` alone, with nothing inherited.
+fn own_config_at(data_dir: &Path) -> Result<Config, String> {
     let path = data_dir.join("config.toml");
     match std::fs::read_to_string(&path) {
         Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
         Err(e) => Err(format!("{}: {e}", path.display())),
     }
+}
+
+/// A `[remote]` a linked worktree takes from its repository's main checkout.
+#[derive(Debug, Clone)]
+pub struct InheritedRemote {
+    pub remote: RemoteConfig,
+    /// The main checkout's data directory (its `.deciduous/`), whose
+    /// `config.toml` holds `remote`.
+    pub data_dir: std::path::PathBuf,
+}
+
+/// The main checkout's `[remote]`, for a project whose data directory is in
+/// a linked worktree of the same repository and whose own config names no
+/// server. None otherwise: outside git, in the main checkout itself, in a
+/// submodule, when this config has a url of its own, or when the main
+/// checkout has none either.
+///
+/// `.deciduous/config.toml` is committed, so a worktree gets whatever
+/// `[remote]` its branch's commit carries. A remote added in the main
+/// checkout and not committed, or committed after the branch was cut,
+/// never reaches the worktree, and its writes stayed in its own database
+/// without a word: a customer case study found 376 nodes stranded that way
+/// across 28 worktrees. The server's workspace is per repository (1.0.8
+/// already names a worktree's workspace after its main checkout), so the
+/// main checkout's url and workspace are the right ones for every worktree
+/// of it. The worktree keeps its own database and log; only where they are
+/// sent comes from the main checkout.
+pub fn inherited_remote(data_dir: &Path) -> Option<InheritedRemote> {
+    if own_config_at(data_dir).ok()?.remote.is_configured() {
+        return None;
+    }
+    let data_dir = std::path::absolute(data_dir).ok()?;
+    let project = data_dir.parent()?;
+    // Cheap before git runs: a linked worktree's `.git` is a file. This is
+    // asked on every database open, and most projects are not worktrees.
+    let top = project.ancestors().find(|d| d.join(".git").exists())?;
+    if !top.join(".git").is_file() {
+        return None;
+    }
+    let main = repo_root(project)?;
+    let same = |a: &Path, b: &Path| match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    };
+    if same(&main, top) {
+        // A submodule: `.git` is a file there too, and it is its own
+        // repository's main checkout.
+        return None;
+    }
+    let main_data_dir = main.join(data_dir.strip_prefix(top).ok()?);
+    if same(&main_data_dir, &data_dir) {
+        return None;
+    }
+    let remote = own_config_at(&main_data_dir).ok()?.remote;
+    remote.is_configured().then_some(InheritedRemote {
+        remote,
+        data_dir: main_data_dir,
+    })
 }
 
 impl Remote {
@@ -479,10 +551,24 @@ impl Remote {
         data_dir: &Path,
         deadline: Option<std::time::Instant>,
     ) -> Result<Self, String> {
-        let config = config_at(data_dir)?;
+        let mut config = own_config_at(data_dir)?;
         let data_dir = std::path::absolute(data_dir).unwrap_or_else(|_| data_dir.to_path_buf());
         let project = data_dir.parent().unwrap_or(&data_dir);
-        Self::resolve_by(&config, project, deadline)
+        let inherited = (!config.remote.is_configured())
+            .then(|| inherited_remote(&data_dir))
+            .flatten();
+        let Some(inherited) = inherited else {
+            return Self::resolve_by(&config, project, deadline);
+        };
+        // A main checkout still on a 1.0.7 config (url, no workspace) has
+        // its workspace recorded in its own config, as it would be by a
+        // write made there. The repository is the same either way.
+        config.remote = inherited.remote;
+        let main = inherited.data_dir.parent().unwrap_or(&inherited.data_dir);
+        let mut remote = Self::resolve_by(&config, main, deadline)?;
+        remote.repo_roots = repo_roots(project);
+        remote.shallow = is_shallow(project);
+        Ok(remote)
     }
 
     pub fn resolve(config: &Config, dir: &Path) -> Result<Self, String> {
@@ -644,10 +730,11 @@ impl Remote {
 
     /// Sends the local graph up. Used to seed a workspace and to carry local
     /// history that predates the remote; it is not the normal write path.
-    pub fn import(&self, graph: Value) -> Result<ImportReport, String> {
+    pub fn import(&self, mut graph: Value) -> Result<ImportReport, String> {
         if let Some(why) = self.write_blocker() {
             return Err(format!("nothing was sent: {why}"));
         }
+        wire_dates(&mut graph);
         let payload = serde_json::json!({
             "workspace": self.workspace,
             "repo_roots": self.repo_roots,
@@ -821,6 +908,27 @@ pub fn push_missing(remote: &Remote, graph: &Value) -> Result<Seeded, String> {
         }
     }
     remote.import(missing).map(|r| (Some(r), deleted, withheld))
+}
+
+/// Spells every node's and edge's timestamps as the server reads them
+/// (`records::wire_ts`): RFC 3339 unchanged, a naive one given this
+/// machine's offset. A naive `created_at` (stored as typed by `add --date`
+/// before 1.0) went up as written; the server's import could not read it
+/// and stamped the node with the time of the seed.
+fn wire_dates(graph: &mut Value) {
+    for (kind, keys) in [
+        ("nodes", &["created_at", "updated_at"][..]),
+        ("edges", &["created_at"][..]),
+    ] {
+        for row in graph[kind].as_array_mut().into_iter().flatten() {
+            for key in keys {
+                if let Some(s) = row[*key].as_str() {
+                    let wired = records::wire_ts(s);
+                    row[*key] = Value::String(wired);
+                }
+            }
+        }
+    }
 }
 
 /// Where a local row (a node, an edge or a document, as `deciduous graph`
@@ -2070,6 +2178,7 @@ impl Drop for ReplayOnExit {
         if let Some(log) = crate::oplog::take_appended() {
             replay_after_write(&log);
         }
+        crate::oplog::print_local_only();
     }
 }
 
