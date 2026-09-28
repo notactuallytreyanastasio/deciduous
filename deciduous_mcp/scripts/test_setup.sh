@@ -19,7 +19,8 @@ run_setup() {
 
 run_setup > "$test_dir/first.log"
 cp "$test_dir/installation.env" "$test_dir/original.env"
-test "$(wc -l < "$test_dir/installation.env" | tr -d ' ')" = 11
+test "$(wc -l < "$test_dir/installation.env" | tr -d ' ')" = 12
+grep -q '^DECIDUOUS_SERVER_MODE=docker$' "$test_dir/installation.env"
 test "$(find "$test_dir/installation.env" -perm 600 | wc -l | tr -d ' ')" = 1
 grep -q '^DECIDUOUS_DATABASE_MODE=local$' "$test_dir/installation.env"
 grep -q 'compose.local.yaml' "$test_dir/calls"

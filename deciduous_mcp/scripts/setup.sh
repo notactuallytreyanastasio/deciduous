@@ -101,6 +101,10 @@ if [ ! -e "$env_file" ]; then
     umask 077
     {
       printf 'COMPOSE_PROJECT_NAME=%s\n' "${COMPOSE_PROJECT_NAME:-deciduous}"
+      # The deciduous CLI also installs the server without Docker, as a
+      # background service; this tells it which kind of install the file is.
+      # Files written before this line existed are Docker installs too.
+      printf 'DECIDUOUS_SERVER_MODE=docker\n'
       printf 'DECIDUOUS_DATABASE_MODE=%s\n' "$mode"
       printf 'DECIDUOUS_BIND_ADDRESS=%s\n' "${DECIDUOUS_BIND_ADDRESS:-127.0.0.1}"
       printf 'DECIDUOUS_PORT=%s\n' "$port"
