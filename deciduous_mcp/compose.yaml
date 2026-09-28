@@ -16,6 +16,12 @@ services:
       DB_SSL_CA_FILE: ${DB_SSL_CA_FILE:-}
     volumes:
       - ./certs:/app/certs:ro
+    # A PostgreSQL on the Docker host (`deciduous remote setup --docker` with
+    # the machine's own database) is host.docker.internal from in here.
+    # Docker Desktop defines the name already; on Linux this maps it to the
+    # host gateway, where PostgreSQL answers only if it listens there.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       # Required, not defaulted: a default would put every install on the same
       # host port and squat it. setup.sh writes the chosen one into .env.

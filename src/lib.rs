@@ -50,6 +50,7 @@ pub mod export;
 pub mod github;
 pub mod hooks;
 pub mod init;
+pub mod local_server;
 pub mod mcp;
 pub mod narratives;
 pub mod opencode;

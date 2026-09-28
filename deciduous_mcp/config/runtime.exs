@@ -1,10 +1,44 @@
 import Config
 
-# Read an env var, treating empty strings as unset — docker-compose's
+# The settings file `deciduous remote setup` writes for a server it runs as a
+# background service (~/.config/deciduous/server/.env). launchd has no
+# environment-file directive, and putting the database password and token in
+# the LaunchAgent plist would copy them into a second file, so the service
+# passes only this path and the server reads the file itself. Lines are
+# KEY=value or KEY='value'; the file is parsed, never executed.
+#
+# When it is set, the file is authoritative over the process environment, the
+# same rule scripts/setup.sh applies: a DATABASE_URL left in some shell must
+# not silently point the service at another database.
+settings_file =
+  case System.get_env("DECIDUOUS_ENV_FILE") do
+    path when path in [nil, ""] ->
+      %{}
+
+    path ->
+      text =
+        case File.read(path) do
+          {:ok, text} ->
+            text
+
+          {:error, reason} ->
+            raise "DECIDUOUS_ENV_FILE=#{path} cannot be read (#{:file.format_error(reason)})."
+        end
+
+      for line <- String.split(text, ["\r\n", "\n"]),
+          line = String.trim(line),
+          line != "" and not String.starts_with?(line, "#"),
+          [key, value] <- [String.split(line, "=", parts: 2)],
+          into: %{} do
+        {String.trim(key), value |> String.trim() |> String.trim("'")}
+      end
+  end
+
+# Read a setting, treating empty strings as unset — docker-compose's
 # `${VAR:-}` defaulting sets variables to "" when they are absent from .env,
 # and an empty token must look missing, not look like a token.
 read_env = fn name ->
-  case System.get_env(name) do
+  case Map.get(settings_file, name) || System.get_env(name) do
     nil -> nil
     "" -> nil
     v -> v
@@ -12,6 +46,45 @@ read_env = fn name ->
 end
 
 config :deciduous_mcp, api_token: read_env.("DECIDUOUS_MCP_TOKEN")
+
+# The settings file names the port DECIDUOUS_PORT (the host port, in Docker
+# terms); a container or a hand-run server sets PORT.
+port_text = Map.get(settings_file, "DECIDUOUS_PORT") || read_env.("PORT") || "4000"
+
+config :deciduous_mcp,
+  http_port:
+    (case Integer.parse(port_text) do
+       {p, ""} -> p
+       _ -> raise "PORT must be an integer, got: #{inspect(port_text)}"
+     end)
+
+# Which address to listen on. Unset means every interface, which is right
+# inside a container (Docker publishes the port on 127.0.0.1 only). A server
+# run directly on the machine binds loopback, or it would offer every graph to
+# the local network.
+case read_env.("DECIDUOUS_BIND_ADDRESS") do
+  nil ->
+    :ok
+
+  address ->
+    case :inet.parse_address(String.to_charlist(address)) do
+      {:ok, ip} ->
+        config :deciduous_mcp, bind_ip: ip
+
+      {:error, _} ->
+        raise "DECIDUOUS_BIND_ADDRESS must be an IP address, got: #{inspect(address)}"
+    end
+end
+
+# A server run as a service creates its database if it is missing and runs
+# migrations before it listens. The container's entrypoint migrates with
+# `bin/deciduous_mcp eval`, which the single-file executable has no way to
+# call. DECIDUOUS_MCP_COMMAND=prepare-database does only that step and exits:
+# `deciduous remote setup` runs it once to learn, in the database's own words,
+# whether the URL it was given works.
+config :deciduous_mcp,
+  prepare_database_at_start: read_env.("DECIDUOUS_PREPARE_DATABASE") == "true",
+  command: System.get_env("DECIDUOUS_MCP_COMMAND")
 
 if config_env() == :prod do
   database_url =
@@ -106,7 +179,7 @@ if config_env() == :prod do
 
   config :deciduous_mcp, DeciduousMcp.Repo,
     url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+    pool_size: String.to_integer(read_env.("POOL_SIZE") || "10"),
     # The database lives on the same private docker network as this container
     # and is not reachable from outside it, so TLS to Postgres is off by
     # default here. Set DB_SSL=true if that ever stops being true.

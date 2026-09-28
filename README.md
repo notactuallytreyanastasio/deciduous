@@ -68,7 +68,7 @@ Set it up with `deciduous remote init <url>` once the server is running (`decidu
 Every project writes to a shared graph server, and `deciduous init` does not
 finish until the project points at one that answers.
 
-**1. Install the binary** (1.0.6 or newer), and Docker if the graph will live on this machine:
+**1. Install the binary** (1.0.11 or newer), and PostgreSQL if the graph will live on this machine:
 
 ```bash
 brew install notactuallytreyanastasio/tap/deciduous   # Homebrew, macOS or Linux
@@ -79,9 +79,11 @@ deciduous --version
 which -a deciduous    # with both installed, the first one on PATH runs
 ```
 
-[Docker Desktop](https://docs.docker.com/get-docker/) (or Docker Engine with
-Compose) must be installed and running unless you only use a server someone
-else runs.
+A graph on this machine is kept in PostgreSQL on localhost:5432 by default:
+the one you already have, or `brew install postgresql@17 && brew services start
+postgresql@17`, or your distribution's package. Any other PostgreSQL works if
+you give its URL. Docker is optional: it can run PostgreSQL and the server for
+you instead (choice 3 below).
 
 **2. Set up a project:**
 
@@ -98,10 +100,14 @@ the project has no server yet, it asks where its graph should live:
 
 Where should this project's graph live?
 
-  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1
-  2) A server someone else runs: you need its URL and token
+  1) This machine: the deciduous server as a background service, using PostgreSQL on
+     localhost:5432 as you (answering now)
+  2) This machine: the server as a background service, using a PostgreSQL you name
+     (any host, port, user, password)
+  3) This machine, in Docker: a new PostgreSQL and the server in containers
+  4) A server someone else runs: you need its URL and token
 
-Choose 1 or 2 [1]:
+Choose 1-4 [1]:
 
 The server needs a port on this machine. 24871 is free right now; anything
 already using the port you pick (a dev server on 4000, say) would stop this
@@ -110,20 +116,41 @@ server from starting.
 Port [24871]:
 ```
 
-- **1.** The first time on a machine, `init` downloads the server bundle for
-  its own version, checks it against the release's checksums, and starts
-  PostgreSQL 17 and the server with Docker (a few minutes). Every later
-  project finds the running server in about a second.
-- **2.** Asks for the URL and the token (typed without being shown), and checks
+- **1 and 2.** The first time on a machine, `init` downloads the server
+  executable for its own version (one file with Erlang and Elixir inside),
+  checks it against the release's checksums, and runs it once to create the
+  database (`deciduous` for choice 1) and apply migrations. If PostgreSQL
+  refuses (no such role, wrong password, no CREATEDB), you see its reason and
+  the menu again. Then it installs the server under
+  `~/.config/deciduous/server/` as a user service that starts at login: a
+  LaunchAgent on macOS, a systemd user unit on Linux. It listens on
+  127.0.0.1 only. Every later project finds the running server in about a
+  second. For choice 2 the password is asked separately and not shown.
+- **3.** Downloads the Docker bundle for its own version, checks it, and
+  starts PostgreSQL 17 and the server with Docker (a few minutes). This is
+  what 1.0.10 and earlier always did, and existing Docker installs stay as
+  they are.
+- **4.** Asks for the URL and the token (typed without being shown), and checks
   them against the server before storing anything.
 
 Either way it stores the token in `~/.config/deciduous/credentials` (mode
 0600), writes `[remote]` to `.deciduous/config.toml`, and registers the server
 with Claude Code. `deciduous update` asks the same question in a project that
-has no server. `deciduous remote setup` asks it on its own. In a script there
+has no server, and upgrades this machine's server executable when it is older
+than the CLI. `deciduous remote setup` asks it on its own. In a script there
 is no terminal to ask, so give the answer instead:
-`deciduous remote setup --local` or `--url <url>`. Commit the project files
-(by path, not `git add -A`) so every clone gets them.
+
+```bash
+deciduous remote setup --local                  # 1: PostgreSQL on localhost:5432 as $USER
+deciduous remote setup --database-url postgres://USER:PASSWORD@HOST:5432/deciduous   # 2
+deciduous remote setup --docker-postgres        # 3
+deciduous remote setup --docker                 # the server in Docker, PostgreSQL from 1 or 2
+deciduous remote setup --url <url>              # 4
+```
+
+`DATABASE_URL` in your environment is never used unless you pass it with
+`--database-url`. Commit the project files (by path, not `git add -A`) so
+every clone gets them.
 
 **3. Restart Claude Code.** When it connects, the server sends the logging
 instructions (when to write, and how to write one step in one call). There is
@@ -132,7 +159,7 @@ the CLI writes to the local database and queues the change in
 `.deciduous/remote-log.jsonl`, which is sent to the server before the command
 exits (or, if the server is down, on the next write or `deciduous remote push`).
 
-If anything is missing (no Docker, a server that does not answer, no token),
+If anything is missing (no PostgreSQL, a server that does not answer, no token),
 `init` and `update` stop with exit 1 and say how to fix it. Upgrading later is
 `brew upgrade deciduous` or the same `cargo install` line, then
 `deciduous update` in each project (`deciduous update --all ~/code` for many).
@@ -206,8 +233,10 @@ for that path, client configuration, backups, and upgrades. From a repository
 checkout, run `./deciduous_mcp/scripts/setup.sh`.
 
 Releases also include Burrito-built `deciduous-mcp-*` native executables with
-Erlang/OTP and Elixir included. The deployment guide covers their one-time
-`STRUCTURE.sql` bootstrap, which requires PostgreSQL 17+ and `psql` 17+.
+Erlang/OTP and Elixir included; `deciduous remote setup` installs one as a user
+service by default. Given a settings file they create their database if it is
+missing and migrate at every start, so a machine with PostgreSQL needs nothing
+else. The deployment guide covers running one by hand.
 
 ### Via Cargo
 
