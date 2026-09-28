@@ -123,6 +123,7 @@ fn r4_attach_document_is_confined_to_the_project() {
     attach(&mut m, "inside.md").expect("a file inside the project must attach");
 }
 
+#[cfg(unix)] // only the symlink test above uses it
 fn walk_contains(dir: &std::path::Path, needle: &[u8]) -> bool {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return false;
