@@ -419,8 +419,26 @@ fn within(limit: std::time::Duration, deadline: Option<std::time::Instant>) -> s
     limit.min(left).max(std::time::Duration::from_millis(1))
 }
 
-/// How long `deciduous remote push` lets one batch of ops take.
+/// How long `deciduous remote push` lets one batch of ops take, unless
+/// [`OPS_TIMEOUT_ENV`] says otherwise.
 const OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Seconds one `POST /ops` request of an explicit command may take: for a
+/// server slower than [`OPS_TIMEOUT`] allows, or a test that needs a
+/// request to time out.
+pub const OPS_TIMEOUT_ENV: &str = "DECIDUOUS_OPS_TIMEOUT";
+
+fn ops_timeout() -> Result<std::time::Duration, String> {
+    match std::env::var(OPS_TIMEOUT_ENV) {
+        Err(_) => Ok(OPS_TIMEOUT),
+        Ok(v) => match v.trim().parse::<u64>() {
+            Ok(n) if n > 0 => Ok(std::time::Duration::from_secs(n)),
+            _ => Err(format!(
+                "{OPS_TIMEOUT_ENV}={v:?} is not a number of seconds above zero"
+            )),
+        },
+    }
+}
 
 /// How long the replay after a write may take in all: resolving the
 /// workspace, every /ops request, and the one-op resends after a 500. A
@@ -598,7 +616,7 @@ impl Remote {
             token,
             repo_roots: repo_roots(dir),
             shallow: is_shallow(dir),
-            ops_timeout: OPS_TIMEOUT,
+            ops_timeout: ops_timeout()?,
             deadline: None,
         })
     }
@@ -1158,6 +1176,9 @@ pub struct ReplayReport {
     /// Lines of the log that are not entries: not sent, and moved to the
     /// side file by the compaction that ends the replay.
     pub unreadable: Vec<crate::oplog::Unreadable>,
+    /// Ops not sent because the replay after a write ran out of its budget
+    /// between batches. They wait, unsent, for the next replay.
+    pub left: usize,
 }
 
 /// Why a replay stopped. The three have different fixes, and saying "the
@@ -1169,6 +1190,10 @@ pub enum ReplayError {
     Log(String),
     /// No answer: nothing listening, a timeout, DNS. Passes by itself.
     Unreachable(String),
+    /// The request went out and no answer came in time. The server may
+    /// have applied some or all of it; the ops stay queued, and sending
+    /// them again is safe (see [`Remote::post_ops`]).
+    NoAnswer(String),
     /// The server answered, and not with a report: a refusal of the whole
     /// request (another repository's workspace, a bad token), a server
     /// error, or a body that is not an ops report.
@@ -1186,6 +1211,7 @@ impl std::fmt::Display for ReplayError {
         match self {
             ReplayError::Log(e)
             | ReplayError::Unreachable(e)
+            | ReplayError::NoAnswer(e)
             | ReplayError::Server(e)
             | ReplayError::Failed(e)
             | ReplayError::Config(e) => f.write_str(e),
@@ -1199,9 +1225,52 @@ impl From<ReplayError> for String {
     }
 }
 
-/// Ops per request. The server takes up to 5,000; a smaller batch keeps one
-/// request well inside its body limit and gets acks written sooner.
-const REPLAY_BATCH: usize = 500;
+/// Ops per request.
+///
+/// The server applies each op in its own transaction, so a request's time
+/// is its length times the time of one op, and the batch size changes how
+/// long one request takes, not how long the whole replay takes. Measured
+/// on a local server (PostgreSQL on the same machine), replaying a fold of
+/// 8,441 ops, half creates and half links:
+///
+/// ```text
+/// batch  requests  ops/s    slowest request
+///   100        85    550    0.46 s
+///   200        43    642    0.62 s
+///   500        17    583    1.51 s
+///  1000         9    577    2.74 s
+///  5000         2    663    8.53 s
+/// ```
+///
+/// Throughput is flat. The request time is what matters: the replay after
+/// a write has 10 s in all ([`QUICK_OPS_TIMEOUT`]), and a request cut off
+/// by it has been applied by the server anyway (the fold of the case study
+/// was). 200 keeps the slowest request near 0.6 s here, so a server ten
+/// times slower still answers one inside the budget, and a stop between
+/// batches wastes little. A resend of ops already applied is answered
+/// `duplicate` at about 8,000 ops/s, so a retry costs little.
+pub const REPLAY_BATCH: usize = 200;
+
+/// A request that went out and got no answer in time, as opposed to one
+/// that never reached the server (a refused connection, DNS): only the
+/// first may have been applied.
+fn no_answer(t: &ureq::Transport) -> bool {
+    use std::error::Error;
+    if t.kind() != ureq::ErrorKind::Io {
+        return false;
+    }
+    let mut source = t.source();
+    while let Some(e) = source {
+        if let Some(io) = e.downcast_ref::<std::io::Error>() {
+            return matches!(
+                io.kind(),
+                std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+            );
+        }
+        source = e.source();
+    }
+    t.to_string().contains("timed out")
+}
 
 impl Remote {
     /// A failed request, described; a 409 is the server refusing this
@@ -1328,6 +1397,12 @@ impl Remote {
     }
 
     /// Sends ops to `POST /ops` and returns the server's answer for each.
+    ///
+    /// Sending an op twice is safe. The server inserts each op id into
+    /// `applied_ops` in the transaction that applies the op, and answers an
+    /// id it has seen `duplicate`; two requests carrying the same ops at
+    /// once (a resend while the first is still being applied) split them
+    /// between `applied` and `duplicate` and apply none twice.
     pub fn post_ops(
         &self,
         ops: &[crate::oplog::Op],
@@ -1359,11 +1434,21 @@ impl Remote {
                 QUICK_OPS_TIMEOUT.as_secs()
             )));
         }
+        let timeout = within(self.ops_timeout, self.deadline);
         let reply: Reply = self
             .post("/ops")
-            .timeout(within(self.ops_timeout, self.deadline))
+            .timeout(timeout)
             .send_json(payload)
             .map_err(|e| match e {
+                ureq::Error::Transport(t) if no_answer(&t) => ReplayError::NoAnswer(format!(
+                    "{} write(s) went to {} and no answer came within {:.1} s ({t}). The server \
+                     may have applied some or all of them. They stay queued, and sending them \
+                     again is safe: the server records the id of every op it applies and answers \
+                     a resend \"duplicate\", so nothing is applied twice",
+                    ops.len(),
+                    self.url,
+                    timeout.as_secs_f64()
+                )),
                 ureq::Error::Status(409, _) => ReplayError::Server(self.claim_refused()),
                 e @ ureq::Error::Status(500, _) => ReplayError::Failed(describe(e)),
                 // A proxy's answer that the server behind it is down or
@@ -1523,6 +1608,24 @@ fn short_id(op: &crate::oplog::Op) -> String {
 /// A pending op that depends on an op this machine set aside earlier is set
 /// aside with it, unsent (see [`Held`]).
 pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, ReplayError> {
+    replay_with(remote, log, true)
+}
+
+/// [`replay`], saying how far it has got on stderr when `progress` is set
+/// and more than one batch is waiting.
+///
+/// Batches go one after another, and each one's answers are written to the
+/// log before the next is sent. With a deadline (the replay after a write),
+/// a batch is not started when the time left is less than one and a half
+/// times the slowest batch so far: what does not fit waits, unsent, in
+/// [`ReplayReport::left`], instead of being cut off in flight. Without one
+/// (an explicit command), a batch that got no answer is sent again, twice
+/// at most; the server answers `duplicate` for what it had applied.
+pub fn replay_with(
+    remote: &Remote,
+    log: &crate::oplog::OpLog,
+    progress: bool,
+) -> Result<ReplayReport, ReplayError> {
     let state = log.read().map_err(ReplayError::Log)?;
     if !state.pending.is_empty() {
         if let Some(why) = remote.write_blocker() {
@@ -1579,13 +1682,48 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
     log.record_acks(&behind).map_err(ReplayError::Log)?;
     tally(&mut report, &behind);
 
+    let total = sendable.len();
+    let show = progress && total > REPLAY_BATCH;
+    if show {
+        eprintln!(
+            "Sending {total} queued write(s) to {} in batches of {REPLAY_BATCH}",
+            remote.url
+        );
+    }
+    let mut slowest = std::time::Duration::ZERO;
+    let mut done = 0usize;
     for batch in sendable.chunks(REPLAY_BATCH) {
+        if let Some(deadline) = remote.deadline {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if done > 0 && remaining < slowest * 3 / 2 {
+                report.left = total - done;
+                break;
+            }
+        }
         upload_attached(remote, log, batch);
-        let (acks, stop) = match remote.post_ops(batch) {
+        let started = std::time::Instant::now();
+        let mut sent = remote.post_ops(batch);
+        for _ in 0..2 {
+            let Err(ReplayError::NoAnswer(e)) = &sent else {
+                break;
+            };
+            if remote.deadline.is_some() {
+                break;
+            }
+            eprintln!("  {e}. Sending them again.");
+            sent = remote.post_ops(batch);
+        }
+        let (acks, stop) = match sent {
             Ok(acks) => (acks, None),
             Err(ReplayError::Failed(e)) => isolate(remote, batch, &e, &mut held),
             Err(e) => return Err(e),
         };
+        slowest = slowest.max(started.elapsed());
+        done += batch.len();
+        // About ten lines for any backlog.
+        if show && stop.is_none() && done * 10 / total > (done - batch.len()) * 10 / total {
+            eprintln!("  {done} of {total} answered");
+        }
         log.record_acks(&acks).map_err(ReplayError::Log)?;
         tally(&mut report, &acks);
         let delivered: Vec<&crate::oplog::Op> = acks
@@ -2039,7 +2177,7 @@ pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplo
 /// says how many writes are waiting and where; they stay in the log, and the
 /// next write or `deciduous remote push` sends them.
 pub fn replay_after_write(log: &crate::oplog::OpLog) {
-    replay_after_write_quietly(log, &mut None);
+    after_write(log, &mut None, true);
 }
 
 /// [`replay_after_write`] for a process that replays after every write for
@@ -2048,6 +2186,13 @@ pub fn replay_after_write(log: &crate::oplog::OpLog) {
 /// bytes of the same warning to stderr, and a client that does not read
 /// stderr stopped the server after about 150 writes (RUST-N7).
 pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<String>) {
+    after_write(log, last, false);
+}
+
+/// The replay after a write. `loud` is a command someone ran at a
+/// terminal: it shows progress through a backlog. The stdio MCP server's
+/// stderr may be read by no one (see [`replay_after_write_quietly`]).
+fn after_write(log: &crate::oplog::OpLog, last: &mut Option<String>, loud: bool) {
     use colored::Colorize;
 
     // The log's own project, not the current directory's: see
@@ -2057,7 +2202,7 @@ pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<S
     let result = remote
         .as_ref()
         .map_err(|e| ReplayError::Config(e.clone()))
-        .and_then(|r| replay(r, log));
+        .and_then(|r| replay_with(r, log, loud));
     let waiting = || match log.read() {
         Ok(s) => format!("{} write(s)", s.pending.len()),
         Err(e) => format!("an unknown number of writes (the log could not be read: {e})"),
@@ -2103,13 +2248,16 @@ pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<S
             }
         }
         // An outage passes by itself; the writes are queued and go later.
-        Err(ReplayError::Unreachable(_)) => {}
+        // So does a slow answer: the ops are resent, safely.
+        Err(ReplayError::Unreachable(_) | ReplayError::NoAnswer(_)) => {}
         Err(e) => unsent(format!(
             "Writes made here did not reach the shared server, and will not until this is fixed: {e}\n{} wait in {}.",
             waiting(),
             log.path().display()
         )),
     }
+    const LEFT: &str = "some writes left for later";
+    let said_left = last.as_deref() == Some(LEFT);
     let this = result.as_ref().err().map(|e| e.to_string());
     let repeat = this.is_some() && *last == this;
     *last = this;
@@ -2117,7 +2265,33 @@ pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<S
         return;
     }
     match result {
-        Ok(report) => print_rejected(&report.rejected, log),
+        Ok(report) => {
+            print_rejected(&report.rejected, log);
+            // Once per process for the MCP server, whose count changes with
+            // every write.
+            if report.left > 0 && (loud || !said_left) {
+                eprintln!(
+                    "{} {} queued write(s) reached the server in the {} s a write waits for it; \
+                     the other {} wait in {}, unsent. `deciduous remote push` sends them now, \
+                     with progress; each later write sends some.",
+                    "Note:".yellow(),
+                    report.sent,
+                    QUICK_OPS_TIMEOUT.as_secs(),
+                    report.left,
+                    log.path().display(),
+                );
+                if !loud {
+                    *last = Some(LEFT.into());
+                }
+            }
+        }
+        Err(ReplayError::NoAnswer(e)) => eprintln!(
+            "{} the local write succeeded; {e}.\n{} queued in {}. They are sent on the next \
+             write, or now with `deciduous remote push`.",
+            "Note:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
         // Only a server that does not answer is an outage that passes by
         // itself. A refusal (another repository's workspace, a bad token)
         // or a config problem is answered the same way on every retry, and

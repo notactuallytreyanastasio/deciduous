@@ -2212,7 +2212,7 @@ fn rust_n2_a_cli_write_to_a_black_hole_server_returns_promptly() {
     assert!(out.status.success(), "{}", text(&out.stderr));
     let err = text(&out.stderr);
     assert!(
-        err.contains("did not get it") && err.contains("1 write(s) queued"),
+        err.contains("no answer came") && err.contains("1 write(s) queued"),
         "{err}"
     );
     assert_eq!(queued_titles(&dir), ["bh-cli"]);
@@ -3719,4 +3719,198 @@ fn status_and_seed_agree_on_edges_whose_server_copies_drifted() {
 
     let seed = sb.dx_ok(&dir, &["remote", "push", "--seed"]);
     assert!(seed.contains("Nothing to seed"), "{seed}");
+}
+
+/// A stand-in for /ops that remembers every op id it applied, answers a
+/// resend of one `duplicate` as the server does, and sleeps
+/// `delay(n)` milliseconds after applying request `n` (from 1) before
+/// answering: a server that applied a batch and answered too late. Returns
+/// the URL and the size of every /ops request it received.
+#[allow(clippy::type_complexity)]
+fn slow_ops_stub(
+    delay: impl Fn(usize) -> u64 + Send + 'static,
+) -> (String, std::sync::Arc<std::sync::Mutex<Vec<usize>>>) {
+    let sizes = std::sync::Arc::new(std::sync::Mutex::new(Vec::<usize>::new()));
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let seen_sizes = sizes.clone();
+    let applied = std::sync::Arc::new(std::sync::Mutex::new(
+        std::collections::HashSet::<String>::new(),
+    ));
+    std::thread::spawn(move || {
+        let mut n = 0;
+        for mut req in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            let path = req.url().split('?').next().unwrap_or("").to_string();
+            let reply = match path.as_str() {
+                "/health" => "ok".to_string(),
+                "/claim" => r#"{"workspace":"stub","claim":"unchecked"}"#.to_string(),
+                "/locate" => r#"{"workspaces":[]}"#.to_string(),
+                "/ops" => {
+                    n += 1;
+                    let v: Value = serde_json::from_str(&body).unwrap();
+                    let ops = v["ops"].as_array().unwrap().clone();
+                    seen_sizes.lock().unwrap().push(ops.len());
+                    let results: Vec<Value> = {
+                        let mut applied = applied.lock().unwrap();
+                        ops.iter()
+                            .map(|op| {
+                                let id = op["op_id"].as_str().unwrap().to_string();
+                                let result = if applied.insert(id) {
+                                    "applied"
+                                } else {
+                                    "duplicate"
+                                };
+                                serde_json::json!({"op_id": op["op_id"], "result": result})
+                            })
+                            .collect()
+                    };
+                    let reply =
+                        serde_json::json!({"workspace": "stub", "results": results}).to_string();
+                    // Answer from another thread, so a request the client
+                    // gave up on does not hold up the next one.
+                    let wait = delay(n);
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(wait));
+                        let _ = req.respond(tiny_http::Response::from_string(reply));
+                    });
+                    continue;
+                }
+                _ => {
+                    let _ = req.respond(tiny_http::Response::empty(404));
+                    continue;
+                }
+            };
+            let _ = req.respond(tiny_http::Response::from_string(reply));
+        }
+    });
+    (format!("http://127.0.0.1:{port}"), sizes)
+}
+
+/// Appends `n` node creates to the repository's log, as a fold of
+/// teammates' records through git queues them.
+fn queue_creates(dir: &Path, n: usize) {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path(dir))
+        .unwrap();
+    for i in 0..n {
+        let op = serde_json::json!({
+            "entry": "op", "op_id": format!("fold-op-{i:05}"), "at": "2026-09-01T12:00:00+00:00",
+            "origin": "git", "kind": "create_node", "change_id": format!("fold-node-{i:05}"),
+            "node_type": "action", "title": format!("teammate node {i}"), "description": null,
+            "status": "active", "metadata": {"branch": "main"},
+            "created_at": "2026-09-01T12:00:00+00:00", "updated_at": "2026-09-01T12:00:00+00:00"
+        });
+        writeln!(f, "{op}").unwrap();
+    }
+}
+
+fn pending_ops(dir: &Path) -> usize {
+    let lines = log_lines(dir);
+    let acked: std::collections::HashSet<&str> = lines
+        .iter()
+        .filter(|l| l["entry"] == "ack")
+        .filter_map(|l| l["op_id"].as_str())
+        .collect();
+    lines
+        .iter()
+        .filter(|l| l["entry"] == "op")
+        .filter(|l| !acked.contains(l["op_id"].as_str().unwrap()))
+        .count()
+}
+
+// A customer case study: a fresh worktree folded 8,442 records and sent
+// them to the server. A backlog goes in bounded requests, and says how far
+// it has got.
+#[test]
+fn a_large_replay_goes_in_several_requests_with_progress() {
+    let (url, sizes) = slow_ops_stub(|_| 0);
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "backlog");
+    queue_creates(&dir, 450);
+    set_remote_url(&dir, &url);
+
+    let out = sb.dx(&dir, &["remote", "push"]);
+    let said = all_of(&out);
+    assert!(out.status.success(), "{said}");
+    assert_eq!(*sizes.lock().unwrap(), [200, 200, 50], "{said}");
+    assert!(
+        said.contains("Sending 450 queued write(s)") && said.contains("450 of 450 answered"),
+        "progress is shown on stderr: {said}"
+    );
+    assert!(said.contains("450 applied"), "{said}");
+    assert_eq!(pending_ops(&dir), 0, "{said}");
+}
+
+// The case study's fold timed out after the server had applied it: the CLI
+// said the server "did not get it", and the queue looked like loss. A batch
+// with no answer is sent again, the server answers "duplicate", and every
+// op ends acknowledged.
+#[test]
+fn a_batch_that_times_out_after_the_server_applied_it_is_resent_and_acknowledged() {
+    // The first request is applied and answered after 3 s; the client
+    // waits 1 s.
+    let (url, sizes) = slow_ops_stub(|n| if n == 1 { 3000 } else { 0 });
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "timeout");
+    queue_creates(&dir, 30);
+    set_remote_url(&dir, &url);
+
+    let out = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["remote", "push"])
+        .current_dir(&dir)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", &sb.token)
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env("DECIDUOUS_OPS_TIMEOUT", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .env("NO_COLOR", "1")
+        .output()
+        .unwrap();
+    let said = all_of(&out);
+    assert!(out.status.success(), "{said}");
+    assert_eq!(*sizes.lock().unwrap(), [30, 30], "sent twice: {said}");
+    assert!(
+        said.contains("may have applied") && said.contains("safe") && said.contains("again"),
+        "the timeout says what happened and that a resend is safe: {said}"
+    );
+    assert!(said.contains("0 applied, 30 already there"), "{said}");
+    assert_eq!(pending_ops(&dir), 0, "nothing is left queued: {said}");
+}
+
+// The replay after a write has 10 s. A backlog that does not fit is not
+// cut off mid-request (a request the server applies while the CLI reports
+// it lost): it stops between batches, and says what waits.
+#[test]
+fn the_replay_after_a_write_stops_between_batches_and_says_what_waits() {
+    let (url, sizes) = slow_ops_stub(|_| 3000);
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "budget");
+    queue_creates(&dir, 1000);
+    set_remote_url(&dir, &url);
+
+    let started = std::time::Instant::now();
+    let said = sb.dx_ok(&dir, &["add", "goal", "one more"]);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(12),
+        "{said}"
+    );
+    let sent: usize = sizes.lock().unwrap().iter().sum();
+    assert!(sent > 0 && sent < 1001, "{sent} {said}");
+    assert!(
+        said.contains(&format!("{sent} queued write(s) reached the server"))
+            && said.contains(&format!("the other {} wait", 1001 - sent)),
+        "{said}"
+    );
+    assert!(!said.contains("did not get it"), "{said}");
+    assert!(
+        !said.contains("no answer came"),
+        "nothing was cut off: {said}"
+    );
+    assert_eq!(pending_ops(&dir), 1001 - sent, "{said}");
 }
