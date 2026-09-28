@@ -69,9 +69,13 @@ defmodule DeciduousMcp.Events.Listener do
   that commits late is broadcast late.
 
   A WebSocket client that reconnects asks for what it missed with
-  `?since=<seq>`, which reads graph_events (kept a week) directly. That
-  replay is by `seq`, so an event whose transaction took a lower `seq` and
-  committed after the client's `since` is not replayed.
+  `?since=<seq>`, which reads graph_events (kept a week) directly: every
+  higher `seq`, and every lower one whose transaction was still open when
+  `since` was written (GraphSocket's `backlog/2`). That look-back assumes
+  a lower seq that committed first went out first. It did if its NOTIFY
+  was heard; if it was missed in an outage and the next pass delivers it
+  after a later event, a client that disconnects within that second and
+  resumes after the later event does not get it.
   """
   use GenServer
   require Logger

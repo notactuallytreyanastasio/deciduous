@@ -70,6 +70,25 @@ defmodule DeciduousMcp.Events.EventLogTest do
     assert {:ok, ^state} = GraphSocket.handle_info({:graph_event, List.last(replayed)}, state)
 
     {:ok, fresh} = GraphSocket.init(%{topic: "graph:" <> name, since: nil})
-    assert fresh.last == 0
+    assert fresh.sent == MapSet.new()
+  end
+
+  test "a resume past 5,000 events starts with a gap frame and sends 5,000" do
+    name = "events-cap-" <> Integer.to_string(System.unique_integer([:positive]))
+
+    Repo.query!(
+      """
+      INSERT INTO graph_events (workspace, payload)
+      SELECT $1, jsonb_build_object('n', g) FROM generate_series(1, 5002) g
+      """,
+      [name]
+    )
+
+    [[first]] = Repo.query!("SELECT min(seq) FROM graph_events WHERE workspace = $1", [name]).rows
+    {:push, [{:text, gap} | rest], _} = GraphSocket.init(%{topic: "graph:" <> name, since: first})
+    assert %{"gap" => true, "since" => ^first} = Jason.decode!(gap)
+    assert length(rest) == 5_000
+    [{:text, oldest} | _] = rest
+    assert Jason.decode!(oldest)["n"] == 2
   end
 end

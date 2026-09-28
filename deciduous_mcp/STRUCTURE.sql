@@ -452,7 +452,9 @@ CREATE TABLE public.graph_events (
     seq bigint NOT NULL,
     workspace text NOT NULL,
     payload jsonb NOT NULL,
-    inserted_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'UTC'::text) NOT NULL
+    inserted_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'UTC'::text) NOT NULL,
+    xact_id xid8 DEFAULT pg_current_xact_id(),
+    horizon xid8 DEFAULT pg_snapshot_xmin(pg_current_snapshot())
 );
 
 
@@ -866,6 +868,13 @@ CREATE INDEX decision_nodes_workspace_id_status_index ON public.decision_nodes U
 --
 
 CREATE INDEX graph_events_workspace_seq_index ON public.graph_events USING btree (workspace, seq);
+
+
+--
+-- Name: graph_events_xact_id_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX graph_events_xact_id_index ON public.graph_events USING btree (xact_id);
 
 
 --
@@ -1322,7 +1331,8 @@ INSERT INTO public.schema_migrations (version, inserted_at) VALUES
   (20260924110000, NOW()),
   (20260926120000, NOW()),
   (20260926130000, NOW()),
-  (20260926140000, NOW());
+  (20260926140000, NOW()),
+  (20260928120000, NOW());
 
 -- Database defaults from the migrated database -------------------------------
 DO $$
