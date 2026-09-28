@@ -464,3 +464,99 @@ fn a_0_17_record_directory_is_migrated_on_sync() {
     assert!(ok, "{out}");
     assert!(out.contains("already agree"), "{out}");
 }
+
+/// graph.json is a file anyone can edit, and a corrupted or hand-written one
+/// used to import whatever it held: an unknown node type or status, an
+/// unknown edge type, a self-loop, a 2-cycle. `add` and `link` refuse every
+/// one of those. Import now refuses them too, by record and by name, and
+/// still takes the valid records around them, including the two legacy
+/// values the server accepts (`feedback`, `done`).
+#[test]
+fn sync_refuses_records_the_cli_would_refuse_and_keeps_the_rest() {
+    let m = Machine::new();
+    let node = |cid: &str, ty: &str, status: &str| {
+        serde_json::json!({
+            "change_id": cid, "node_type": ty, "title": cid, "status": status,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        })
+    };
+    let edge = |from: &str, to: &str, ty: &str| {
+        let id = format!("{from}-{to}-{ty}");
+        (
+            id.clone(),
+            serde_json::json!({
+                "edge_id": id, "from_change_id": from, "to_change_id": to,
+                "edge_type": ty, "created_at": "2026-01-01T00:00:00+00:00",
+            }),
+        )
+    };
+    let mut edges = serde_json::Map::new();
+    for (from, to, ty) in [
+        ("good-a", "good-b", "leads_to"),
+        ("good-b", "good-a", "leads_to"),
+        ("good-a", "good-b", "frobs"),
+        ("good-a", "good-a", "requires"),
+    ] {
+        let (id, e) = edge(from, to, ty);
+        edges.insert(id, e);
+    }
+    let doc = serde_json::json!({
+        "version": 1,
+        "nodes": {
+            "good-a": node("good-a", "goal", "pending"),
+            "good-b": node("good-b", "decision", "active"),
+            "legacy": node("legacy", "feedback", "done"),
+            "bad-type": node("bad-type", "bogus", "pending"),
+            "bad-status": node("bad-status", "goal", "weird"),
+        },
+        "edges": edges,
+    });
+    fs::write(&m.graph, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+
+    let (_, stdout, stderr) = m.run(&["sync"]);
+    let said = format!("{stdout}\n{stderr}");
+
+    let g = m.graph();
+    let titles: Vec<&str> = g["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["title"].as_str().unwrap())
+        .collect();
+    assert!(
+        titles.contains(&"good-a") && titles.contains(&"good-b"),
+        "{titles:?}"
+    );
+    assert!(
+        titles.contains(&"legacy"),
+        "feedback/done are server values: {titles:?}"
+    );
+    assert!(!titles.contains(&"bad-type"), "{titles:?}");
+    assert!(!titles.contains(&"bad-status"), "{titles:?}");
+
+    let edges: Vec<String> = g["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["edge_type"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        edges,
+        vec!["leads_to".to_string()],
+        "one of the 2-cycle, no frobs, no self-loop"
+    );
+
+    for needle in [
+        "unknown node type 'bogus'",
+        "unknown status 'weird'",
+        "unknown edge type 'frobs'",
+        "links a node to itself",
+        "each other's parent",
+    ] {
+        assert!(
+            said.contains(needle),
+            "sync did not say {needle:?}:\n{said}"
+        );
+    }
+}
