@@ -398,6 +398,108 @@ defmodule DeciduousMcp.Graph.RetrievalTest do
     assert from == ctx.redis.id
   end
 
+  describe "a specific word outranks a common one" do
+    # The shape of the shared server's graph when "Why did the 1.0.10
+    # release not publish?" ranked its answer 25th of 25: many release
+    # nodes that say "release" and "publish", one that names the version.
+    setup ctx do
+      common =
+        for n <- 1..60 do
+          ctx.node.(
+            "outcome",
+            "Release 0.#{n}.0 published: release run green, publish jobs done",
+            %{description: "The release workflow published every artifact."}
+          )
+        end
+
+      answer =
+        ctx.node.(
+          "observation",
+          "v1.0.10 did not publish: mint got three advisories",
+          %{description: "mix deps.get refuses them in every server build."}
+        )
+
+      lone =
+        ctx.node.("observation", "Mint advisories blocked 1.0.10", %{})
+
+      %{common: common, answer: answer, lone: lone}
+    end
+
+    test "the node naming the rare term comes first, however many share the common ones", ctx do
+      {:ok, r} = Retrieval.run(ctx.ws.id, "Why did the 1.0.10 release not publish?")
+
+      assert r.term_hits == %{"1.0.10" => 2, "publish" => 61, "release" => 60}
+      assert r.stop_reason != "distinctive_term_unmatched"
+
+      top2 = r |> Retrieval.ordered() |> Enum.take(2) |> Enum.map(& &1.node.id)
+      # Both hold the rare term; which of the two leads is RRF's call.
+      assert Enum.sort(top2) == Enum.sort([ctx.answer.id, ctx.lone.id])
+    end
+
+    test "a node holding only the rare term is an anchor even when both similarity lists are full",
+         ctx do
+      # "Mint advisories blocked 1.0.10" contains neither "release" nor
+      # "publish"; sixty nodes contain both, so trigram and fts each fill
+      # their 50 with them.
+      {:ok, r} =
+        Retrieval.run(ctx.ws.id, "Why did the 1.0.10 release not publish?", anchor_limit: 3)
+
+      ids = Enum.map(r.anchors, & &1.node.id)
+      assert ctx.lone.id in ids
+      assert ctx.answer.id in ids
+    end
+  end
+
+  describe "term_weights/2" do
+    test "the live counts: the version weighs 1/df, the English words nothing" do
+      w =
+        Retrieval.term_weights(
+          %{"1.0.10" => 5, "publish" => 90, "release" => 236},
+          "Why did the 1.0.10 release not publish?"
+        )
+
+      assert w == %{"1.0.10" => 0.2, "publish" => 0.0, "release" => 0.0}
+    end
+
+    test "an ordinary word rare by accident is not decisive" do
+      # On the 56-node eval fixture "engine" occurs once.
+      q = "What layout engine draws the graph in the browser viewer?"
+
+      assert Retrieval.term_weights(%{"engine" => 1, "graph" => 12, "layout" => 4}, q)
+             |> Map.values()
+             |> Enum.all?(&(&1 == 0.0))
+    end
+
+    test "a term of art no rarer than a common word of the question is not decisive" do
+      q = "What does the CLI use to store the graph locally?"
+      w = Retrieval.term_weights(%{"cli" => 6, "store" => 2, "graph" => 12}, q)
+      assert w["cli"] == 0.0
+
+      # Rarer than every common word: decisive, rarer terms more so.
+      w =
+        Retrieval.term_weights(
+          %{"4c7d8e0" => 1, "api" => 5},
+          "What does commit 4c7d8e0 do to the API?"
+        )
+
+      assert w == %{"4c7d8e0" => 1.0, "api" => 0.2}
+    end
+
+    test "a name mid-sentence is distinctive even when it is an English word" do
+      w = Retrieval.term_weights(%{"mint" => 2, "release" => 20}, "Which release moved to Mint?")
+      assert w["mint"] == 0.5
+    end
+
+    test "one matched term, or a term in more than 50 nodes, decides nothing" do
+      assert Retrieval.term_weights(%{"1.0.10" => 3, "trying" => 0}, "trying 1.0.10") ==
+               %{"1.0.10" => 0.0, "trying" => 0.0}
+
+      assert Retrieval.term_weights(%{"postgres" => 51, "release" => 300}, "postgres release")[
+               "postgres"
+             ] == 0.0
+    end
+  end
+
   test "extract_terms keeps paths whole" do
     assert Retrieval.extract_terms("what changed in src/db.rs?") == ["changed", "src/db.rs"]
     assert Retrieval.extract_terms("see .deciduous/sync.") == ["see", "deciduous/sync"]

@@ -43,6 +43,13 @@ defmodule DeciduousMcp.Eval.AskGraphEvalTest do
     assert Enum.all?(ans, &is_binary(&1[:rare_term]))
   end
 
+  test "the rare-term set: 11+ questions, each carrying its rare term, led by the live failure" do
+    rare = AskGraphFixture.rare_term_set()
+    assert length(rare) >= 11
+    assert Enum.all?(rare, &is_binary(&1[:rare_term]))
+    assert hd(rare).question == "Why did the 1.0.10 release not publish?"
+  end
+
   test "adversarial: the absent term named AND at most 3 results, or no results" do
     # The old criterion passed a03 and a04 with 21 and 22 unrelated
     # results because unmatched_terms named the absent word.

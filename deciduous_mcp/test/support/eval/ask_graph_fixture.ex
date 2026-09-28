@@ -687,6 +687,215 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
     ]
   end
 
+  @doc """
+  A release history loaded, with `nodes/0`, into a workspace of its own for
+  `rare_term_set/0`. It copies the shape of the shared server's graph where
+  "Why did the 1.0.10 release not publish?" ranked its answer 25th of 25:
+  a dozen release nodes that all say "release" and "publish", and one that
+  names the version. The main fixture is not touched, so the three older
+  sets score the graph they always did.
+  """
+  def release_nodes do
+    [
+      {:g_rel, "goal", "Ship the 1.0.x releases through the release workflow",
+       %{status: "active"}},
+      {:rel_102, "outcome",
+       "v1.0.2 released: GitHub release with 13 assets, crates.io 1.0.2, release run all jobs green",
+       %{
+         description:
+           "Merge of the release branch tagged v1.0.2 and release.yml ran with publish=true.",
+         status: "completed"
+       }},
+      {:rel_103_act, "action",
+       "Release 1.0.3: version bump and changelog, release run publishing",
+       %{
+         description:
+           "Auto release tagged v1.0.3 and dispatched the release workflow to publish.",
+         files: ["Cargo.toml", "CHANGELOG.md"],
+         commit: "8cc3f61",
+         status: "completed"
+       }},
+      {:rel_103, "outcome", "1.0.3 published to crates.io, GitHub and Homebrew",
+       %{description: "Every release job green; the publish jobs ran.", status: "completed"}},
+      {:rel_104_fail, "observation",
+       "v1.0.4 publish failed on a hex.pm mirror timeout in the darwin-amd64 build",
+       %{
+         description:
+           "setup-beam could not fetch builds.txt; the release, publish-crate and update-homebrew jobs were skipped, so nothing was published."
+       }},
+      {:rel_104, "outcome", "1.0.4 published everywhere after rerunning the failed release job",
+       %{
+         description: "gh run rerun --failed rebuilt darwin-amd64 and ran the publish jobs.",
+         status: "completed"
+       }},
+      {:rel_105, "outcome", "1.0.5 released: crates.io, GitHub release and Homebrew all publish",
+       %{description: "Release run 35870601346, all 20 jobs green.", status: "completed"}},
+      {:rel_106, "outcome", "1.0.6 forced out: crates.io published by hand from the release tag",
+       %{
+         description:
+           "cargo publish --no-verify from git archive v1.0.6; the release workflow's publish-crate job then fails with already-exists. Rollback image rollback-1.0.5-db72783.",
+         status: "completed"
+       }},
+      {:rel_107, "outcome", "1.0.7 released without incident; publish jobs green",
+       %{status: "completed"}},
+      {:rel_108_act, "action",
+       "Release 1.0.8: move the release workflow to the Windows runner image as well",
+       %{files: [".github/workflows/release.yml"], commit: "5e6f7a8", status: "completed"}},
+      {:rel_108, "outcome", "1.0.8 published; the release took 41 minutes end to end",
+       %{status: "completed"}},
+      {:rel_109, "outcome", "1.0.9 published to every channel from the release workflow",
+       %{status: "completed"}},
+      {:rel_1010, "observation",
+       "v1.0.10 did not publish: mint 1.10.1 got three advisories (one HIGH) after 1.0.9, and mix deps.get refuses them in every self-contained server build",
+       %{
+         description:
+           "Release run 36450998001: CLI binaries built, all five Burrito builds and acceptance failed, release/publish-crate/update-homebrew skipped."
+       }},
+      {:rel_mint, "action", "Bump mint to 1.11.0 so the server builds pass the audit",
+       %{files: ["deciduous_mcp/mix.lock"], commit: "2b3c4d5", status: "completed"}},
+      {:rel_1011, "outcome",
+       "1.0.11 published everywhere and the shared server redeployed from the release",
+       %{
+         description:
+           "Release run 36476814917: all 20 jobs green; GitHub release, crates.io, Homebrew.",
+         status: "completed"
+       }},
+      {:rel_notes, "decision", "Write release notes by hand for every publish",
+       %{description: "Generated notes listed merge commits nobody reads.", status: "active"}},
+      {:rel_brew, "observation", "Homebrew tap lags a release by up to an hour after publish",
+       %{description: "The tap refresh runs on a schedule, not on the release event."}}
+    ]
+  end
+
+  @doc "Edges of `release_nodes/0`."
+  def release_edges do
+    [
+      {:g_rel, :rel_102, "leads_to", nil},
+      {:g_rel, :rel_103_act, "leads_to", nil},
+      {:rel_103_act, :rel_103, "leads_to", nil},
+      {:g_rel, :rel_104_fail, "leads_to", nil},
+      {:rel_104_fail, :rel_104, "leads_to", "Rerun"},
+      {:g_rel, :rel_105, "leads_to", nil},
+      {:g_rel, :rel_106, "leads_to", nil},
+      {:g_rel, :rel_107, "leads_to", nil},
+      {:g_rel, :rel_108_act, "leads_to", nil},
+      {:rel_108_act, :rel_108, "leads_to", nil},
+      {:g_rel, :rel_109, "leads_to", nil},
+      {:g_rel, :rel_1010, "leads_to", nil},
+      {:rel_1010, :rel_mint, "leads_to", "The fix"},
+      {:rel_mint, :rel_1011, "leads_to", nil},
+      {:g_rel, :rel_notes, "leads_to", nil},
+      {:g_rel, :rel_brew, "leads_to", nil}
+    ]
+  end
+
+  @doc """
+  The rare-term set, asked against `nodes/0` plus `release_nodes/0` in a
+  workspace of its own and reported separately. Each question pairs one
+  term that few nodes contain (a version, an identifier, a number, a run
+  id: `rare_term`) with words many nodes contain. The first is the question
+  that failed on the shared server. Written before the ranking change it
+  checks, and not tuned against afterwards.
+  """
+  def rare_term_set do
+    [
+      rare(:r01, :single_hop, "Why did the 1.0.10 release not publish?", [:rel_1010], "1.0.10"),
+      rare(
+        :r02,
+        :single_hop,
+        "What went wrong with the hex.pm mirror during the release?",
+        [:rel_104_fail],
+        "hex.pm"
+      ),
+      rare(
+        :r03,
+        :single_hop,
+        "Which release published with cargo publish --no-verify?",
+        [
+          :rel_106
+        ],
+        "no-verify"
+      ),
+      rare(
+        :r04,
+        :single_hop,
+        "What did the mint advisories stop from publishing?",
+        [:rel_1010],
+        "mint"
+      ),
+      rare(
+        :r05,
+        :single_hop,
+        "What happened in release run 36450998001?",
+        [:rel_1010],
+        "36450998001"
+      ),
+      rare(
+        :r06,
+        :single_hop,
+        "Which release image is rollback-1.0.5-db72783?",
+        [:rel_106],
+        "rollback-1.0.5-db72783"
+      ),
+      rare(
+        :r07,
+        :single_hop,
+        "How long did the 1.0.8 release take to publish?",
+        [:rel_108],
+        "1.0.8"
+      ),
+      rare(
+        :r08,
+        :multi_hop,
+        "What did the v1.0.4 publish failure need before the release went out?",
+        [:rel_104_fail, :rel_104],
+        "v1.0.4"
+      ),
+      rare(
+        :r09,
+        :single_hop,
+        "Where did the 8KB header limit come up for viewer login?",
+        [:ob_jwt_size],
+        "8kb"
+      ),
+      rare(
+        :r10,
+        :single_hop,
+        "What does limit_req do for the API rate limit?",
+        [:o_nginx_ip],
+        "limit_req"
+      ),
+      rare(
+        :r11,
+        :single_hop,
+        "What does commit 4c7d8e0 have to do with the API?",
+        [:a_limiter],
+        "4c7d8e0"
+      ),
+      rare(
+        :r12,
+        :single_hop,
+        "How did the 40-branch test go for graph sync?",
+        [:oc_mergedriver],
+        "40-branch"
+      ),
+      rare(
+        :r13,
+        :single_hop,
+        "What does workflow_dispatch do for the release workflow?",
+        [:a_dispatch],
+        "workflow_dispatch"
+      ),
+      rare(
+        :r14,
+        :single_hop,
+        "Which release moved to mint 1.11.0?",
+        [:rel_mint],
+        "1.11.0"
+      )
+    ]
+  end
+
   @doc "The route cue words the held-out set must not contain."
   def route_cues do
     routes = DeciduousMcp.Graph.Retrieval.default_routes() ++ [DeciduousMcp.Graph.Related.route()]
@@ -762,6 +971,44 @@ defmodule DeciduousMcp.Eval.AskGraphFixture do
 
       unless String.contains?(String.downcase(q.question), t) do
         raise ArgumentError, "#{q.id}: rare term #{inspect(t)} is not in the question"
+      end
+    end
+
+    rare_ws = nodes() ++ release_nodes()
+    rare_keys = MapSet.new(rare_ws, &elem(&1, 0))
+
+    if MapSet.size(rare_keys) != length(rare_ws),
+      do: raise(ArgumentError, "release_nodes/0 reuses a key of nodes/0")
+
+    for {from, to, _, _} <- release_edges(), k <- [from, to], k not in rare_keys do
+      raise ArgumentError, "release edge names unknown node #{inspect(k)}"
+    end
+
+    rare_texts =
+      Enum.map(rare_ws, fn {_, _, title, attrs} ->
+        [title, attrs[:description], attrs[:commit] | attrs[:files] || []]
+        |> Enum.join(" ")
+        |> String.downcase()
+      end)
+
+    rare_ids = Enum.map(rare_term_set(), & &1.id)
+
+    if Enum.any?(rare_ids, &(&1 in ids)) or rare_ids != Enum.uniq(rare_ids),
+      do: raise(ArgumentError, "duplicate question ids in rare_term_set/0")
+
+    for %{rare_term: t} = q <- rare_term_set() do
+      n = Enum.count(rare_texts, &String.contains?(&1, t))
+
+      unless n in 1..3 do
+        raise ArgumentError, "#{q.id}: rare term #{inspect(t)} is in #{n} nodes, not 1..3"
+      end
+
+      unless String.contains?(String.downcase(q.question), t) do
+        raise ArgumentError, "#{q.id}: rare term #{inspect(t)} is not in the question"
+      end
+
+      for k <- q.expect, k not in rare_keys do
+        raise ArgumentError, "question #{q.id} expects unknown node #{inspect(k)}"
       end
     end
 
