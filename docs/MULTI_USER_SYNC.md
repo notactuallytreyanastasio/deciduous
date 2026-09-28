@@ -126,7 +126,7 @@ the file by default in pull request diffs. It is still there to expand and revie
 
 ```bash
 git pull
-deciduous sync              # optional since 1.0.9: any command follows graph.json first
+deciduous sync              # optional since 1.0.11: any command follows graph.json first
 # ... work; every add/link/status/delete writes the file immediately ...
 git add .deciduous/graph.json docs/graph-data.json
 git commit -m "graph: chose token bucket over leaky bucket"
@@ -146,7 +146,7 @@ prefixes when linking to another person's nodes.
 ## Branches, old commits and resets
 
 The database is one per clone and is shared by every branch and commit you
-check out; `graph.json` is versioned like any other file. Since 1.0.9 the
+check out; `graph.json` is versioned like any other file. Since 1.0.11 the
 database **follows the file**: before any command (or, in a running `deciduous
 mcp` server, before any tool call), if `graph.json` is not the file the
 database last mirrored, the database is brought to it. The graph you see is
@@ -182,7 +182,7 @@ differs. A lock held from each write's database commit to its line in the file,
 and for the whole of a follow, keeps a follow in one process from mistaking
 another process's write in flight for a row git removed.
 
-A database from before 1.0.9 has neither record. Its first sync takes out only
+A database from before 1.0.11 has neither record. Its first sync takes out only
 rows some local branch's `graph.json` has (git keeps them), and treats rows no
 branch has as unpublished writes, publishing them rather than losing them.
 

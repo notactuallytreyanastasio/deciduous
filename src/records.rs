@@ -1955,7 +1955,7 @@ impl SyncReport {
 
     /// Nothing would be written to graph.json. Imports only bring the local
     /// database up to the file, and every command does that before it runs
-    /// (1.0.9), so a database behind the file after `git checkout` or
+    /// (1.0.11), so a database behind the file after `git checkout` or
     /// `git pull` is not work sync owes: counting it failed a pre-push
     /// `sync --check` after every branch switch.
     pub fn is_clean(&self) -> bool {
@@ -2066,8 +2066,8 @@ pub fn follow_graph_file(db: &Database) -> std::result::Result<Option<SyncReport
 
 /// Rows the database holds that graph.json does not, and that no local
 /// branch's graph.json has either: local writes that never reached a file
-/// (made while HEAD was detached, under a version before 1.0.9 recorded
-/// them). A database from before 1.0.9 has no record of which rows are
+/// (made while HEAD was detached, under a version before 1.0.11 recorded
+/// them). A database from before 1.0.11 has no record of which rows are
 /// unpublished, so the first sync works it out here, once. A row some
 /// branch has is safe to take out of this checkout's view: git keeps it.
 fn homeless(
@@ -2149,7 +2149,7 @@ fn homeless(
 /// newer-wins reconcile after this was built for: records the file has
 /// that are newer or new, and unpublished local writes, which it exports.
 ///
-/// Before 1.0.9 the reconcile exported every row the file lacked, because
+/// Before 1.0.11 the reconcile exported every row the file lacked, because
 /// the database could not tell a local write the file never got from a
 /// row git took out: a node added on a branch was written into main's file
 /// by the first sync after `git checkout main` (G6), and `git reset --hard`
@@ -2177,12 +2177,12 @@ fn follow_file(
     let mut followed = Followed::default();
     let db_err = |e: crate::db::DbError| format!("database: {}", e);
     let mut keep = db.unpublished().map_err(db_err)?;
-    // No mirror recorded yet (a database from before 1.0.9, or one that
+    // No mirror recorded yet (a database from before 1.0.11, or one that
     // has never synced with this file): a row newer than the file's copy
     // may be a local write the file never got, or a version git went back
     // from, and nothing says which. This once, only rows some other branch
     // has are taken out; the reconcile after this decides the rest by
-    // newer-wins, as every version before 1.0.9 did.
+    // newer-wins, as every version before 1.0.11 did.
     let first = db.mirror_digest().map_err(db_err)?.is_none();
     if first {
         let found = homeless(db, store)?;

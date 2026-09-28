@@ -1420,7 +1420,7 @@ impl Database {
     }
 
     /// The digest of the graph.json this database mirrors, if one was ever
-    /// recorded (a database from before 1.0.9 has none).
+    /// recorded (a database from before 1.0.11 has none).
     pub(crate) fn mirror_digest(&self) -> Result<Option<String>> {
         #[derive(diesel::QueryableByName)]
         struct Row {
