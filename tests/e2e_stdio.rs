@@ -88,6 +88,7 @@ fn attach(m: &mut StdioMcp, path: &str) -> Result<Value, String> {
 /// R4: attach_document read any path: /etc/passwd, ../../ traversal, and a
 /// symlink inside the repository pointing out of it were all copied into
 /// .deciduous/documents/.
+#[cfg(unix)] // symlinks are created with std::os::unix::fs::symlink
 #[test]
 fn r4_attach_document_is_confined_to_the_project() {
     let Some(()) = local("r4_attach_document_is_confined_to_the_project") else {
@@ -140,6 +141,7 @@ fn walk_contains(dir: &std::path::Path, needle: &[u8]) -> bool {
 
 /// R4: a FIFO hung the single-threaded server forever; /dev/zero grew it to
 /// gigabytes. Each must fail fast and leave the server answering.
+#[cfg(unix)] // symlinks are created with std::os::unix::fs::symlink
 #[test]
 fn r4_attach_document_never_hangs_on_special_files() {
     let Some(()) = local("r4_attach_document_never_hangs_on_special_files") else {

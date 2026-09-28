@@ -12,6 +12,10 @@
 //! `DECIDUOUS_E2E=1`. `DECIDUOUS_E2E_SWARM_SCRIPT=<path>` runs the panes with
 //! another version of demo-swarm.zsh, for bisecting.
 
+// The launcher refuses anything but macOS, and the harness uses Unix process
+// groups and `script`; there is nothing to compile on Windows.
+#![cfg(unix)]
+
 mod e2e_support;
 
 use e2e_support::*;
