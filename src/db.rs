@@ -192,6 +192,34 @@ pub const EDGE_TYPES: &[&str] = &[
     "took_from",
 ];
 
+/// Node types a record read from graph.json or the server may carry: every
+/// type a new node may have, plus `feedback`, which exists in graphs on disk
+/// and which the server accepts. Kept equal to the server's list
+/// (deciduous_mcp/lib/deciduous_mcp/schema/node.ex), so a pull is never
+/// refused here for a node the server holds.
+pub const IMPORTABLE_NODE_TYPES: &[&str] = &[
+    "goal",
+    "decision",
+    "option",
+    "action",
+    "outcome",
+    "observation",
+    "revisit",
+    "feedback",
+];
+
+/// Statuses a record may carry: every settable status plus `done`, for the
+/// same reason as [`IMPORTABLE_NODE_TYPES`].
+pub const IMPORTABLE_STATUSES: &[&str] = &[
+    "pending",
+    "active",
+    "completed",
+    "rejected",
+    "superseded",
+    "abandoned",
+    "done",
+];
+
 fn one_of(what: &str, value: &str, allowed: &[&str]) -> Result<()> {
     if allowed.contains(&value) {
         Ok(())
@@ -2702,6 +2730,12 @@ impl Database {
 
     /// Insert a node exactly as recorded (timestamps, status, metadata kept).
     pub(crate) fn import_node_record(&self, rec: &NodeRecord) -> Result<i32> {
+        // The same vocabulary `add` enforces, widened only to what the
+        // server holds. A hand-edited or corrupted graph.json used to import
+        // any type and status here, while `add` refused them, and with a
+        // remote the import was queued as an op the server then rejected.
+        one_of("node type", &rec.node_type, IMPORTABLE_NODE_TYPES)?;
+        one_of("status", &rec.status, IMPORTABLE_STATUSES)?;
         let mut conn = self.get_conn()?;
         let metadata = rec.metadata_json();
         let new_node = NewDecisionNode {
@@ -2937,7 +2971,37 @@ impl Database {
         to_id: i32,
         rec: &EdgeRecord,
     ) -> Result<i32> {
+        // What create_edge refuses, refused on import too: an unknown type,
+        // a self-loop, and a 2-cycle (the server refuses both on every path,
+        // so an imported one would sit in the op log as a rejected op).
+        one_of("edge type", &rec.edge_type, EDGE_TYPES)?;
+        if from_id == to_id {
+            return Err(DbError::Validation(format!(
+                "edge {} -> {} ({}) links a node to itself",
+                rec.from_change_id, rec.to_change_id, rec.edge_type
+            )));
+        }
         let mut conn = self.get_conn()?;
+        if rec.edge_type != "took_from" {
+            let reverse = decision_edges::table
+                .filter(decision_edges::from_node_id.eq(to_id))
+                .filter(decision_edges::to_node_id.eq(from_id))
+                .filter(decision_edges::edge_type.ne("took_from"))
+                .first::<DecisionEdge>(&mut conn)
+                .optional()?;
+            if let Some(rev) = reverse {
+                return Err(DbError::Validation(format!(
+                    "edge {} -> {} ({}) would make the two nodes each other's parent; \
+                     {} -> {} ({}) is already in the graph",
+                    rec.from_change_id,
+                    rec.to_change_id,
+                    rec.edge_type,
+                    rec.to_change_id,
+                    rec.from_change_id,
+                    rev.edge_type
+                )));
+            }
+        }
         let new_edge = NewDecisionEdge {
             from_node_id: from_id,
             to_node_id: to_id,
