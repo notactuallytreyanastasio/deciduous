@@ -353,8 +353,14 @@ pub fn tag_id(node_change_id: &str, theme_change_id: &str) -> String {
 /// and a couple of looser forms produced by `--date`. Unparseable values
 /// sort before everything else so a real timestamp always wins.
 pub fn parse_ts(s: &str) -> DateTime<Utc> {
+    parse_ts_opt(s).unwrap_or(DateTime::<Utc>::UNIX_EPOCH)
+}
+
+/// [`parse_ts`], saying `None` for a string that is not a time instead of
+/// reading it as the epoch.
+pub fn parse_ts_opt(s: &str) -> Option<DateTime<Utc>> {
     if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-        return dt.with_timezone(&Utc);
+        return Some(dt.with_timezone(&Utc));
     }
     // Naive shapes come from `add --date`, which reads them as local time.
     let local = |naive: chrono::NaiveDateTime| {
@@ -366,13 +372,62 @@ pub fn parse_ts(s: &str) -> DateTime<Utc> {
     };
     for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"] {
         if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, fmt) {
-            return local(naive);
+            return Some(local(naive));
         }
         if let Ok(date) = chrono::NaiveDate::parse_from_str(s, fmt) {
-            return local(date.and_hms_opt(0, 0, 0).unwrap_or_default());
+            return Some(local(date.and_hms_opt(0, 0, 0).unwrap_or_default()));
         }
     }
-    DateTime::<Utc>::UNIX_EPOCH
+    None
+}
+
+/// The earlier of two `created_at` values, as the text it arrived in.
+///
+/// A record is created once. Every copy of it that travelled through a
+/// migration (the JSONL log, the 0.17 directory, graph.json, a server
+/// import) can only have been re-stamped *later*, at the time it was copied,
+/// never earlier, so the earliest claim any copy makes is the best one there
+/// is. This is the one rule every import applies, on the CLI and (as
+/// `LEAST(inserted_at, …)`) on the server.
+///
+/// Compared to the microsecond, because the server keeps microseconds and
+/// the CLI can write nanoseconds: a copy back from the server is not earlier
+/// than the original, and a tie keeps `ours` byte for byte. A value that is
+/// not a time never wins over one that is (the old reader took it as 1970).
+pub fn earlier_created<'a>(ours: &'a str, theirs: &'a str) -> &'a str {
+    if created_before(theirs, ours) {
+        theirs
+    } else {
+        ours
+    }
+}
+
+/// `a` names an earlier creation than `b`, by the rule of
+/// [`earlier_created`]: to the microsecond, and a time before a non-time.
+/// The same instant spelled twice ("-04:00" and "Z") is not earlier.
+pub fn created_before(a: &str, b: &str) -> bool {
+    let micros = |s: &str| parse_ts_opt(s).map(|t| t.timestamp_micros());
+    match (micros(a), micros(b)) {
+        (Some(a), Some(b)) => a < b,
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
+
+/// A timestamp as it goes to the server: RFC 3339 text unchanged, and a
+/// naive one (`add --date` stored those as typed before 1.0) given the
+/// local offset this machine has always read it with (see [`parse_ts`]).
+/// The server reads a naive time as UTC, so sent as stored, a node dated
+/// "2024-03-01 09:00:00" in New York came back four hours earlier, and the
+/// earliest-wins rule then took the wrong hour everywhere.
+pub fn wire_ts(s: &str) -> String {
+    if DateTime::parse_from_rfc3339(s).is_ok() {
+        return s.to_string();
+    }
+    match parse_ts_opt(s) {
+        Some(t) => t.with_timezone(&chrono::Local).to_rfc3339(),
+        None => s.to_string(),
+    }
 }
 
 /// Current time in the same format the database uses for timestamps.
@@ -734,6 +789,54 @@ fn restamp_local_write(
     }
     incoming[field] = Value::String(stamp.clone());
     (field == "updated_at").then_some(stamp)
+}
+
+/// A record kind that is made once and then edited: its `created_at` is
+/// the day it was made, not a version.
+trait MadeOnce {
+    fn created_at_mut(&mut self) -> &mut String;
+    fn version(&self) -> DateTime<Utc>;
+}
+impl MadeOnce for NodeRecord {
+    fn created_at_mut(&mut self) -> &mut String {
+        &mut self.created_at
+    }
+    fn version(&self) -> DateTime<Utc> {
+        self.effective_ts()
+    }
+}
+impl MadeOnce for ThemeRecord {
+    fn created_at_mut(&mut self) -> &mut String {
+        &mut self.created_at
+    }
+    fn version(&self) -> DateTime<Utc> {
+        self.effective_ts()
+    }
+}
+
+/// Take a migrated copy of a record into the document: the newer version
+/// wins, as it always has, and the earlier `created_at` of the two is kept
+/// whichever version that is (see [`earlier_created`]). Before, the newer
+/// copy came in whole, and a re-emitted or re-stamped copy moved the date
+/// the record was made to the day it was migrated.
+fn take_migrated<T: MadeOnce + PartialEq + Clone>(
+    map: &mut BTreeMap<String, T>,
+    key: String,
+    mut rec: T,
+) -> bool {
+    let Some(have) = map.get(&key) else {
+        return put(map, key, rec);
+    };
+    let mut have = have.clone();
+    let made = earlier_created(have.created_at_mut(), rec.created_at_mut()).to_string();
+    let winner = if rec.version() > have.version() {
+        &mut rec
+    } else {
+        &mut have
+    };
+    *winner.created_at_mut() = made;
+    let winner = winner.clone();
+    put(map, key, winner)
 }
 
 /// Insert `rec` under `key`, reporting whether the document changed.
@@ -1546,11 +1649,7 @@ impl RecordStore {
         self.mutate(|doc| {
             let mut changed = false;
             for rec in &nodes.records {
-                let keep = match doc.nodes.get(&rec.change_id) {
-                    Some(have) => rec.effective_ts() > have.effective_ts(),
-                    None => true,
-                };
-                if keep && put(&mut doc.nodes, rec.change_id.clone(), rec.clone()) {
+                if take_migrated(&mut doc.nodes, rec.change_id.clone(), rec.clone()) {
                     changed = true;
                     report.nodes += 1;
                 }
@@ -1564,11 +1663,7 @@ impl RecordStore {
                 }
             }
             for rec in &themes.records {
-                let keep = match doc.themes.get(&rec.change_id) {
-                    Some(have) => rec.effective_ts() > have.effective_ts(),
-                    None => true,
-                };
-                if keep && put(&mut doc.themes, rec.change_id.clone(), rec.clone()) {
+                if take_migrated(&mut doc.themes, rec.change_id.clone(), rec.clone()) {
                     changed = true;
                     report.themes += 1;
                 }
@@ -1637,12 +1732,19 @@ impl RecordStore {
         let (mut events, errors) = read_events_tolerant(&self.legacy_events_dir());
         // The old rebuild replayed only events newer than the checkpoint;
         // older ones are already folded in and would regress its state.
-        if let Some(cutoff) = cutoff {
-            events.retain(|e| e.timestamp() > cutoff);
-        }
+        // They still say when a node was added (see `date_from`).
+        let folded: Vec<_> = match cutoff {
+            Some(cutoff) => {
+                let (old, new) = events.into_iter().partition(|e| e.timestamp() <= cutoff);
+                events = new;
+                old
+            }
+            None => Vec::new(),
+        };
         report.events = events.len();
         report.errors.extend(errors);
         state.replay(&events);
+        state.date_from(&folded);
 
         let into_record =
             |node: &crate::events::MaterializedNode, deleted_at: Option<String>| NodeRecord {
@@ -1652,7 +1754,7 @@ impl RecordStore {
                 description: node.description.clone(),
                 status: node.status.clone(),
                 metadata: node.metadata_json.as_deref().map(parse_metadata),
-                created_at: node.created_at.to_rfc3339(),
+                created_at: node.created_text.clone(),
                 updated_at: node.updated_at.to_rfc3339(),
                 author: node.author.clone(),
                 deleted_at,
@@ -1662,11 +1764,7 @@ impl RecordStore {
         self.mutate(|doc| {
             let mut changed = false;
             let mut take_node = |rec: NodeRecord| {
-                let keep = match doc.nodes.get(&rec.change_id) {
-                    Some(have) => rec.effective_ts() > have.effective_ts(),
-                    None => true,
-                };
-                if keep && put(&mut doc.nodes, rec.change_id.clone(), rec) {
+                if take_migrated(&mut doc.nodes, rec.change_id.clone(), rec) {
                     changed = true;
                     report.nodes += 1;
                 }
@@ -1686,7 +1784,7 @@ impl RecordStore {
                     edge_type: edge.edge_type.clone(),
                     rationale: edge.rationale.clone(),
                     weight: None,
-                    created_at: edge.created_at.to_rfc3339(),
+                    created_at: edge.created_text.clone(),
                     author: edge.author.clone(),
                     deleted_at: None,
                     extra: Default::default(),
@@ -1707,7 +1805,7 @@ impl RecordStore {
                     edge_type: edge.edge_type.clone(),
                     rationale: edge.rationale.clone(),
                     weight: None,
-                    created_at: edge.created_at.to_rfc3339(),
+                    created_at: edge.created_text.clone(),
                     author: edge.author.clone(),
                     deleted_at: Some(deleted_at.to_rfc3339()),
                     extra: Default::default(),
@@ -1880,6 +1978,9 @@ pub struct SyncReport {
     /// of an older branch). Local only, like the above.
     pub nodes_reverted: usize,
     pub themes_reverted: usize,
+    /// Rows whose created_at moved back to the earlier date graph.json
+    /// holds for them (a migration had re-stamped the row).
+    pub nodes_redated: usize,
 }
 
 impl SyncReport {
@@ -1887,6 +1988,7 @@ impl SyncReport {
     pub fn imported(&self) -> usize {
         self.nodes_imported
             + self.nodes_updated
+            + self.nodes_redated
             + self.nodes_deleted
             + self.edges_imported
             + self.edges_updated
@@ -2496,18 +2598,47 @@ fn reconcile_inner(
                         theirs.updated_at = mine.updated_at.clone();
                         mine == theirs
                     };
+                    // Whichever side is newer, the earlier created_at is
+                    // kept on both (`earlier_created`): a row a migration
+                    // re-stamped takes the file's date, and a file record
+                    // re-stamped takes the row's.
+                    let file_earlier = created_before(&rec.created_at, &row.created_at);
+                    let row_earlier = created_before(&row.created_at, &rec.created_at);
                     if rec_ts > row_ts || (rec_ts == row_ts && !same_content) {
                         if !dry_run {
                             db.update_node_record(row.id, rec).map_err(db_err)?;
                         }
                         if !same_content {
                             report.nodes_updated += 1;
+                        } else if file_earlier {
+                            report.nodes_redated += 1;
                         }
-                    } else if row_ts > rec_ts {
+                        if row_earlier {
+                            if !dry_run {
+                                let mut kept = rec.clone();
+                                kept.created_at = row.created_at.clone();
+                                store.write_node(&kept).map_err(io_err)?;
+                            }
+                            report.nodes_exported += 1;
+                        }
+                    } else if row_ts > rec_ts || row_earlier {
                         if !dry_run {
                             store.publish_node(row).map_err(io_err)?;
                         }
                         report.nodes_exported += 1;
+                        if file_earlier {
+                            if !dry_run {
+                                db.redate_node_record(row.id, &rec.created_at)
+                                    .map_err(db_err)?;
+                            }
+                            report.nodes_redated += 1;
+                        }
+                    } else if file_earlier {
+                        if !dry_run {
+                            db.redate_node_record(row.id, &rec.created_at)
+                                .map_err(db_err)?;
+                        }
+                        report.nodes_redated += 1;
                     }
                 }
             }
@@ -2977,7 +3108,12 @@ pub fn merge_record_values(base: Option<&Value>, ours: &Value, theirs: &Value) -
     };
     let b = base.and_then(Value::as_object);
     let ours_newer = record_ts(ours) >= record_ts(theirs);
-    let mut out = merge_objects(b, o, t, ours_newer);
+    // A node or theme dates its versions with updated_at, so its
+    // created_at is only the day it was made. An edge or tag has nothing
+    // else: its created_at is the version (a relink after an unlink is
+    // stamped later to beat the tombstone), and it keeps the rules below.
+    let made_once = o.contains_key("updated_at") || t.contains_key("updated_at");
+    let mut out = merge_objects(b, o, t, ours_newer, made_once);
 
     // A one-sided delete versus an edit made after it: the edit wins.
     let o_del = o.get("deleted_at").and_then(Value::as_str);
@@ -3003,6 +3139,7 @@ fn merge_objects(
     ours: &serde_json::Map<String, Value>,
     theirs: &serde_json::Map<String, Value>,
     ours_newer: bool,
+    made_once: bool,
 ) -> serde_json::Map<String, Value> {
     let mut keys: Vec<&String> = ours.keys().chain(theirs.keys()).collect();
     if let Some(b) = base {
@@ -3018,6 +3155,13 @@ fn merge_objects(
         let tv = theirs.get(key);
         let merged: Option<Value> = if ov == tv {
             ov.cloned()
+        } else if let (true, Some(Value::String(a)), Some(Value::String(c))) =
+            (made_once && key == "created_at", ov, tv)
+        {
+            // Before the base rules: "the side that changed it wins" let a
+            // copy re-stamped by a migration (base == ours, theirs later)
+            // replace the date the record was made. See `earlier_created`.
+            Some(Value::String(earlier_created(a, c).to_string()))
         } else if base.is_some() && ov == bv {
             tv.cloned()
         } else if base.is_some() && tv == bv {
@@ -3025,7 +3169,7 @@ fn merge_objects(
         } else {
             match (key.as_str(), ov, tv) {
                 (_, Some(Value::Object(om)), Some(Value::Object(tm))) => Some(Value::Object(
-                    merge_objects(bv.and_then(Value::as_object), om, tm, ours_newer),
+                    merge_objects(bv.and_then(Value::as_object), om, tm, ours_newer, false),
                 )),
                 ("updated_at" | "deleted_at", Some(Value::String(a)), Some(Value::String(c))) => {
                     Some(Value::String(if parse_ts(a) >= parse_ts(c) {
@@ -3034,12 +3178,9 @@ fn merge_objects(
                         c.clone()
                     }))
                 }
+                // An edge or tag with no base: the earlier, as before.
                 ("created_at", Some(Value::String(a)), Some(Value::String(c))) => {
-                    Some(Value::String(if parse_ts(a) <= parse_ts(c) {
-                        a.clone()
-                    } else {
-                        c.clone()
-                    }))
+                    Some(Value::String(earlier_created(a, c).to_string()))
                 }
                 // Present on one side only and absent from the base: an
                 // addition, keep it. (With a base, one side removed it while
@@ -5124,5 +5265,176 @@ mod tests {
         assert_eq!(report.errors.len(), 1);
         assert!(!report.removed);
         assert!(sync.exists());
+    }
+
+    // ---- created_at survives every copy -------------------------------------
+
+    #[test]
+    fn earlier_created_compares_instants_to_the_microsecond() {
+        // The same instant spelled twice keeps ours, byte for byte.
+        let ours = "2026-01-01T12:00:00.123456789-04:00";
+        assert_eq!(earlier_created(ours, "2026-01-01T16:00:00.123456Z"), ours);
+        assert!(!created_before("2026-01-01T16:00:00.123456Z", ours));
+        assert_eq!(
+            earlier_created(ours, "2020-01-01T00:00:00Z"),
+            "2020-01-01T00:00:00Z"
+        );
+        // A value that is not a time never wins, whichever side it is on.
+        assert_eq!(earlier_created("garbage", ours), ours);
+        assert_eq!(earlier_created(ours, "garbage"), ours);
+    }
+
+    #[test]
+    fn wire_ts_keeps_rfc3339_and_gives_a_naive_time_this_machines_offset() {
+        let t = "2019-03-04T05:06:07.123456789-05:00";
+        assert_eq!(wire_ts(t), t);
+        let naive = "2018-06-01 12:00:00";
+        let wired = wire_ts(naive);
+        assert!(DateTime::parse_from_rfc3339(&wired).is_ok(), "{wired}");
+        assert_eq!(parse_ts(&wired), parse_ts(naive));
+        assert_eq!(wire_ts("garbage"), "garbage");
+    }
+
+    #[test]
+    fn a_three_way_merge_keeps_the_earlier_created_at_of_a_node() {
+        // Base and ours agree; theirs went through a migration that stamped
+        // it. "Only one side changed it" used to hand theirs the field.
+        let mut base = node("n", "T", "2026-01-02T00:00:00+00:00");
+        base.created_at = "2019-01-01T00:00:00-05:00".into();
+        let ours = base.clone();
+        let mut theirs = base.clone();
+        theirs.created_at = "2026-09-28T00:00:00+00:00".into();
+        theirs.updated_at = "2026-09-28T00:00:01+00:00".into();
+        theirs.title = "T2".into();
+        let v = |r: &NodeRecord| serde_json::to_value(r).unwrap();
+        let merged = merge_record_values(Some(&v(&base)), &v(&ours), &v(&theirs));
+        assert_eq!(merged["created_at"], "2019-01-01T00:00:00-05:00");
+        assert_eq!(merged["title"], "T2");
+        // And the other way round.
+        let merged = merge_record_values(Some(&v(&base)), &v(&theirs), &v(&ours));
+        assert_eq!(merged["created_at"], "2019-01-01T00:00:00-05:00");
+    }
+
+    #[test]
+    fn an_edge_relinked_over_a_tombstone_keeps_its_later_created_at() {
+        // An edge's created_at is its version: the relink must stay later
+        // than the unlink, so the min rule is not applied against a base.
+        let base = serde_json::json!({"edge_id": "e", "from_change_id": "a",
+            "to_change_id": "b", "edge_type": "leads_to",
+            "created_at": "2026-01-01T00:00:00+00:00"});
+        let mut ours = base.clone();
+        ours["deleted_at"] = "2026-01-02T00:00:00+00:00".into();
+        let mut theirs = base.clone();
+        theirs["created_at"] = "2026-01-03T00:00:00+00:00".into();
+        let merged = merge_record_values(Some(&base), &ours, &theirs);
+        assert_eq!(merged["created_at"], "2026-01-03T00:00:00+00:00");
+        assert!(merged.get("deleted_at").is_none());
+    }
+
+    #[test]
+    fn a_0_17_record_newer_but_later_dated_keeps_the_documents_created_at() {
+        let (dir, s) = store();
+        let mut have = node("n", "Old title", "2026-01-01T00:00:00+00:00");
+        have.created_at = "2019-01-01T00:00:00-05:00".into();
+        s.write_node(&have).unwrap();
+
+        let sync = dir.path().join("sync");
+        fs::create_dir_all(sync.join("nodes")).unwrap();
+        let mut theirs = node("n", "New title", "2026-02-01T00:00:00+00:00");
+        theirs.created_at = "2026-02-01T00:00:00+00:00".into();
+        fs::write(
+            sync.join("nodes/n.json"),
+            serde_json::to_string(&theirs).unwrap(),
+        )
+        .unwrap();
+
+        s.import_legacy_record_dir().unwrap();
+        let got = s.read_node("n").unwrap().unwrap();
+        assert_eq!(got.title, "New title");
+        assert_eq!(got.created_at, "2019-01-01T00:00:00-05:00");
+    }
+
+    #[test]
+    fn a_legacy_re_emit_does_not_re_date_a_checkpointed_node_or_edge() {
+        let (_d, s) = store();
+        fs::create_dir_all(s.dir().join("sync/events")).unwrap();
+        let cp = serde_json::json!({
+            "created_at": 1_735_689_600_000_i64, "version": "1.0",
+            "nodes": [{"change_id": "n1", "node_type": "goal", "title": "T",
+                "description": null, "status": "pending", "metadata_json": null,
+                "created_at": "2019-01-01T00:00:00.5-05:00",
+                "updated_at": "2019-01-01T00:00:00.5-05:00"}],
+            "edges": [{"edge_id": "e1", "from_change_id": "n1", "to_change_id": "n1b",
+                "edge_type": "leads_to", "rationale": null,
+                "created_at": "2019-01-02T00:00:00-05:00"}]
+        });
+        fs::write(s.dir().join("sync/checkpoint.json"), cp.to_string()).unwrap();
+        fs::write(
+            s.dir().join("sync/events/a.jsonl"),
+            concat!(
+                r#"{"op":"add_node","change_id":"n1","node_type":"goal","title":"T","description":null,"status":"pending","metadata_json":null,"timestamp":1767225600000,"author":"a"}"#,
+                "\n",
+                r#"{"op":"add_edge","edge_id":"e1","from_change_id":"n1","to_change_id":"n1b","edge_type":"leads_to","rationale":null,"timestamp":1767225600000,"author":"a"}"#,
+                "\n",
+            ),
+        )
+        .unwrap();
+        s.import_legacy_events().unwrap();
+        assert_eq!(
+            s.read_node("n1").unwrap().unwrap().created_at,
+            "2019-01-01T00:00:00.5-05:00"
+        );
+        let e = s
+            .read_edge(&edge_id("n1", "n1b", "leads_to"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(e.created_at, "2019-01-02T00:00:00-05:00");
+    }
+
+    #[test]
+    fn a_legacy_relink_after_an_unlink_takes_the_relinks_date() {
+        let (_d, s) = store();
+        fs::create_dir_all(s.dir().join("sync/events")).unwrap();
+        let add = |ts: i64| {
+            format!(
+                r#"{{"op":"add_edge","edge_id":"e1","from_change_id":"a","to_change_id":"b","edge_type":"leads_to","rationale":null,"timestamp":{ts},"author":"x"}}"#
+            )
+        };
+        let del = r#"{"op":"delete_edge","edge_id":"e1","timestamp":2000,"author":"x"}"#;
+        fs::write(
+            s.dir().join("sync/events/a.jsonl"),
+            format!("{}\n{}\n{}\n", add(1000), del, add(3000)),
+        )
+        .unwrap();
+        s.import_legacy_events().unwrap();
+        let e = s
+            .read_edge(&edge_id("a", "b", "leads_to"))
+            .unwrap()
+            .unwrap();
+        assert!(!e.is_tombstone());
+        assert_eq!(parse_ts(&e.created_at).timestamp_millis(), 3000);
+    }
+
+    #[test]
+    fn reconcile_gives_the_database_the_earlier_date_graph_json_holds() {
+        let (dir, s) = store();
+        let db = db_in(dir.path());
+        db.set_store(Some(s.clone()));
+        let id = db.create_node("goal", "G", None, None, None).unwrap();
+        let row = db.get_node(id).unwrap().unwrap();
+
+        let mut rec = s.read_node(&row.change_id).unwrap().unwrap();
+        rec.created_at = "2016-06-06T06:06:06+00:00".into();
+        s.write_node(&rec).unwrap();
+
+        let report = reconcile(&db, &s, false).unwrap();
+        assert_eq!(report.nodes_redated, 1, "{report:?}");
+        assert_eq!(
+            db.get_node(id).unwrap().unwrap().created_at,
+            "2016-06-06T06:06:06+00:00"
+        );
+        // Settled: a second pass has nothing to do.
+        let again = reconcile(&db, &s, false).unwrap();
+        assert_eq!((again.nodes_redated, again.exported()), (0, 0));
     }
 }
