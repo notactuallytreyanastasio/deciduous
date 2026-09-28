@@ -4065,20 +4065,68 @@ pub fn mark_beyond_file(
     Ok(marked)
 }
 
+/// 0.17's per-record directory (or the event log before it) beside the
+/// graph file at `store_path`, when it is there to be folded in: a phrase
+/// naming it and how many node records it holds.
+pub fn unfolded_legacy_layout(store_path: &Path) -> Option<String> {
+    let dir = store_path.parent()?.join(STORE_DIR_NAME);
+    let records = ["nodes", "edges", "themes", "tags"]
+        .iter()
+        .any(|sub| dir.join(sub).is_dir());
+    let events = dir.join("events").is_dir() || dir.join("checkpoint.json").is_file();
+    if !records && !events {
+        return None;
+    }
+    let nodes = fs::read_dir(dir.join("nodes"))
+        .map(|d| {
+            d.filter_map(|e| e.ok())
+                .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+                .count()
+        })
+        .unwrap_or(0);
+    let what = match (records, events) {
+        (true, false) => format!("{nodes} node record(s) in 0.17's per-record files"),
+        (false, _) => "an event log from before 0.17".to_string(),
+        (true, true) => format!(
+            "{nodes} node record(s) in 0.17's per-record files, and an event log from before 0.17"
+        ),
+    };
+    Some(format!("{} holds {what}", dir.display()))
+}
+
 /// The sentence saying what a sync on a detached commit did: the local
 /// graph now shows that commit's graph file (records other commits have
 /// left it, and come back with them), the file itself was not written, and
 /// local writes that are in no file yet stayed in the database.
-pub fn viewing_history_note(at: &str, file_exists: bool, withheld: &[String]) -> String {
+///
+/// And, when the commit carries a graph in the layout before graph.json,
+/// that it was not folded in and how to fold it. Folding writes graph.json,
+/// which a detached commit does not get (G7), and the note used to say only
+/// "no graph file was created": a customer case study migrating from a PR
+/// ref could not tell why none of the commit's nodes arrived.
+pub fn viewing_history_note(
+    at: &str,
+    store_path: &Path,
+    file_exists: bool,
+    withheld: &[String],
+) -> String {
     let file = if file_exists {
         "the graph file was left as this commit has it"
     } else {
         "no graph file was created (this commit has none)"
     };
-    let view = format!(
+    let mut view = format!(
         "HEAD is detached at {at}: the local graph shows this commit's graph, and {file}. \
          Records other commits have come back when one of them is checked out."
     );
+    if let Some(legacy) = unfolded_legacy_layout(store_path) {
+        view.push_str(&format!(
+            " {legacy}: they were NOT folded into the local graph, because HEAD is detached \
+             and folding them writes graph.json, which a detached commit's checkout keeps as \
+             the commit has it. To fold them, put the commit on a branch and sync there: \
+             `git switch -c <name>` then `deciduous sync`."
+        ));
+    }
     if withheld.is_empty() {
         view
     } else {

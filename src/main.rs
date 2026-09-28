@@ -1192,6 +1192,7 @@ fn exit(code: i32) -> ! {
     if let Some(log) = deciduous::oplog::take_appended() {
         deciduous::remote::replay_after_write(&log);
     }
+    deciduous::oplog::print_local_only();
     if let Some(dir) = CHECK_SCRATCH.get() {
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -2752,6 +2753,13 @@ fn main() {
 
                     println!("{} {}", "Remote:".bold(), remote.url);
                     println!("{} {}", "Workspace:".bold(), remote.workspace.cyan());
+                    if let Some(from) = deciduous::remote::inherited_remote(db.data_dir()) {
+                        println!(
+                            "{} this worktree's config names no server; its writes go to the main checkout's ({})",
+                            "From:".bold(),
+                            from.data_dir.join("config.toml").display()
+                        );
+                    }
 
                     // The queue first: it is this machine's half of any
                     // difference below, and it needs no server to read.
@@ -3902,9 +3910,11 @@ fn main() {
                 }
             }
 
-            if let Some(store) = &store {
+            // On a detached commit these are not folded (that writes the graph
+            // file), and the detached note below says so and how to fold them.
+            if let (Some(store), None) = (&store, &detached) {
                 if store.has_legacy_record_dir() {
-                    if check || detached.is_some() {
+                    if check {
                         println!(
                             "{} .deciduous/sync/ (0.17 per-record files) present; `deciduous sync` will fold it into the graph file",
                             "Note:".yellow()
@@ -3921,7 +3931,7 @@ fn main() {
                 }
 
                 if store.has_legacy_events() {
-                    if check || detached.is_some() {
+                    if check {
                         println!(
                             "{} Legacy event log present; `deciduous sync` will import it",
                             "Note:".yellow()
@@ -3961,7 +3971,12 @@ fn main() {
                     println!(
                         "  {} {}",
                         "Note:".yellow(),
-                        deciduous::records::viewing_history_note(at, store.is_some(), &withheld)
+                        deciduous::records::viewing_history_note(
+                            at,
+                            &store_path,
+                            store.is_some(),
+                            &withheld,
+                        )
                     );
                 }
             }

@@ -818,6 +818,10 @@ pub struct Database {
     /// the shared server, and an older version brought back by a reset is
     /// not an edit to send. See [`Self::with_ops_suppressed`].
     ops_suppressed: std::sync::atomic::AtomicBool,
+    /// Set by a local write (not one git brought) made while there is no
+    /// server log, and taken by [`Self::to_log`] once it is committed, so
+    /// the command can say its write stayed here.
+    local_only_pending: std::sync::atomic::AtomicBool,
     /// The follow lock this process holds, and how many writes/syncs in it
     /// are inside it (see [`Self::hold_mirror`]).
     mirror_hold: std::sync::Mutex<(usize, Option<std::fs::File>)>,
@@ -945,6 +949,7 @@ impl Database {
             store_author: std::sync::RwLock::new(None),
             head_file: std::sync::OnceLock::new(),
             ops_suppressed: std::sync::atomic::AtomicBool::new(false),
+            local_only_pending: std::sync::atomic::AtomicBool::new(false),
             mirror_hold: std::sync::Mutex::new((0, None)),
         };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
@@ -1051,6 +1056,10 @@ impl Database {
         {
             return Ok(Vec::new());
         }
+        if origin.is_none() && self.oplog().is_none() {
+            self.local_only_pending
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
         let mut out = Vec::with_capacity(bodies.len());
         for body in bodies {
             let mut op = crate::oplog::OpLog::new_op(body);
@@ -1083,6 +1092,12 @@ impl Database {
     /// After the commit, still holding the log's lock: moves a write's ops
     /// from `remote_outbox` to the log.
     fn to_log(&self, queued: Vec<Queued>) {
+        if self
+            .local_only_pending
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            crate::oplog::note_local_only(&self.path);
+        }
         if queued.is_empty() {
             return;
         }
