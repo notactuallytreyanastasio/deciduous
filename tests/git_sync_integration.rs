@@ -1632,3 +1632,55 @@ fn model_7833_a_field_set_back_to_the_ancestors_value_survives_the_merge() {
         "alice's later edit back to the ancestor's value was lost in the merge"
     );
 }
+
+/// A commit carrying 0.17's `.deciduous/sync/` and no graph.json, checked
+/// out detached (a PR ref, fetched to migrate it): sync used to say only "no
+/// graph file was created (this commit has none)", and none of its nodes
+/// arrived. Folding writes graph.json, which a detached commit does not get
+/// (G7), so they still do not arrive; the note now says so and how to fold
+/// them, and that way works.
+#[test]
+fn sync_on_a_detached_commit_says_its_0_17_records_were_not_folded_and_how_to() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    alice.git(&["checkout", "-q", "-b", "old-layout"]);
+    alice.add("goal", "In the old layout", &[]);
+    // graph.json -> one file per node under .deciduous/sync/nodes/.
+    let doc = alice.doc();
+    let nodes = alice.dir.join(".deciduous").join("sync").join("nodes");
+    fs::create_dir_all(&nodes).unwrap();
+    for (cid, rec) in doc["nodes"].as_object().unwrap() {
+        fs::write(nodes.join(format!("{cid}.json")), rec.to_string()).unwrap();
+    }
+    alice.git(&["rm", "-q", "-f", ".deciduous/graph.json"]);
+    alice.git(&["add", "-f", ".deciduous/sync"]);
+    alice.git(&["commit", "-q", "-m", "0.17 layout"]);
+    alice.git(&["push", "-q", "origin", "old-layout"]);
+
+    let bob = team.join("bob");
+    bob.git(&["fetch", "-q", "origin", "old-layout"]);
+    bob.git(&["checkout", "-q", "--detach", "FETCH_HEAD"]);
+    let before = bob.git(&["status", "--porcelain"]);
+    let out = bob.ok(&["sync"]);
+    assert!(
+        out.contains("1 node record(s) in 0.17's per-record files")
+            && out.contains("NOT folded into the local graph, because HEAD is detached")
+            && out.contains("git switch -c"),
+        "{out}"
+    );
+    assert!(
+        !out.contains("will fold it"),
+        "a detached sync promised to fold: {out}"
+    );
+    // Behaviour unchanged: nothing folded, nothing written.
+    assert!(bob.node_by_title("In the old layout").is_none());
+    assert_eq!(bob.git(&["status", "--porcelain"]), before, "{out}");
+
+    // The way the note gives works.
+    bob.git(&["switch", "-q", "-c", "migrate"]);
+    let out = bob.ok(&["sync"]);
+    assert!(
+        bob.node_by_title("In the old layout").is_some(),
+        "not folded on a branch: {out}"
+    );
+}

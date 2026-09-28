@@ -3910,9 +3910,11 @@ fn main() {
                 }
             }
 
-            if let Some(store) = &store {
+            // On a detached commit these are not folded (that writes the graph
+            // file), and the detached note below says so and how to fold them.
+            if let (Some(store), None) = (&store, &detached) {
                 if store.has_legacy_record_dir() {
-                    if check || detached.is_some() {
+                    if check {
                         println!(
                             "{} .deciduous/sync/ (0.17 per-record files) present; `deciduous sync` will fold it into the graph file",
                             "Note:".yellow()
@@ -3929,7 +3931,7 @@ fn main() {
                 }
 
                 if store.has_legacy_events() {
-                    if check || detached.is_some() {
+                    if check {
                         println!(
                             "{} Legacy event log present; `deciduous sync` will import it",
                             "Note:".yellow()
@@ -3969,7 +3971,12 @@ fn main() {
                     println!(
                         "  {} {}",
                         "Note:".yellow(),
-                        deciduous::records::viewing_history_note(at, store.is_some(), &withheld)
+                        deciduous::records::viewing_history_note(
+                            at,
+                            &store_path,
+                            store.is_some(),
+                            &withheld,
+                        )
                     );
                 }
             }

@@ -1113,7 +1113,7 @@ fn sync_viewing_history(
 ) -> HandlerResult {
     let (report, withheld) = crate::records::reconcile_viewing_history(db, store, dry_run)
         .map_err(HandlerError::from)?;
-    let note = crate::records::viewing_history_note(at, store.is_some(), &withheld);
+    let note = crate::records::viewing_history_note(at, path, store.is_some(), &withheld);
     let applied = if dry_run {
         format!(
             "Would import {} record(s) into the database",
