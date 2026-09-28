@@ -3638,3 +3638,85 @@ fn a_write_with_no_server_anywhere_says_so_on_stderr_only() {
         text(&quiet.stderr)
     );
 }
+
+// ---------------------------------------------------------------------------
+// Chapter 62: `remote status` and `remote push --seed` tell the truth about
+// edges and about a large replay.
+// ---------------------------------------------------------------------------
+
+/// The export a server gives for this repository's graph, with every edge's
+/// stored change_id copies replaced by ones that name no node: rows whose
+/// copies drifted from the nodes they join. The rows' node ids are right.
+fn export_with_drifted_edge_copies(sb: &Sandbox, dir: &Path) -> Value {
+    let g: Value = serde_json::from_str(&sb.dx_ok(dir, &["graph"])).unwrap();
+    let srv = |id: &Value| format!("srv-{id}");
+    let nodes: Vec<Value> = g["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| {
+            let meta: Value = n["metadata_json"]
+                .as_str()
+                .map(|m| serde_json::from_str(m).unwrap())
+                .unwrap_or(Value::Null);
+            serde_json::json!({
+                "id": srv(&n["id"]), "change_id": n["change_id"], "node_type": n["node_type"],
+                "title": n["title"], "description": n["description"], "status": n["status"],
+                "metadata": meta, "created_at": n["created_at"], "updated_at": n["updated_at"],
+                "deleted_at": null
+            })
+        })
+        .collect();
+    let edges: Vec<Value> = g["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "id": format!("edge-{}", e["id"]),
+                "from_node_id": srv(&e["from_node_id"]), "to_node_id": srv(&e["to_node_id"]),
+                "from_change_id": format!("drifted-{}", e["from_node_id"]),
+                "to_change_id": format!("drifted-{}", e["to_node_id"]),
+                "edge_type": e["edge_type"], "rationale": null, "weight": 1.0,
+                "created_at": e["created_at"]
+            })
+        })
+        .collect();
+    serde_json::json!({"nodes": nodes, "edges": edges, "documents": [], "edge_tombstones": []})
+}
+
+// A customer case study, from an old worktree: status listed thousands of
+// edges "only here", seed sent a handful, and status still listed them.
+// Here the server holds every edge, but its rows' change_id copies are not
+// the nodes' ids. Status and seed now key the server's edges by the nodes
+// the rows join, which is how the server itself identifies them.
+#[test]
+fn status_and_seed_agree_on_edges_whose_server_copies_drifted() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "drift");
+    for t in ["a", "b", "c"] {
+        sb.dx_ok(&dir, &["add", "goal", t]);
+    }
+    sb.dx_ok(&dir, &["link", "1", "2"]);
+    sb.dx_ok(&dir, &["link", "2", "3"]);
+    let url = stub_server(export_with_drifted_edge_copies(&sb, &dir));
+    set_remote_url(&dir, &url);
+    // The stub applies what is queued, so the log is empty.
+    sb.dx_ok(&dir, &["remote", "push"]);
+
+    let st = sb.dx(&dir, &["remote", "status"]);
+    let said = all_of(&st);
+    assert!(said.contains("In sync"), "{said}");
+    assert!(!said.contains("Edges only here"), "{said}");
+    assert!(
+        said.contains("note: 2 edge(s) on the server store endpoint change_ids"),
+        "the drifted copies are mentioned once, quietly: {said}"
+    );
+    assert!(
+        st.status.success(),
+        "a drifted copy is not a difference: {said}"
+    );
+
+    let seed = sb.dx_ok(&dir, &["remote", "push", "--seed"]);
+    assert!(seed.contains("Nothing to seed"), "{seed}");
+}

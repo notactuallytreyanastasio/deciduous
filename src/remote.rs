@@ -775,16 +775,10 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
     // missing from it, and sending it would write into the deleted row.
     let have_nodes: HashSet<&str> = server.nodes.iter().map(|n| n.change_id.as_str()).collect();
     let dead = server.tombstones();
-    let have_edges: HashSet<(&str, &str, &str)> = server
-        .edges
+    let ends = server.edge_ends();
+    let have_edges: HashSet<(&str, &str, &str)> = ends
         .iter()
-        .filter_map(|e| {
-            Some((
-                e.from_change_id.as_deref()?,
-                e.to_change_id.as_deref()?,
-                e.edge_type.as_str(),
-            ))
-        })
+        .map(|e| (e.from, e.to, e.edge.edge_type.as_str()))
         .collect();
     let have_docs: HashSet<&str> = server
         .documents
@@ -1841,12 +1835,15 @@ pub fn settled_refusals(
         })
         .collect();
     let edges_there: std::collections::HashSet<(String, String, String)> = server
-        .edges
+        .edge_ends()
         .iter()
-        .filter_map(|e| {
-            let (f, t) = (e.from_change_id.as_deref()?, e.to_change_id.as_deref()?);
-            (there.contains_key(f) && there.contains_key(t))
-                .then(|| (f.to_string(), t.to_string(), e.edge_type.clone()))
+        .filter(|e| there.contains_key(e.from) && there.contains_key(e.to))
+        .map(|e| {
+            (
+                e.from.to_string(),
+                e.to.to_string(),
+                e.edge.edge_type.clone(),
+            )
         })
         .collect();
     let same_node = |cid: &str| match (here.get(cid), there.get(cid)) {
@@ -2206,6 +2203,10 @@ pub struct ContentDiff {
     pub differ: Vec<NodeDifference>,
     pub edges_only_local: Vec<String>,
     pub edges_only_server: Vec<String>,
+    /// Server edges whose stored change_id copies do not name the nodes the
+    /// row joins. Compared by the nodes they match: the server's
+    /// bookkeeping, not a difference in the graph, so `is_empty` ignores it.
+    pub server_edge_copies_drifted: usize,
 }
 
 impl ContentDiff {
@@ -2333,24 +2334,40 @@ pub fn content_diff(
 
     let by_id: HashMap<i32, &str> = nodes.iter().map(|n| (n.id, n.change_id.as_str())).collect();
     let edge_label = |f: &str, t: &str, k: &str| format!("{} -> {} ({k})", short(f), short(t));
+    // Keyed as `--seed` keys them (`missing_on_server`): by the node the
+    // row points at, the stored change_id copy only for an endpoint that is
+    // not a node here.
     let local_edges: BTreeSet<(String, String, String)> = edges
         .iter()
         .filter_map(|e| {
+            let end = |id: i32, copy: &Option<String>| {
+                by_id
+                    .get(&id)
+                    .copied()
+                    .or(copy.as_deref())
+                    .map(str::to_string)
+            };
             Some((
-                by_id.get(&e.from_node_id)?.to_string(),
-                by_id.get(&e.to_node_id)?.to_string(),
+                end(e.from_node_id, &e.from_change_id)?,
+                end(e.to_node_id, &e.to_change_id)?,
                 e.edge_type.clone(),
             ))
         })
         .collect();
-    // An edge from or to a node the server deleted is not in its live graph.
-    let server_edges: BTreeSet<(String, String, String)> = server
-        .edges
+    // Keyed by the nodes each row joins, not its stored change_id copies:
+    // see `RemoteGraph::edge_ends`. An edge from or to a node the server
+    // deleted is not in its live graph.
+    let ends = server.edge_ends();
+    d.server_edge_copies_drifted = ends.iter().filter(|e| e.drifted).count();
+    let server_edges: BTreeSet<(String, String, String)> = ends
         .iter()
-        .filter_map(|e| {
-            let (f, t) = (e.from_change_id.as_deref()?, e.to_change_id.as_deref()?);
-            (server_nodes.contains_key(f) && server_nodes.contains_key(t))
-                .then(|| (f.to_string(), t.to_string(), e.edge_type.clone()))
+        .filter(|e| server_nodes.contains_key(e.from) && server_nodes.contains_key(e.to))
+        .map(|e| {
+            (
+                e.from.to_string(),
+                e.to.to_string(),
+                e.edge.edge_type.clone(),
+            )
         })
         .collect();
     d.local_edges = local_edges.len();
@@ -2840,6 +2857,50 @@ impl RemoteGraph {
             .collect()
     }
 
+    /// Every edge with the change_ids of the nodes its row joins.
+    ///
+    /// The server identifies an edge by the node rows it joins, (from_node_id,
+    /// to_node_id, edge_type): that is its unique index and the target of
+    /// `/import`'s upsert. The row's from_change_id and to_change_id are
+    /// copies taken when it was written, and no write refreshes them: an
+    /// upsert onto an existing row replaces its rationale and weight only.
+    /// `remote status` and `--seed` keyed the server's edges by those
+    /// copies. Where a copy had drifted from its node, the edge read as
+    /// "only here" to status, `--seed` sent it, the server matched it to the
+    /// row it already had ("edges 3 of 3"), left the copy as it was, and the
+    /// next status listed it again, run after run. Keyed by the nodes, the
+    /// edge is the one the server has.
+    ///
+    /// An export without node ids (an older server, a stub) is keyed by the
+    /// copies, as before.
+    pub fn edge_ends(&self) -> Vec<EdgeEnds<'_>> {
+        let key = |v: &Value| match v {
+            Value::String(s) => s.clone(),
+            v => v.to_string(),
+        };
+        let by_id: std::collections::HashMap<String, &str> = self
+            .nodes
+            .iter()
+            .filter_map(|n| Some((n.id.clone()?, n.change_id.as_str())))
+            .collect();
+        let node = |id: &Option<Value>| id.as_ref().and_then(|v| by_id.get(&key(v)).copied());
+        self.edges
+            .iter()
+            .filter_map(|e| {
+                let from = node(&e.from_node_id).or(e.from_change_id.as_deref())?;
+                let to = node(&e.to_node_id).or(e.to_change_id.as_deref())?;
+                let drifted = e.from_change_id.as_deref() != Some(from)
+                    || e.to_change_id.as_deref() != Some(to);
+                Some(EdgeEnds {
+                    from,
+                    to,
+                    edge: e,
+                    drifted,
+                })
+            })
+            .collect()
+    }
+
     pub fn live_counts(&self) -> RemoteCounts {
         RemoteCounts {
             nodes: self.nodes.iter().filter(|n| n.deleted_at.is_none()).count(),
@@ -2847,6 +2908,17 @@ impl RemoteGraph {
             documents: self.documents.len(),
         }
     }
+}
+
+/// One server edge, by the change_ids of the nodes it joins. See
+/// [`RemoteGraph::edge_ends`].
+#[derive(Debug)]
+pub struct EdgeEnds<'a> {
+    pub from: &'a str,
+    pub to: &'a str,
+    pub edge: &'a RemoteEdge,
+    /// The row's stored change_id copies do not name these nodes.
+    pub drifted: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2870,6 +2942,13 @@ pub struct RemoteNode {
 
 #[derive(Debug, Deserialize)]
 pub struct RemoteEdge {
+    /// The server's ids of the nodes this edge's row joins: what the server
+    /// identifies the edge by. See [`RemoteGraph::edge_ends`].
+    #[serde(default)]
+    pub from_node_id: Option<Value>,
+    #[serde(default)]
+    pub to_node_id: Option<Value>,
+    /// Copies of the endpoints' change_ids, made when the row was written.
     pub from_change_id: Option<String>,
     pub to_change_id: Option<String>,
     pub edge_type: String,
@@ -3057,17 +3136,17 @@ fn pull_server_rows(
             }
         }
 
-        for e in &graph.edges {
-            // An edge with an unresolved endpoint cannot be addressed by
-            // change_id and is skipped rather than written half-formed.
-            let (Some(from), Some(to)) = (&e.from_change_id, &e.to_change_id) else {
-                continue;
-            };
-
+        // By the nodes each row joins (see `RemoteGraph::edge_ends`). An
+        // edge with an unresolved endpoint cannot be addressed by change_id
+        // and is skipped rather than written half-formed.
+        for EdgeEnds {
+            from, to, edge: e, ..
+        } in graph.edge_ends()
+        {
             let rec = EdgeRecord {
                 edge_id: records::edge_id(from, to, &e.edge_type),
-                from_change_id: from.clone(),
-                to_change_id: to.clone(),
+                from_change_id: from.to_string(),
+                to_change_id: to.to_string(),
                 edge_type: e.edge_type.clone(),
                 rationale: e.rationale.clone(),
                 // EdgeRecord has no updated_at: an edge is immutable once
@@ -3417,6 +3496,8 @@ mod tests {
             edges: edges
                 .iter()
                 .map(|(f, t, k)| RemoteEdge {
+                    from_node_id: None,
+                    to_node_id: None,
                     from_change_id: Some(f.to_string()),
                     to_change_id: Some(t.to_string()),
                     edge_type: k.to_string(),
@@ -3456,6 +3537,54 @@ mod tests {
         });
         let (_, n, m) = missing_on_server(&local, &server(&["a", "b"], &[("a", "b", "leads_to")]));
         assert_eq!((n, m), (0, 0));
+    }
+
+    /// Stale copies on both sides: the local row's from_change_id and the
+    /// server row's both name "old-a", while both rows join node a. Status
+    /// and seed must agree that the server has the edge, since the server
+    /// says so by its node ids.
+    #[test]
+    fn status_and_seed_key_edges_by_the_nodes_the_rows_join() {
+        let mut g = server(&["a", "b"], &[("old-a", "b", "leads_to")]);
+        for n in &mut g.nodes {
+            n.id = Some(format!("srv-{}", n.change_id));
+        }
+        g.edges[0].from_node_id = Some(Value::String("srv-a".into()));
+        g.edges[0].to_node_id = Some(Value::String("srv-b".into()));
+
+        let local = serde_json::json!({
+            "nodes": [{"id": 1, "change_id": "a"}, {"id": 2, "change_id": "b"}],
+            "edges": [{"from_node_id": 1, "to_node_id": 2, "from_change_id": "old-a", "to_change_id": "b", "edge_type": "leads_to"}]
+        });
+        assert_eq!(missing_on_server(&local, &g).2, 0, "seed sends nothing");
+
+        let node = |id, cid: &str| crate::db::DecisionNode {
+            id,
+            change_id: cid.into(),
+            node_type: "goal".into(),
+            title: "t".into(),
+            description: None,
+            status: "pending".into(),
+            created_at: "x".into(),
+            updated_at: "x".into(),
+            metadata_json: None,
+        };
+        let edge = crate::db::DecisionEdge {
+            id: 1,
+            from_node_id: 1,
+            to_node_id: 2,
+            from_change_id: Some("old-a".into()),
+            to_change_id: Some("b".into()),
+            edge_type: "leads_to".into(),
+            weight: None,
+            rationale: None,
+            created_at: "x".into(),
+        };
+        let d = content_diff(&[node(1, "a"), node(2, "b")], &[edge], &g);
+        assert!(d.edges_only_local.is_empty(), "{:?}", d.edges_only_local);
+        assert!(d.edges_only_server.is_empty(), "{:?}", d.edges_only_server);
+        assert_eq!(d.server_edge_copies_drifted, 1);
+        assert!(d.is_empty(), "a drifted copy is not a difference");
     }
     use super::*;
 

@@ -3104,6 +3104,19 @@ fn main() {
                     );
                     list("Edges only here", d.edges_only_local.clone());
                     list("Edges only on the server", d.edges_only_server.clone());
+                    // Not a difference: said once, and it changes no exit code.
+                    if d.server_edge_copies_drifted > 0 {
+                        println!(
+                            "\n{}",
+                            format!(
+                                "note: {} edge(s) on the server store endpoint change_ids that are not \
+                                 their nodes' (copies taken when the row was written); compared by the \
+                                 nodes they join, they match. Nothing to do.",
+                                d.server_edge_copies_drifted
+                            )
+                            .dimmed()
+                        );
+                    }
                     list(
                         "Documents only here",
                         docs_here
