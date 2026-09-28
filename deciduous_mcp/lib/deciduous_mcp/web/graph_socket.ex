@@ -34,17 +34,17 @@ defmodule DeciduousMcp.Web.GraphSocket do
   @impl true
   def init(%{topic: topic} = opts) do
     # Subscribe first, then read the backlog: an event committed in
-    # between arrives both ways, and `last` drops the second copy.
+    # between arrives both ways, and `sent` drops the second copy.
     Phoenix.PubSub.subscribe(DeciduousMcp.PubSub, topic)
     schedule_ping()
 
     case opts[:since] do
       nil ->
-        {:ok, %{last: 0}}
+        {:ok, %{sent: MapSet.new()}}
 
       since ->
-        {frames, last} = backlog(topic, since)
-        {:push, frames, %{last: last}}
+        {frames, sent} = backlog(topic, since)
+        {:push, frames, %{sent: sent}}
     end
   end
 
@@ -52,20 +52,20 @@ defmodule DeciduousMcp.Web.GraphSocket do
   def handle_in(_data, state), do: {:ok, state}
 
   # Each event has a `seq` from graph_events (see the 20260924020000
-  # migration). One already sent, from the backlog, is not sent again.
-  # `last` is where the backlog ended and stays there: live events are
-  # already deduplicated by Events.Listener, and they do not arrive in seq
-  # order (a transaction that took its seq early can commit late, and the
-  # listener's catch-up fills such holes afterwards), so raising `last` on
-  # each live event would drop exactly those.
+  # migration). One the backlog already sent is not sent again. The test is
+  # membership, not "at or below where the backlog ended": live events do
+  # not arrive in seq order (a transaction that took its seq early can
+  # commit late, and the listener's catch-up fills such holes afterwards),
+  # so a live 10 after a backlog that ended at 11 is new, not a copy. Live
+  # events are already deduplicated by Events.Listener.
   @impl true
   def handle_info({:graph_event, event}, state) do
-    case event["seq"] do
-      seq when is_integer(seq) and seq <= state.last ->
-        {:ok, state}
+    seq = event["seq"]
 
-      _ ->
-        {:push, {:text, Jason.encode!(event)}, state}
+    if is_integer(seq) and MapSet.member?(state.sent, seq) do
+      {:ok, state}
+    else
+      {:push, {:text, Jason.encode!(event)}, state}
     end
   end
 
@@ -81,29 +81,49 @@ defmodule DeciduousMcp.Web.GraphSocket do
 
   defp schedule_ping, do: Process.send_after(self(), :ping, @ping_every_ms)
 
-  # The events after `since` that this topic would have delivered, oldest
-  # first. A resume from before what the table still holds (pruned after a
-  # week) or past @max_backlog starts with a gap frame, so the client knows
-  # the stream is not complete and can re-read.
+  # The events this topic delivered that a client which saw `since` may
+  # not have, oldest seq first: every `seq > since`, and every `seq < since`
+  # whose transaction was running when `since` was written, or began after
+  # (its `xact_id` is at or above that row's `horizon`; see the
+  # 20260928120000 migration). A lower seq committed before `since` did went
+  # out before it, in commit order; only one committed after can have been
+  # missed. The second part is empty unless writers overlapped, and what it
+  # returns that the client already has, the client drops by `seq`.
+  #
+  # `since` is looked up as the first row at or after it, so a seq that
+  # rolled back still has a horizon. A NULL horizon (a row from before the
+  # migration) means no look-back. A resume from before what the table
+  # still holds (pruned after a week) or past @max_backlog starts with a
+  # gap frame, so the client knows the stream is not complete and can
+  # re-read. The two halves are separate selects so each has an index to
+  # walk (seq for one, xact_id for the other); an OR of the two made the
+  # planner read the workspace's whole week.
   defp backlog(topic, since) do
-    import Ecto.Query
-
-    q =
-      from(e in "graph_events",
-        where: e.seq > ^since,
-        order_by: [asc: e.seq],
-        limit: ^(@max_backlog + 1),
-        select: {e.seq, e.payload}
-      )
-
-    q =
+    {scope, params} =
       case topic do
-        "graph:*" -> q
-        "graph:" <> name -> where(q, [e], e.workspace == ^name)
+        "graph:*" -> {"", [since, @max_backlog + 1]}
+        "graph:" <> name -> {"AND workspace = $3", [since, @max_backlog + 1, name]}
       end
 
-    rows = DeciduousMcp.Repo.all(q)
-    oldest = DeciduousMcp.Repo.one(from(e in "graph_events", select: min(e.seq)))
+    rows =
+      DeciduousMcp.Repo.query!(
+        """
+        WITH h AS (SELECT horizon FROM graph_events WHERE seq >= $1 ORDER BY seq LIMIT 1)
+        (SELECT seq, payload FROM graph_events
+          WHERE seq < $1 AND xact_id >= (SELECT horizon FROM h) #{scope}
+          ORDER BY seq LIMIT $2)
+        UNION ALL
+        (SELECT seq, payload FROM graph_events
+          WHERE seq > $1 #{scope}
+          ORDER BY seq LIMIT $2)
+        ORDER BY seq
+        LIMIT $2
+        """,
+        params
+      ).rows
+      |> Enum.map(fn [seq, payload] -> {seq, payload} end)
+
+    [[oldest]] = DeciduousMcp.Repo.query!("SELECT min(seq) FROM graph_events").rows
     truncated = length(rows) > @max_backlog
     rows = Enum.take(rows, @max_backlog)
 
@@ -114,8 +134,8 @@ defmodule DeciduousMcp.Web.GraphSocket do
         []
       end
 
-    last = rows |> List.last() |> then(fn r -> if r, do: elem(r, 0), else: since end)
-    {gap ++ Enum.map(rows, fn {_, payload} -> {:text, Jason.encode!(payload)} end), last}
+    sent = MapSet.new(rows, &elem(&1, 0))
+    {gap ++ Enum.map(rows, fn {_, payload} -> {:text, Jason.encode!(payload)} end), sent}
   end
 
   defp gap_reason(true), do: "more than #{@max_backlog} events were missed; re-read the graph"
