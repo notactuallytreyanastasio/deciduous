@@ -158,7 +158,12 @@ pub fn ensure(project: &Path, caller: Caller) -> Result<(), String> {
     println!("\n{}", "Shared graph server".cyan().bold());
 
     match remote::read_remote_url(project) {
-        Some(url) => check_configured(project, &url, caller),
+        Some(url) => {
+            if caller == Caller::Update {
+                upgrade_native(&url);
+            }
+            check_configured(project, &url, caller)
+        }
         // Where the graph lives is the user's choice, not a default: ask in a
         // terminal, and without one say how to answer on the command line.
         None => {
@@ -788,7 +793,7 @@ fn install_native(
     let url = format!("http://127.0.0.1:{port}");
     match manager {
         Some(m) => {
-            install_service(m, &layout, env_path)?;
+            install_service(m, &layout, env_path, &url)?;
             wait_ready(&url, &layout.log)?;
             Ok(())
         }
@@ -800,6 +805,59 @@ fn install_native(
             env_path.display()
         ))),
     }
+}
+
+/// `update` in a project that writes to this machine's native server brings
+/// the server to this CLI's version: the new executable (verified like the
+/// first), the version recorded in the settings file, the service restarted.
+/// The server migrates as it starts. Docker installs are left alone, as they
+/// always were. A failed upgrade is reported and leaves the running server
+/// as it was; it does not fail `update`, whose job is the project's files.
+fn upgrade_native(project_url: &str) {
+    let Some(env_path) = env_file() else { return };
+    let Ok(text) = std::fs::read_to_string(&env_path) else {
+        return;
+    };
+    let Ok(settings) = Settings::parse(&text) else {
+        return;
+    };
+    let Ok(url) = local_url(&text) else { return };
+    if settings.mode != ServerMode::Native
+        || !same_local_server(project_url, &url)
+        || !local::older_than(settings.version.as_deref(), VERSION)
+    {
+        return;
+    }
+    let from = settings.version.as_deref().unwrap_or("an unknown version");
+    println!(
+        "   {} this machine's server from {from} to {VERSION}",
+        "Upgrading".green()
+    );
+    let result = (|| -> Result<(), String> {
+        let layout = NativeLayout::new(&env_path)?;
+        let manager = service_manager()?;
+        install_binary(&layout, true)?;
+        set_settings_value(&env_path, "DECIDUOUS_SERVER_VERSION", VERSION)?;
+        install_service(manager, &layout, &env_path, &url)?;
+        wait_ready(&url, &layout.log)
+    })();
+    if let Err(e) = result {
+        println!(
+            "   {} could not upgrade this machine's server: {e}",
+            "Warning".yellow()
+        );
+    }
+}
+
+/// Whether a project's `[remote] url` is this machine's server
+/// (`http://127.0.0.1:<port>` in the settings file), however it was spelled.
+fn same_local_server(project_url: &str, local_url: &str) -> bool {
+    let norm = |u: &str| {
+        u.trim()
+            .trim_end_matches('/')
+            .replace("://localhost:", "://127.0.0.1:")
+    };
+    norm(project_url) == norm(local_url)
 }
 
 /// A native server set up before that is not answering: put back whatever
@@ -823,7 +881,7 @@ fn start_native(env_path: &Path, settings: &Settings, url: &str) -> Result<(), L
             set_settings_value(env_path, "DECIDUOUS_SERVER_VERSION", VERSION)?;
         }
     }
-    install_service(manager, &layout, env_path)?;
+    install_service(manager, &layout, env_path, url)?;
     wait_ready(url, &layout.log)?;
     Ok(())
 }
@@ -1060,6 +1118,7 @@ fn install_service(
     manager: ServiceManager,
     layout: &NativeLayout,
     env_path: &Path,
+    url: &str,
 ) -> Result<(), String> {
     let logs = layout.log.parent().ok_or("log path has no parent")?;
     std::fs::create_dir_all(logs).map_err(|e| format!("creating {}: {e}", logs.display()))?;
@@ -1073,12 +1132,15 @@ fn install_service(
                 .map_err(|e| format!("writing {}: {e}", plist.display()))?;
             let domain = format!("gui/{}", user_id());
             let target = format!("{domain}/{}", local::LAUNCHD_LABEL);
-            // bootstrap refuses a label that is already loaded; bootout of
-            // one that is not is harmless. bootout returns while the old
-            // server is still shutting down, and a restart that polled /ready
-            // then would hear the old process answer and report the new one
-            // ready (it did, on the first upgrade run). So wait until launchd
-            // no longer knows the label, which is when the process has gone.
+            // bootstrap refuses a label that is already loaded, so a running
+            // agent is booted out first. That returns while the old server is
+            // still shutting down, and a restart that polled /ready then heard
+            // the old process answer and reported the new one ready. Waiting
+            // for launchd to forget the label was not enough either: launchd
+            // tracks the executable's launcher, which exits before the BEAM
+            // it started, and the BEAM kept the port for another half second
+            // (upgrade run 2: "Ready", then connection refused). So wait for
+            // the label to go and then for the port to stop answering.
             let loaded = |t: &str| {
                 Command::new("launchctl")
                     .args(["print", t])
@@ -1100,6 +1162,7 @@ fn install_service(
                     }
                     std::thread::sleep(std::time::Duration::from_millis(250));
                 }
+                wait_until_down(url)?;
             }
             let plist_s = plist.display().to_string();
             run_checked("launchctl", &["bootstrap", &domain, &plist_s])?;
@@ -1133,6 +1196,21 @@ fn install_service(
                 current_user()
             );
         }
+    }
+    Ok(())
+}
+
+/// Waits until nothing answers at `url`, so the next answer is the new
+/// server's.
+fn wait_until_down(url: &str) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while answers(url) {
+        if std::time::Instant::now() > deadline {
+            return Err(format!(
+                "the old server at {url} was stopped but still answers after 30 seconds"
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
     Ok(())
 }
@@ -1577,6 +1655,18 @@ mod tests {
             let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "rewriting keeps it private");
         }
+    }
+
+    #[test]
+    fn only_a_project_writing_to_this_machines_server_upgrades_it() {
+        let local = "http://127.0.0.1:24987";
+        assert!(same_local_server("http://127.0.0.1:24987", local));
+        assert!(same_local_server("http://localhost:24987/", local));
+        assert!(!same_local_server("http://127.0.0.1:24988", local));
+        assert!(!same_local_server(
+            "https://bobbby.online/deciduous-mcp",
+            local
+        ));
     }
 
     #[test]
