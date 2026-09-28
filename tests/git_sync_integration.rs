@@ -1286,34 +1286,36 @@ fn a_prefix_of_a_pulled_but_unsynced_node_is_not_taken_as_a_local_id() {
         "teammate target",
     );
 
+    // 1.0.9: every command follows graph.json first, so the pulled node is
+    // in the database before `delete` resolves anything. The ambiguity is
+    // still refused, naming both, and nothing is deleted.
     let (_, err) = alice.fails(&["delete", "0002"]);
     assert!(
         err.contains("local two") && err.contains("0002abcd"),
         "{err}"
     );
-    assert!(err.contains("deciduous sync"), "{err}");
+    assert!(err.contains("teammate target"), "{err}");
     assert!(alice.node_by_title("local two").is_some());
+    assert!(alice.node_by_title("teammate target").is_some());
     alice.fails(&["show", "0002"]);
 
-    // A hex prefix one local node has and an unsynced one shares.
+    // A hex prefix one local node has and a pulled one shares.
     let prefix = &local_abcd[..4];
     let twin = format!("{prefix}ffff-2222-4222-8222-222222222222");
     pull_teammate_node(&alice, &twin, "teammate twin");
     let (_, err) = alice.fails(&["status", prefix, "completed"]);
     assert!(err.contains("teammate twin"), "{err}");
     assert_eq!(status_of(&alice, "3"), "pending");
-    // A prefix only the unsynced node has names it, and says to sync.
-    let (_, err) = alice.fails(&["show", &twin[..9]]);
-    assert!(
-        err.contains("deciduous sync") && err.contains("teammate twin"),
-        "{err}"
-    );
+    // A prefix only the pulled node has names it, with no sync first.
+    let shown = alice.ok(&["show", &twin[..9]]);
+    assert!(shown.contains("teammate twin"), "{shown}");
 
-    // Explicit local ids still work, and after sync the prefix is the node.
+    // Explicit local ids still work, and a longer prefix is the node.
     alice.ok(&["show", "#2"]);
-    alice.ok(&["sync"]);
     let shown = alice.ok(&["show", "0002a"]);
     assert!(shown.contains("teammate target"), "{shown}");
+    // Nothing was left for sync to do.
+    alice.ok(&["sync", "--check"]);
 }
 
 /// One JSON-RPC exchange with a real `deciduous mcp` process.
@@ -1547,14 +1549,13 @@ fn indented_conflict_markers_are_not_sent_back_to_the_sync_that_cannot_merge_the
 }
 
 // ============================================================================
-// G6 / G7: deferred. The database is shared by every branch and commit a
-// clone checks out, and cannot tell a row it never exported from a row git
-// took out of the file. These reproduce the findings for the chapter that
-// gives the database that knowledge; run with --ignored.
+// G6 / G7. The database is shared by every branch and commit a clone checks
+// out. Before 1.0.9 it could not tell a row it never exported from a row git
+// took out of the file; now it follows graph.json and records the rows that
+// are unpublished local writes (records::follow_file).
 // ============================================================================
 
 #[test]
-#[ignore = "G6 deferred: needs a record of which rows are unpublished local writes"]
 fn a_node_added_on_a_branch_stays_on_that_branch() {
     let team = Team::new();
     let alice = team.founder("alice");
@@ -1564,9 +1565,14 @@ fn a_node_added_on_a_branch_stays_on_that_branch() {
     alice.add("goal", "Spike", &[]);
     alice.commit_graph("spike");
     alice.git(&["checkout", "-q", "main"]);
+    let before = alice.git(&["status", "--porcelain"]);
     let out = alice.ok(&["sync"]);
     assert!(!alice.graph_text().contains("Spike"), "{out}");
-    assert!(alice.git(&["status", "--porcelain"]).is_empty(), "{out}");
+    assert!(out.contains("1 nodes left the local graph"), "{out}");
+    assert_eq!(alice.git(&["status", "--porcelain"]), before, "{out}");
+    // And back on spike it returns, from spike's file.
+    alice.git(&["checkout", "-q", "spike"]);
+    assert!(alice.node_by_title("Spike").is_some());
 }
 
 #[test]
