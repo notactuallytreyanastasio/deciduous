@@ -12,6 +12,16 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.12",
+        highlights: &[
+            "`update` keeps sections and command files you edited, and projects with a [remote] get remote-aware templates instead of git-model text; a second update changes nothing",
+            "A git worktree without its own [remote] writes to its main checkout's server; with no server anywhere, a write says it stayed local",
+            "Migrations and imports keep a node's original created_at: a date can move earlier, never later",
+            "`remote status` and `remote push --seed` agree about edges; large replays go in batches and a timeout says resending is safe",
+            "ask_graph ranks a node naming a rare term (a version, an identifier) above ones matching only common words",
+        ],
+    },
+    Release {
         version: "1.0.11",
         highlights: &[
             "A server on this machine needs PostgreSQL, not Docker: `remote setup --local` runs the release's self-contained server as a background service (launchd / systemd) against the system PostgreSQL on localhost:5432; `--database-url` for any other PostgreSQL, `--docker-postgres` / `--docker` for the old containers; earlier installs stay on Docker",
