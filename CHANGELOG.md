@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.12] - 2026-09-28
+
+A customer case study reproduced six defects on 1.0.10, each of which lost or misrepresented work without saying so. 1.0.12 fixes them, plus two found while releasing.
+
+### Fixed
+- **`update` keeps what you wrote.** On a project with a `[remote]`, `update` rewrote hand-written server-model instructions back to the git model and left a doubled `<!-- deciduous:start -->`. A section or command file you edited is now kept on every project, and anything left alone gets its would-be template written to `.deciduous/update-templates/<path>` for `diff`. Projects with a `[remote]` get remote-aware templates (`remote pull`, `remote status`, no graph.json or merge driver) and are never appended to. A second `update` is a no-op (#304).
+- **A write says where it went.** A git worktree whose config lacks `[remote]` now sends to its main checkout's server (same repository, one workspace) instead of keeping writes only in its local cache; `remote push --seed` works from a worktree. With no server anywhere, a write prints one stderr line naming `remote setup` (`DECIDUOUS_QUIET_LOCAL_ONLY=1` turns it off). A detached checkout holding only the 0.17 record store now says why `sync` did not fold it (#306).
+- **History keeps its dates.** Legacy-log re-emits, record-store migrations, graph.json merges and the server's `/import` re-stamped `created_at`; a migration now moves a node's date earlier, never later. `/import` refuses an unreadable timestamp instead of stamping the arrival time, and reports how many dates it had to infer (#307).
+- **`remote status` and `remote push --seed` agree about edges**: both identify a server edge by the nodes it joins, not by copied ids that can drift (#309).
+- **A large replay no longer looks like loss.** Ops go in batches of 200, a batch is not started when it cannot finish in the time left, a timeout says the server may already have applied the writes and that resending is safe, and explicit commands resend it. `DECIDUOUS_OPS_TIMEOUT` sets the per-request timeout (#309).
+- **A specific word outranks a common one in `ask_graph`.** Anchors are ordered by how rare their decisive terms are (a version string, an identifier), so "why did the 1.0.10 release not publish?" finds its answer at rank 3 instead of 25 on a copy of the real graph. MRR rises on every eval set (original .726 → .752, held-out .647 → .696, probe .872 → .949, a new rare-term set .770 → 1.000) (#305).
+- **A server booted while PostgreSQL was down broadcasts the first write after it.** Its event listener took its starting point on the first readable pass, after the write (#308).
+
+### Not done
+- Per-field versions: a record still has one `updated_at`, so a stale clone's write to one field can still win another.
+- A graph already re-stamped by earlier migrations is not re-dated; re-dating from linked commits is scoped, not built.
+- OpenCode and Windsurf files have no remote-aware versions.
+- The server keeps drifted edge id copies; `/export` does not derive them.
+
 ## [1.0.11] - 2026-09-28
 
 1.0.10 was tagged but never published: after 1.0.9 shipped, three security advisories were published against `mint` 1.10.1, and every self-contained server build refuses packages with advisories. 1.0.11 carries everything 1.0.10 had, plus the fix for that, a branch-scoped local graph, and a local server that no longer needs Docker.
