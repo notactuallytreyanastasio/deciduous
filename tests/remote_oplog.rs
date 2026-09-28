@@ -3133,3 +3133,283 @@ fn server_node_with(
         "deleted_at": null
     })
 }
+
+// ---------------------------------------------------------------------------
+// Chapter 57: an op for an edit that arrived through git is dated when the
+// edit was made (the record's own time), not when this machine queued it.
+// ---------------------------------------------------------------------------
+
+type Deleted = std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>;
+type Seen = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+
+/// A server that orders an edit against a delete the way the real one does
+/// (`editable_node` in sync/ops.ex): an update to a deleted node applies,
+/// and brings it back, only when its `at` is after the delete; a delete's
+/// `at` dates the tombstone. `deleted` maps change_id to when the node was
+/// deleted; `seen` is "kind change_id result at" per op.
+fn dating_stub() -> (String, Deleted, Seen) {
+    use chrono::DateTime;
+    let deleted: Deleted = Default::default();
+    let seen: Seen = Default::default();
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let (dead, log) = (deleted.clone(), seen.clone());
+    std::thread::spawn(move || {
+        for mut req in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            let path = req.url().split('?').next().unwrap_or("").to_string();
+            let reply = match path.as_str() {
+                "/health" => "ok".to_string(),
+                "/claim" => r#"{"workspace":"stub","claim":"unchecked"}"#.to_string(),
+                "/locate" => r#"{"workspaces":[]}"#.to_string(),
+                "/ops" => {
+                    let v: Value = serde_json::from_str(&body).unwrap();
+                    let mut dead = dead.lock().unwrap();
+                    let mut log = log.lock().unwrap();
+                    let results: Vec<Value> = v["ops"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|op| {
+                            let kind = op["kind"].as_str().unwrap_or("");
+                            let cid = op["change_id"].as_str().unwrap_or("").to_string();
+                            let at = op["at"].as_str().unwrap_or("").to_string();
+                            let (result, reason) = match (kind, dead.get(&cid)) {
+                                ("create_node", Some(_)) => ("rejected", "deleted".to_string()),
+                                ("update_node", Some(d)) => {
+                                    let made = DateTime::parse_from_rfc3339(&at).unwrap();
+                                    let d = DateTime::parse_from_rfc3339(d).unwrap();
+                                    if made > d {
+                                        dead.remove(&cid);
+                                        ("applied", String::new())
+                                    } else {
+                                        (
+                                            "rejected",
+                                            format!(
+                                                "node {cid} was deleted on the server at {d}, \
+                                                 after this edit was made at {made}"
+                                            ),
+                                        )
+                                    }
+                                }
+                                ("delete_node", _) => {
+                                    dead.insert(cid.clone(), at.clone());
+                                    ("applied", String::new())
+                                }
+                                _ => ("applied", String::new()),
+                            };
+                            log.push(format!("{kind} {cid} {result} {at}"));
+                            serde_json::json!({"op_id": op["op_id"], "result": result, "reason": reason})
+                        })
+                        .collect();
+                    serde_json::json!({"workspace": "stub", "results": results}).to_string()
+                }
+                _ => {
+                    let _ = req.respond(tiny_http::Response::empty(404));
+                    continue;
+                }
+            };
+            let _ = req.respond(tiny_http::Response::from_string(reply));
+        }
+    });
+    (format!("http://127.0.0.1:{port}"), deleted, seen)
+}
+
+/// alice (git only) and bob (a clone of alice's repository, writing to the
+/// server at `url`).
+fn alice_and_bob(sb: &Sandbox, url: &str, workspace: &str) -> (PathBuf, PathBuf) {
+    let alice = sb.repo("alice");
+    sb.git(
+        &alice,
+        &["add", ".deciduous/config.toml", ".deciduous/graph.json"],
+    );
+    sb.git(
+        &alice,
+        &["commit", "-q", "--allow-empty", "-m", "deciduous"],
+    );
+    let bob = sb.path().join("bob");
+    sb.git(
+        sb.path(),
+        &[
+            "clone",
+            "-q",
+            alice.to_str().unwrap(),
+            bob.to_str().unwrap(),
+        ],
+    );
+    std::fs::write(
+        bob.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{url}\"\nworkspace = \"{workspace}\"\n"),
+    )
+    .unwrap();
+    (alice, bob)
+}
+
+fn commit_graph(sb: &Sandbox, dir: &Path, msg: &str) {
+    sb.git(dir, &["add", ".deciduous/graph.json"]);
+    sb.git(dir, &["commit", "-q", "-m", msg]);
+}
+
+fn pull_and_sync(sb: &Sandbox, dir: &Path) -> String {
+    sb.git(dir, &["pull", "-q", "--no-rebase"]);
+    sb.dx_ok(dir, &["sync"])
+}
+
+/// The record graph.json holds for `cid`.
+fn graph_record(dir: &Path, cid: &str) -> Value {
+    let g: Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join(".deciduous").join("graph.json")).unwrap(),
+    )
+    .unwrap();
+    g["nodes"]
+        .get(cid)
+        .unwrap_or_else(|| panic!("no record {cid} in graph.json: {g}"))
+        .clone()
+}
+
+fn same_instant(a: &str, b: &str) -> bool {
+    chrono::DateTime::parse_from_rfc3339(a).unwrap()
+        == chrono::DateTime::parse_from_rfc3339(b).unwrap()
+}
+
+// An edit alice made BEFORE an agent deleted the node reached bob through
+// git AFTER the delete. Bob's op for it was stamped when bob queued it, so
+// the server's "made after the delete" test passed and the edit revived a
+// node nobody had touched since it was deleted. An edit made after the
+// delete must still bring it back, as git's merge driver does.
+#[test]
+fn a_git_edit_made_before_a_server_delete_does_not_revive_the_node() {
+    let (url, deleted, seen) = dating_stub();
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let (alice, bob) = alice_and_bob(&sb, &url, "dating");
+
+    sb.dx_ok(&alice, &["add", "goal", "deleted by an agent"]);
+    commit_graph(&sb, &alice, "add");
+    pull_and_sync(&sb, &bob);
+    let cid = local_change_id(&sb, &alice, 1);
+
+    // Alice's edit, then the agent's delete on the server.
+    sb.dx_ok(&alice, &["status", "1", "completed"]);
+    commit_graph(&sb, &alice, "before the delete");
+    let edited = graph_record(&alice, &cid)["updated_at"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let deleted_at = chrono::Utc::now().to_rfc3339();
+    deleted
+        .lock()
+        .unwrap()
+        .insert(cid.clone(), deleted_at.clone());
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    pull_and_sync(&sb, &bob);
+    let last = seen.lock().unwrap().last().cloned().unwrap_or_default();
+    assert!(
+        last.starts_with(&format!("update_node {cid} rejected ")),
+        "an edit made at {edited}, before the delete at {deleted_at}, reached the server as: {last}"
+    );
+    let at = last.rsplit(' ').next().unwrap();
+    assert!(
+        same_instant(at, &edited),
+        "the op is dated {at}; alice made the edit at {edited}"
+    );
+
+    // An edit made after the delete brings the node back.
+    sb.dx_ok(&alice, &["status", "1", "rejected"]);
+    commit_graph(&sb, &alice, "after the delete");
+    pull_and_sync(&sb, &bob);
+    let last = seen.lock().unwrap().last().cloned().unwrap_or_default();
+    assert!(
+        last.starts_with(&format!("update_node {cid} applied ")),
+        "an edit made after the delete at {deleted_at} was refused: {last}"
+    );
+    assert!(!deleted.lock().unwrap().contains_key(&cid));
+}
+
+// The same clock, the other way round: a delete that reached bob through git
+// dates the server's tombstone. Dated when bob queued it, it was later than
+// an edit someone made after the delete, and that edit was refused.
+#[test]
+fn a_git_delete_is_dated_when_it_was_made() {
+    let (url, _deleted, seen) = dating_stub();
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let (alice, bob) = alice_and_bob(&sb, &url, "dating-delete");
+
+    sb.dx_ok(&alice, &["add", "goal", "deleted through git"]);
+    commit_graph(&sb, &alice, "add");
+    pull_and_sync(&sb, &bob);
+    let cid = local_change_id(&sb, &alice, 1);
+
+    sb.dx_ok(&alice, &["delete", "1"]);
+    commit_graph(&sb, &alice, "delete");
+    let made = graph_record(&alice, &cid)["deleted_at"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+
+    pull_and_sync(&sb, &bob);
+    let last = seen.lock().unwrap().last().cloned().unwrap_or_default();
+    assert!(
+        last.starts_with(&format!("delete_node {cid} applied ")),
+        "{last}"
+    );
+    let at = last.rsplit(' ').next().unwrap();
+    assert!(
+        same_instant(at, &made),
+        "the tombstone is dated {at}; alice deleted the node at {made}"
+    );
+}
+
+// The same against the real server: its `editable_node` is what the stub
+// above stands in for.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_git_edit_made_before_an_agents_delete_does_not_revive_the_node_on_the_server() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("git-dating");
+    let (alice, bob) = alice_and_bob(&sb, &url, &ws);
+
+    sb.dx_ok(&alice, &["add", "goal", "deleted by an agent"]);
+    commit_graph(&sb, &alice, "add");
+    pull_and_sync(&sb, &bob);
+    let id = server_id(&export(&url, &token, &ws), "deleted by an agent");
+
+    sb.dx_ok(&alice, &["status", "1", "completed"]);
+    commit_graph(&sb, &alice, "before the delete");
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    mcp(
+        &url,
+        &token,
+        &ws,
+        &[("delete_node", serde_json::json!({"node_id": id}))],
+    );
+
+    let out = pull_and_sync(&sb, &bob);
+    assert!(
+        live_titles(&export(&url, &token, &ws)).is_empty(),
+        "an edit made before the delete brought the node back (sync said: {out})"
+    );
+
+    // An edit made after the delete brings the node back. It edits a field
+    // the refused edit did not touch: an edit of `status` would name
+    // "completed" as the value it replaced, the server's deleted row still
+    // holds "pending", and the server's compare-and-set refuses it by name
+    // (see the PR for chapter 57: not fixed here).
+    sb.dx_ok(&alice, &["prompt", "1", "made after the delete"]);
+    commit_graph(&sb, &alice, "after the delete");
+    let out = pull_and_sync(&sb, &bob);
+    let g = export(&url, &token, &ws);
+    assert_eq!(
+        live_titles(&g),
+        ["deleted by an agent"],
+        "an edit made after the delete did not bring the node back (sync said: {out})"
+    );
+    assert_eq!(
+        server_node(&g, "deleted by an agent")["metadata"]["prompt"],
+        "made after the delete"
+    );
+}

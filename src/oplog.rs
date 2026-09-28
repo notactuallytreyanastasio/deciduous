@@ -92,7 +92,10 @@ pub const DELIVERED_FILE: &str = "remote-delivered.jsonl";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Op {
     pub op_id: String,
-    /// When the local write happened.
+    /// When the change was made: the local write's time, or, for an op with
+    /// `origin` `git`, the time graph.json's record carries for it (capped
+    /// at when it was queued; see `Database::queue_git_in_tx`). The server
+    /// orders an edit against a delete by it.
     pub at: String,
     /// `git` for a write this machine applied from graph.json: a
     /// teammate's edit that reached it through git, which the server may
