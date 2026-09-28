@@ -13,7 +13,7 @@
 //! `UPDATE` to a goal is not a second goal.
 
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::io::{ErrorKind, Write};
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
@@ -299,19 +299,38 @@ fn is_permanent(e: &tungstenite::Error) -> Option<String> {
 /// shown once by its number, not by its bytes, so the third identical-
 /// looking status change of a node is a line of its own. A server that
 /// sends no `seq` (older than this) gets the old content filter.
+///
+/// `seq` is taken inside the writing transaction and events go out in
+/// commit order, so a lower seq can arrive after a higher one, live or in
+/// a resume's replay (which also re-sends lower seqs whose writer was still
+/// open when `since` was written). An event is therefore new unless its seq
+/// has been seen, not unless it is at or below the highest: a high-water
+/// mark would drop exactly the late commit the replay exists to deliver.
+/// The resume point stays the highest seq seen.
 #[derive(Debug, Default)]
 pub struct Cursor {
     pub last: Option<u64>,
+    seen: BTreeSet<u64>,
 }
+
+/// How many seqs a watcher remembers. A duplicate comes from a resume's
+/// look-back, which covers the writers open around the resume point; past
+/// this many, anything older than the oldest remembered is taken as seen.
+const CURSOR_REMEMBERS: usize = 10_000;
 
 impl Cursor {
     /// Whether `event` is new, recording it if it is.
     pub fn admit(&mut self, event: &Value) -> Option<bool> {
         let seq = event.get("seq").and_then(Value::as_u64)?;
-        if self.last.is_some_and(|l| seq <= l) {
+        let full = self.seen.len() >= CURSOR_REMEMBERS;
+        if self.seen.contains(&seq) || (full && self.seen.first().is_some_and(|&f| seq < f)) {
             return Some(false);
         }
-        self.last = Some(seq);
+        self.seen.insert(seq);
+        if self.seen.len() > CURSOR_REMEMBERS {
+            self.seen.pop_first();
+        }
+        self.last = Some(self.last.map_or(seq, |l| l.max(seq)));
         Some(true)
     }
 
@@ -550,6 +569,36 @@ mod tests {
             None,
             "no seq: the old filter decides"
         );
+    }
+
+    /// Writer A takes seq 10, writer B takes 11 and commits first. The
+    /// watcher sees 11, then 10 (live, or replayed by `since=11`); 10 is a
+    /// line of its own, the resume point stays 11, and a replayed 11 is not.
+    #[test]
+    fn a_lower_seq_that_commits_late_is_shown_and_the_resume_point_stays_highest() {
+        let mut c = Cursor::default();
+        let mut b = node("INSERT");
+        b["seq"] = json!(11);
+        let mut a = node("INSERT");
+        a["seq"] = json!(10);
+        assert_eq!(c.admit(&b), Some(true));
+        assert_eq!(c.admit(&a), Some(true), "10 after 11 is new");
+        assert_eq!(c.admit(&a), Some(false), "and shown once");
+        assert_eq!(c.admit(&b), Some(false));
+        assert_eq!(c.resume("ws://h/events"), "ws://h/events?since=11");
+    }
+
+    #[test]
+    fn a_cursor_forgets_its_oldest_seqs_and_takes_older_ones_as_seen() {
+        let mut c = Cursor::default();
+        let mut e = node("INSERT");
+        for s in 1..=(CURSOR_REMEMBERS as u64 + 5) {
+            e["seq"] = json!(s);
+            assert_eq!(c.admit(&e), Some(true));
+        }
+        assert_eq!(c.seen.len(), CURSOR_REMEMBERS);
+        e["seq"] = json!(3);
+        assert_eq!(c.admit(&e), Some(false));
     }
 
     #[test]
