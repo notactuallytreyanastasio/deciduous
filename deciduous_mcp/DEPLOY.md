@@ -1,8 +1,17 @@
 # Run a shared Deciduous server
 
 The server stores graphs and document content in PostgreSQL and exposes an
-authenticated HTTP MCP endpoint. Docker with Compose is enough to run it;
-Erlang, Elixir, Mix, and PostgreSQL tools run inside the containers.
+authenticated HTTP MCP endpoint. There are two ways to run it:
+
+- **The native executable**, a single file with Erlang/OTP and Elixir inside,
+  against a PostgreSQL you already have. This is what `deciduous init` and
+  `deciduous remote setup` install on a developer machine by default, as a
+  launchd or systemd user service; see [Run the native binary](#run-the-native-binary)
+  for doing it by hand.
+- **Docker with Compose**, described first below. Erlang, Elixir, Mix, and
+  PostgreSQL tools run inside the containers, and setup can create the
+  PostgreSQL too. `deciduous remote setup --docker-postgres` runs this path
+  for you; `--docker` runs only the server container, against your database.
 
 ## First install
 
@@ -117,10 +126,14 @@ are skipped. This path also works with a new, empty database created by your
 database administrator.
 
 The database host must be reachable from the container. `localhost` points
-inside the server container, not at your host's PostgreSQL. On Docker Desktop,
-use `host.docker.internal` for a host database; on a Linux server, use a
-reachable private address or attach the server to the database's Docker network.
-URL-encode reserved characters in the password.
+inside the server container, not at your host's PostgreSQL. Use
+`host.docker.internal` for a host database (`deciduous remote setup --docker`
+rewrites localhost to it for you). Docker Desktop routes that name to the
+host's loopback. On Linux, compose.yaml maps it to the host gateway (the
+`docker0` address), where a stock PostgreSQL does not listen: add that address
+to `listen_addresses` and a `pg_hba.conf` line for the Docker networks
+(172.16.0.0/12), or use a reachable private address, or attach the server to
+the database's Docker network. URL-encode reserved characters in the password.
 
 For a TLS database connection, set `DB_SSL=true` before first setup or in
 `.env`. `DB_SSL_VERIFY` says how much of the server is checked, in libpq's
@@ -291,7 +304,55 @@ Releases include `deciduous-mcp-*` Burrito executables for Linux, macOS, and
 Windows. They contain Erlang/OTP, Elixir, and the application, so the machine
 running the server does not need a BEAM installation.
 
-For a fresh database, download the binary and `deciduous-mcp-structure.sql`
+`deciduous remote setup` (the default choice, or `--database-url`) installs one
+as a user service; what it does is what you would do by hand:
+
+1. Download `deciduous-mcp-<os>-<arch>` and check it against `checksums.txt`.
+2. Test the database and prepare it. With `DECIDUOUS_MCP_COMMAND=prepare-database`
+   the executable connects, creates the database if PostgreSQL says it does
+   not exist (the role needs `CREATEDB` for that), runs every pending
+   migration, prints `database ready` and exits 0; otherwise it prints
+   PostgreSQL's reason and exits 1. No `psql` is needed, and PostgreSQL 16
+   works (the migrations were run against Homebrew 16).
+3. Write a settings file, mode 600:
+
+   ```
+   DECIDUOUS_SERVER_MODE=native
+   DECIDUOUS_SERVER_VERSION=1.0.11
+   DECIDUOUS_BIND_ADDRESS=127.0.0.1
+   DECIDUOUS_PORT=24987
+   DECIDUOUS_MCP_TOKEN='<at least 32 bytes>'
+   DATABASE_URL='ecto://USER:URL_ENCODED_PASSWORD@localhost:5432/deciduous'
+   DB_SSL=false
+   DB_SSL_VERIFY=full
+   DB_SSL_CA_FILE=
+   POOL_SIZE=10
+   DECIDUOUS_PREPARE_DATABASE=true
+   ```
+
+4. Run the executable with `DECIDUOUS_ENV_FILE` pointing at that file and
+   `DECIDUOUS_MCP_INSTALL_DIR` at a directory it may unpack its runtime into.
+   The file is parsed, not executed, and wins over the process environment.
+   `DECIDUOUS_PREPARE_DATABASE=true` repeats step 2 at every start, so an
+   upgraded executable migrates before it listens. `DECIDUOUS_BIND_ADDRESS`
+   keeps it on loopback; unset, it listens on every interface.
+
+The CLI keeps all of this in `~/.config/deciduous/server/` (`bin/`, `runtime/`,
+`logs/server.log`, `.env`) and starts it with a LaunchAgent
+(`~/Library/LaunchAgents/dev.deciduous.server.plist`, `KeepAlive`) or a systemd
+user unit (`~/.config/systemd/user/deciduous-server.service`, `Restart=always`).
+On Linux, `loginctl enable-linger $USER` keeps it running after logout.
+`deciduous update` in a project that uses it replaces an executable older than
+the CLI and restarts the service. To remove it:
+
+```bash
+launchctl bootout gui/$(id -u)/dev.deciduous.server      # macOS
+rm ~/Library/LaunchAgents/dev.deciduous.server.plist
+systemctl --user disable --now deciduous-server.service  # Linux
+rm -r ~/.config/deciduous/server                          # settings and executable; the database stays
+```
+
+Instead of step 2 you can load the schema snapshot. For a fresh database, download the binary and `deciduous-mcp-structure.sql`
 from the same release and verify their checksums. This snapshot requires
 PostgreSQL 17 or later and `psql` 17 or later; the release tests use PostgreSQL
 17. Create an empty database owned by the connecting role, set a random bearer
@@ -307,9 +368,10 @@ chmod +x deciduous-mcp-linux-amd64
 ./deciduous-mcp-linux-amd64
 ```
 
-`psql` is needed only for that bootstrap. Use the Docker path for upgrades that
-need migrations. Run the appropriate binary name for your platform; on
-Windows it ends in `.exe`.
+`psql` is needed only for that bootstrap. For upgrades that need migrations,
+start the new executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`
+(or with `DECIDUOUS_PREPARE_DATABASE=true`). Run the appropriate binary name
+for your platform; on Windows it ends in `.exe`.
 
 For maintainers, regenerate the checked-in snapshot after changing migrations,
 using a disposable PostgreSQL 17 database with all repository migrations
