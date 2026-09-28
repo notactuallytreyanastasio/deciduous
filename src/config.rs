@@ -217,15 +217,23 @@ pub fn parse_with_table(existing: &str, name: &str) -> Result<toml_edit::Documen
 impl Config {
     /// Load config from .deciduous/config.toml
     /// Returns default config if file doesn't exist
+    ///
+    /// A linked worktree whose config has no `[remote]` url takes the main
+    /// checkout's ([`crate::remote::inherited_remote`]).
     pub fn load() -> Self {
-        if let Some(path) = Self::find_config_path() {
-            if let Ok(contents) = std::fs::read_to_string(&path) {
-                if let Ok(config) = toml::from_str(&contents) {
-                    return config;
-                }
+        let Some(dir) = Self::find_deciduous_dir() else {
+            return Self::default();
+        };
+        let mut config: Self = std::fs::read_to_string(dir.join("config.toml"))
+            .ok()
+            .and_then(|contents| toml::from_str(&contents).ok())
+            .unwrap_or_default();
+        if !config.remote.is_configured() {
+            if let Some(inherited) = crate::remote::inherited_remote(&dir) {
+                config.remote = inherited.remote;
             }
         }
-        Self::default()
+        config
     }
 
     /// Write the `[remote]` section into `.deciduous/config.toml`, leaving
@@ -280,11 +288,6 @@ impl Config {
 
         std::fs::write(&path, doc.to_string())?;
         Ok(path)
-    }
-
-    /// Find config.toml by walking up directory tree
-    fn find_config_path() -> Option<PathBuf> {
-        Self::find_deciduous_dir().map(|d| d.join("config.toml"))
     }
 
     /// Find .deciduous directory by walking up directory tree

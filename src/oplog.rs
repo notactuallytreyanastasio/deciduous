@@ -540,6 +540,47 @@ pub fn take_appended() -> Option<OpLog> {
         .map(|path| OpLog { path })
 }
 
+/// Set when this process wrote to a database that has no server to send to,
+/// so the write can be named as local-only once, when the command ends.
+static LOCAL_ONLY: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// Set to anything to silence [`print_local_only`] (tests, scripts that know).
+pub const QUIET_LOCAL_ONLY_ENV: &str = "DECIDUOUS_QUIET_LOCAL_ONLY";
+
+/// Records that a write went to the database at `db_path` and nowhere else.
+pub fn note_local_only(db_path: &Path) {
+    if let Ok(mut g) = LOCAL_ONLY.lock() {
+        *g = Some(db_path.to_path_buf());
+    }
+}
+
+/// The line saying a write stayed on this machine, for the database at
+/// `db_path`. None when no local-only write was noted since the last call.
+pub fn take_local_only() -> Option<String> {
+    let db = LOCAL_ONLY.lock().ok()?.take()?;
+    Some(format!(
+        "Note: written to {} only; this project has no shared server. \
+         `deciduous remote setup` connects one.",
+        db.display()
+    ))
+}
+
+/// Prints [`take_local_only`]'s line on stderr, unless
+/// [`QUIET_LOCAL_ONLY_ENV`] is set. Never stdout: `graph`, `--json` output
+/// and the stdio MCP protocol are read by programs.
+///
+/// A write to a project with no `[remote]` used to print "Created node 6306"
+/// and nothing else. A customer case study found 376 nodes that way, in 28
+/// git worktrees whose config lacked the `[remote]` their main checkout had;
+/// nobody could have told from the output that the server never saw them.
+pub fn print_local_only() {
+    if let Some(line) = take_local_only() {
+        if std::env::var_os(QUIET_LOCAL_ONLY_ENV).is_none() {
+            eprintln!("{line}");
+        }
+    }
+}
+
 /// What a rewrite keeps of one op.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Keep {
@@ -572,12 +613,20 @@ impl OpLog {
     /// A bare file name (`DECIDUOUS_DB_PATH=deciduous.db` from inside
     /// `.deciduous/`) is in the current directory. Its empty parent used to
     /// mean "no log": the write was made, never queued, and nothing said so.
+    ///
+    /// A linked worktree whose config has no url of its own logs for the
+    /// main checkout's server ([`crate::remote::inherited_remote`]).
     pub fn for_db(db_path: &Path) -> Option<Self> {
         let db_path = std::path::absolute(db_path).ok()?;
         let dir = db_path.parent()?;
-        let config = std::fs::read_to_string(dir.join("config.toml")).ok()?;
-        let doc: toml::Value = toml::from_str(&config).ok()?;
-        doc.get("remote")?.get("url")?.as_str()?;
+        let own = || -> Option<()> {
+            let config = std::fs::read_to_string(dir.join("config.toml")).ok()?;
+            let doc: toml::Value = toml::from_str(&config).ok()?;
+            doc.get("remote")?.get("url")?.as_str().map(|_| ())
+        };
+        if own().is_none() {
+            crate::remote::inherited_remote(dir)?;
+        }
         Some(OpLog::at(dir.join(FILE_NAME)))
     }
 

@@ -527,6 +527,10 @@ pub fn run_server() -> io::Result<()> {
     // client lost every tool for the rest of the session.
     let mut stdin = stdin.lock();
     let mut buf = Vec::new();
+    // A write with no server to send it to is said once per session, not
+    // after every tool call (the RUST-N7 lesson: a client that does not
+    // read stderr stops the server once the pipe fills).
+    let mut said_local_only = false;
     loop {
         buf.clear();
         if stdin.read_until(b'\n', &mut buf)? == 0 {
@@ -571,6 +575,12 @@ pub fn run_server() -> io::Result<()> {
         // Warnings go to stderr; stdout is the protocol.
         if let Some(log) = crate::oplog::take_appended() {
             replayer.send(log);
+        }
+        if let Some(line) = crate::oplog::take_local_only() {
+            if !said_local_only && std::env::var_os(crate::oplog::QUIET_LOCAL_ONLY_ENV).is_none() {
+                eprintln!("deciduous-mcp: {line} (Said once per session.)");
+            }
+            said_local_only = true;
         }
     }
 

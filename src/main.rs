@@ -1192,6 +1192,7 @@ fn exit(code: i32) -> ! {
     if let Some(log) = deciduous::oplog::take_appended() {
         deciduous::remote::replay_after_write(&log);
     }
+    deciduous::oplog::print_local_only();
     if let Some(dir) = CHECK_SCRATCH.get() {
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -2752,6 +2753,13 @@ fn main() {
 
                     println!("{} {}", "Remote:".bold(), remote.url);
                     println!("{} {}", "Workspace:".bold(), remote.workspace.cyan());
+                    if let Some(from) = deciduous::remote::inherited_remote(db.data_dir()) {
+                        println!(
+                            "{} this worktree's config names no server; its writes go to the main checkout's ({})",
+                            "From:".bold(),
+                            from.data_dir.join("config.toml").display()
+                        );
+                    }
 
                     // The queue first: it is this machine's half of any
                     // difference below, and it needs no server to read.
