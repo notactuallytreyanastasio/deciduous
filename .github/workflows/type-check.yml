@@ -111,6 +111,26 @@ jobs:
           echo "- Integration tests" >> $GITHUB_STEP_SUMMARY
           echo "- Clippy (warnings denied)" >> $GITHUB_STEP_SUMMARY
 
+  check-windows:
+    # The release builds a Windows binary; nothing else did. v1.0.11's
+    # release run was the first to compile src/server.rs's launchd code on
+    # Windows (libc::getuid does not exist there) and stopped every publish
+    # step. A check is enough to catch that class of error before a tag.
+    name: Check (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo check
+        run: cargo check --all-targets
+
   build-web:
     name: Build Web
     runs-on: ubuntu-latest

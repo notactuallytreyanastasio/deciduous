@@ -1077,9 +1077,18 @@ fn write_private(path: &Path, text: &str) -> Result<(), String> {
         .map_err(|e| format!("writing {}: {e}", path.display()))
 }
 
+/// The login session's launchd domain id. launchd exists only on macOS, so
+/// only a Unix build can reach this; Windows has no getuid, and there
+/// `service_manager` never picks launchd.
+#[cfg(unix)]
 fn user_id() -> String {
     // SAFETY: getuid has no preconditions and cannot fail.
     unsafe { libc::getuid() }.to_string()
+}
+
+#[cfg(not(unix))]
+fn user_id() -> String {
+    unreachable!("launchd is macOS only; no service manager is used on this platform")
 }
 
 fn launch_agent_path() -> Result<PathBuf, String> {
