@@ -141,6 +141,12 @@ defmodule DeciduousMcp.Events.Listener do
       conn: nil,
       ref: nil,
       high: safe_max_seq(),
+      # When the database was down at boot, `high` is unknown until a pass
+      # can read it. That pass must not take max(seq) as it stands then: a
+      # write made after boot but before that pass (the server says ready
+      # as soon as the Repo answers) would already be at or below it and
+      # never be broadcast. It starts from the events logged before boot.
+      booted_at: NaiveDateTime.utc_now(),
       sent: :gb_sets.new(),
       holes: %{},
       broadcast: Keyword.get(opts, :broadcast, &broadcast/1),
@@ -249,7 +255,10 @@ defmodule DeciduousMcp.Events.Listener do
     state = expire_holes(state)
 
     try do
-      state = if is_integer(state.high), do: state, else: %{state | high: max_seq()}
+      state =
+        if is_integer(state.high),
+          do: state,
+          else: %{state | high: max_seq_before(state.booted_at)}
 
       filled = if map_size(state.holes) == 0, do: [], else: fetch_holes(Map.keys(state.holes))
       state = Enum.reduce(filled, state, fn {seq, payload}, s -> deliver(s, seq, payload) end)
@@ -305,8 +314,26 @@ defmodule DeciduousMcp.Events.Listener do
     |> then(fn [[n]] -> n end)
   end
 
+  # The highest seq logged before `booted_at`, less a margin for the
+  # distance between this node's clock and the database's (inserted_at is
+  # the database's now()). The margin can only re-send an event logged
+  # just before boot, which no subscriber of this server has seen: sockets
+  # connect after boot. A transaction that began more than the margin
+  # before boot and committed after it is still missed.
+  @boot_margin_seconds 5
+
+  defp max_seq_before(booted_at) do
+    cutoff = NaiveDateTime.add(booted_at, -@boot_margin_seconds, :second)
+
+    Repo.query!(
+      "SELECT coalesce(max(seq), 0) FROM graph_events WHERE inserted_at < $1",
+      [cutoff]
+    ).rows
+    |> then(fn [[n]] -> n end)
+  end
+
   # At boot the database may be down; the first pass that can reach it
-  # reads max(seq) then.
+  # starts from the events logged before boot (max_seq_before/1).
   defp safe_max_seq do
     max_seq()
   rescue

@@ -65,6 +65,30 @@ defmodule DeciduousMcp.Events.ListenerTest do
     end
   end
 
+  test "booted while the database was down: a write made before the first readable pass is broadcast",
+       %{ws: ws, state: state} do
+    # Release acceptance boots the server with PostgreSQL stopped, starts
+    # it, waits for /ready and writes. The listener read max(seq) on its
+    # first readable pass, after that write, so the event was taken as
+    # already sent and the websocket read timed out.
+    old = node!(ws, "logged before boot")
+    [old_seq] = seqs(ws)
+
+    Repo.query!(
+      "UPDATE graph_events SET inserted_at = inserted_at - interval '1 hour' WHERE seq = $1",
+      [old_seq]
+    )
+
+    %{rows: [[db_now]]} = Repo.query!("SELECT now() AT TIME ZONE 'UTC'", [])
+    booted = state |> Map.put(:high, nil) |> Map.put(:booted_at, db_now)
+
+    node!(ws, "written after boot, before the first readable pass")
+    [_, new_seq] = seqs(ws)
+
+    tick(booted)
+    assert received() == [new_seq]
+  end
+
   test "an event that never came by NOTIFY is broadcast by the next pass, once", %{
     ws: ws,
     state: state
