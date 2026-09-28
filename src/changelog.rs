@@ -12,6 +12,16 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.11",
+        highlights: &[
+            "A server on this machine needs PostgreSQL, not Docker: `remote setup --local` runs the release's self-contained server as a background service (launchd / systemd) against the system PostgreSQL on localhost:5432; `--database-url` for any other PostgreSQL, `--docker-postgres` / `--docker` for the old containers; earlier installs stay on Docker",
+            "The local database follows graph.json: a node added on one branch no longer appears on every branch after `sync`, and checkout, reset, pull and stash are followed by every command",
+            "sync refuses records `add` and `link` would refuse (unknown types and statuses, self-loops, 2-cycles) and names them; ops that arrive through git carry the time of the edit",
+            "`/events?since=` replays an event that committed after a higher one; mint 1.11.0 clears three advisories in the server's HTTP client",
+            "Includes everything in 1.0.10, which was tagged but never published: closed-loop ask_graph, absent-topic stops, file and commit links, parent suggestions, consolidation_report, and five sync and event fixes",
+        ],
+    },
+    Release {
         version: "1.0.10",
         highlights: &[
             "ask_graph is a closed loop: trigram and full-text anchors fused by rank, routes by question shape, a budget and an explicit stop_reason; recall@10 0.611 -> 0.889 and MRR 0.264 -> 0.726 on the new eval, 5-11 queries per question instead of 72-152",
