@@ -17,3 +17,6 @@ erl_crash.dump
 # IDE
 .elixir_ls/
 .vscode/
+
+# Burrito single-file executables (BURRITO_TARGET=... mix release)
+/burrito_out/

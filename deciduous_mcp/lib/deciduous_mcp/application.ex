@@ -20,8 +20,50 @@ defmodule DeciduousMcp.Application do
 
   @impl true
   def start(_type, _args) do
+    case Application.get_env(:deciduous_mcp, :command) do
+      command when command in [nil, ""] ->
+        serve()
+
+      "prepare-database" ->
+        # One-shot: create the database if missing, migrate, report, exit.
+        # The exit status is the answer; the message is the database's own.
+        case DeciduousMcp.Release.prepare_database() do
+          :ok ->
+            IO.puts("database ready")
+            System.halt(0)
+
+          {:error, message} ->
+            IO.puts(:stderr, message)
+            System.halt(1)
+        end
+
+      other ->
+        IO.puts(
+          :stderr,
+          "DECIDUOUS_MCP_COMMAND=#{inspect(other)} is not a command (prepare-database is)"
+        )
+
+        System.halt(2)
+    end
+  end
+
+  defp serve do
     verify_token!()
     port = port()
+
+    if Application.get_env(:deciduous_mcp, :prepare_database_at_start, false) do
+      # Before anything listens, so /ready never answers for an unmigrated
+      # schema. A database that is not there yet (the machine is still
+      # booting) stops the server; the service manager starts it again.
+      case DeciduousMcp.Release.prepare_database() do
+        :ok ->
+          :ok
+
+        {:error, message} ->
+          IO.puts(:stderr, message)
+          System.halt(1)
+      end
+    end
 
     children = [
       # Database
@@ -70,7 +112,7 @@ defmodule DeciduousMcp.Application do
       DeciduousMcp.Events.Listener,
 
       # Public surface: /health, /mcp, /import
-      {Bandit, plug: DeciduousMcp.Web.Router, scheme: :http, port: port}
+      {Bandit, [plug: DeciduousMcp.Web.Router, scheme: :http, port: port] ++ bind_ip()}
     ]
 
     log_db_tls()
@@ -132,10 +174,13 @@ defmodule DeciduousMcp.Application do
     end
   end
 
-  defp port do
-    case Integer.parse(System.get_env("PORT") || "4000") do
-      {p, ""} -> p
-      _ -> raise "PORT must be an integer, got: #{inspect(System.get_env("PORT"))}"
+  # Parsed in config/runtime.exs, from PORT or the settings file.
+  defp port, do: Application.get_env(:deciduous_mcp, :http_port, 4000)
+
+  defp bind_ip do
+    case Application.get_env(:deciduous_mcp, :bind_ip) do
+      nil -> []
+      ip -> [ip: ip]
     end
   end
 end
