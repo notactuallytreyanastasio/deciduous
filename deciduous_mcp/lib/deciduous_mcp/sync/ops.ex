@@ -463,7 +463,16 @@ defmodule DeciduousMcp.Sync.Ops do
              "Nothing was written. Two nodes cannot share a change_id: one of the two " <>
              "writers reused it"}
 
-        %Node{deleted_at: nil} ->
+        %Node{deleted_at: nil} = node ->
+          # The same node, created again (a replayed op, a second clone's
+          # copy). Nothing is written but its date, and only earlier: a
+          # node a seed dated on arrival takes the date its create carries.
+          # The rule /import and the CLI's merge keep.
+          if inserted_at && DateTime.compare(inserted_at, node.inserted_at) == :lt do
+            from(n in Node, where: n.id == ^node.id)
+            |> Repo.update_all(set: [inserted_at: inserted_at])
+          end
+
           {:ok, "exists"}
 
         %Node{} ->
@@ -486,8 +495,16 @@ defmodule DeciduousMcp.Sync.Ops do
           |> Node.changeset(attrs)
           # Backdated archaeology nodes (`deciduous add --date`) keep their
           # date; the CLI's timestamp is the fact, the arrival time is not.
-          |> Ecto.Changeset.put_change(:inserted_at, inserted_at || now)
-          |> Ecto.Changeset.put_change(:updated_at, updated_at || now)
+          # An op without created_at is dated, in this order, by its
+          # updated_at, then by `at` (when the op was made on its machine),
+          # and only then by its arrival here. The CLI sends created_at on
+          # every create; the fallbacks are named so none of them is a
+          # silent now().
+          |> Ecto.Changeset.put_change(
+            :inserted_at,
+            created_fallback(inserted_at, updated_at, op, now)
+          )
+          |> Ecto.Changeset.put_change(:updated_at, updated_at || inserted_at || now)
           |> Repo.insert()
           |> case do
             {:ok, _} -> {:ok, "applied"}
@@ -988,6 +1005,16 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
+  defp created_fallback(created, _updated, _op, _now) when not is_nil(created), do: created
+  defp created_fallback(nil, updated, _op, _now) when not is_nil(updated), do: updated
+
+  defp created_fallback(nil, nil, op, now) do
+    case Import.read_time(op["at"]) do
+      {:ok, at} -> at
+      _ -> now
+    end
+  end
+
   defp held_to(schema, op, what) do
     case ArgCheck.check(ArgCheck.with_limits(schema), op) do
       :ok -> :ok
@@ -1000,28 +1027,17 @@ defmodule DeciduousMcp.Sync.Ops do
   # time. Anything else is refused: "99999-01-01T00:00:00Z" and 12345 used
   # to become the arrival time without a word, and so did the naive form.
   defp time(op, key, cid) do
-    case op[key] do
-      nil ->
+    case {op[key], Import.read_time(op[key])} do
+      {_, :missing} ->
         {:ok, nil}
 
-      value when is_binary(value) ->
-        case DateTime.from_iso8601(value) do
-          {:ok, dt, _offset} ->
-            {:ok, %{dt | microsecond: {elem(dt.microsecond, 0), 6}}}
+      {_, {:ok, dt}} ->
+        {:ok, dt}
 
-          _ ->
-            case NaiveDateTime.from_iso8601(value) do
-              {:ok, naive} ->
-                dt = DateTime.from_naive!(naive, "Etc/UTC")
-                {:ok, %{dt | microsecond: {elem(dt.microsecond, 0), 6}}}
+      {value, :error} when is_binary(value) ->
+        {:rejected, "create_node #{cid}: #{key} #{inspect(value)} is not an ISO 8601 time"}
 
-              _ ->
-                {:rejected,
-                 "create_node #{cid}: #{key} #{inspect(value)} is not an ISO 8601 time"}
-            end
-        end
-
-      other ->
+      {other, :error} ->
         {:rejected,
          "create_node #{cid}: #{key} must be an ISO 8601 string, got #{inspect(other)}"}
     end

@@ -55,6 +55,7 @@ defmodule DeciduousMcp.Sync.Import do
              opts[:pinned_workspace_name]
            ),
          :ok <- validate_shapes(graph),
+         :ok <- validate_dates(graph),
          {:ok, nodes} <- validate_nodes(graph["nodes"] || []),
          :ok <- validate_edge_sizes(graph["edges"] || []) do
       if writes_nothing?(graph),
@@ -355,6 +356,56 @@ defmodule DeciduousMcp.Sync.Import do
   defp contains_nul?(v) when is_list(v), do: Enum.any?(v, &contains_nul?/1)
   defp contains_nul?(_), do: false
 
+  # --- Dates ------------------------------------------------------------------
+
+  # A timestamp that is present and is not a time is refused, whole, naming
+  # the row. It used to become the time of the import without a word, and
+  # so did every naive "YYYY-MM-DD HH:MM:SS" (what `add --date` stored
+  # before 1.0): a seed re-dated that history to the minute it ran.
+  defp validate_dates(graph) do
+    checks = [
+      {"nodes", ["created_at", "updated_at"]},
+      {"edges", ["created_at"]}
+    ]
+
+    Enum.reduce_while(checks, :ok, fn {kind, keys}, :ok ->
+      (graph[kind] || [])
+      |> Enum.with_index()
+      |> Enum.find_value(fn {row, i} ->
+        Enum.find_value(keys, fn key ->
+          if read_time(row[key]) == :error,
+            do:
+              "#{kind}[#{i}].#{key} #{inspect(row[key])} is not an ISO 8601 time" <>
+                "#{change_id_hint(row)}; nothing was imported"
+        end)
+      end)
+      |> case do
+        nil -> {:cont, :ok}
+        message -> {:halt, {:error, message}}
+      end
+    end)
+  end
+
+  # When a row was made, as the row says, and where that came from.
+  #
+  # created_at is the fact. A node without one takes its updated_at, which
+  # is no earlier than when it was made and is the nearest date the row
+  # carries. A row with neither is dated on arrival, and the report counts
+  # it (`dated_on_arrival`), so the sender can tell a date it did not send
+  # from one it did. `deciduous graph` always sends created_at.
+  defp made_at(row, now) do
+    case read_time(row["created_at"]) do
+      {:ok, dt} ->
+        {dt, :created_at}
+
+      _ ->
+        case read_time(row["updated_at"]) do
+          {:ok, dt} -> {dt, :updated_at}
+          _ -> {now, :arrival}
+        end
+    end
+  end
+
   # --- Nodes ------------------------------------------------------------------
 
   # Validation happens up front and rejects the whole import, rather than
@@ -500,8 +551,10 @@ defmodule DeciduousMcp.Sync.Import do
 
     {refused, nodes} = Enum.split_with(nodes, &Map.has_key?(deleted, &1["change_id"]))
 
+    made = Enum.map(nodes, &made_at(&1, now))
+
     rows =
-      Enum.map(nodes, fn n ->
+      Enum.zip_with(nodes, made, fn n, {inserted_at, _from} ->
         %{
           id: Ecto.UUID.generate(),
           workspace_id: workspace_id,
@@ -512,8 +565,8 @@ defmodule DeciduousMcp.Sync.Import do
           status: n["status"] || "pending",
           # Decoded and checked by validate_metadata/1.
           metadata: n["metadata_json"],
-          inserted_at: parse_time(n["created_at"], now),
-          updated_at: parse_time(n["updated_at"], now)
+          inserted_at: inserted_at,
+          updated_at: parse_time(n["updated_at"], inserted_at)
         }
       end)
 
@@ -533,6 +586,8 @@ defmodule DeciduousMcp.Sync.Import do
     %{
       received: length(rows) + length(refused),
       upserted: inserted,
+      dated_from_updated_at: Enum.count(made, &match?({_, :updated_at}, &1)),
+      dated_on_arrival: Enum.count(made, &match?({_, :arrival}, &1)),
       refused_deleted: length(refused),
       refused_deleted_examples:
         refused
@@ -557,7 +612,12 @@ defmodule DeciduousMcp.Sync.Import do
           description: fragment("EXCLUDED.description"),
           status: fragment("EXCLUDED.status"),
           metadata: fragment("EXCLUDED.metadata"),
-          updated_at: fragment("EXCLUDED.updated_at")
+          updated_at: fragment("EXCLUDED.updated_at"),
+          # The earlier of the two, never the import's: the CLI's merge
+          # keeps the earlier created_at by the same rule
+          # (records::earlier_created). A copy is only ever re-stamped
+          # later, so the earliest date any copy carries is the best one.
+          inserted_at: fragment("LEAST(?, EXCLUDED.inserted_at)", n.inserted_at)
         ]
       ]
     )
@@ -639,7 +699,7 @@ defmodule DeciduousMcp.Sync.Import do
       |> Enum.reduce(0, fn chunk, acc ->
         {count, _} =
           Repo.insert_all(Edge, chunk,
-            on_conflict: {:replace, [:rationale, :weight, :updated_at]},
+            on_conflict: edge_upsert(),
             conflict_target: [:from_node_id, :to_node_id, :edge_type]
           )
 
@@ -649,12 +709,28 @@ defmodule DeciduousMcp.Sync.Import do
     %{
       received: length(edges),
       upserted: inserted,
+      dated_on_arrival: Enum.count(edges, &(read_time(&1["created_at"]) == :missing)),
       unresolved: length(unresolved),
       unresolved_examples: Enum.take(unresolved, 10),
       refused_deleted: length(dead),
       refused_deleted_examples: Enum.take(dead, 10),
       stale_change_ids: stale
     }
+  end
+
+  # Rationale and weight from the copy; the earlier inserted_at of the two,
+  # as for a node (see replace_unless_deleted/0).
+  defp edge_upsert do
+    from(e in Edge,
+      update: [
+        set: [
+          rationale: fragment("EXCLUDED.rationale"),
+          weight: fragment("EXCLUDED.weight"),
+          updated_at: fragment("EXCLUDED.updated_at"),
+          inserted_at: fragment("LEAST(?, EXCLUDED.inserted_at)", e.inserted_at)
+        ]
+      ]
+    )
   end
 
   defp edge_tombstones(workspace_id) do
@@ -698,7 +774,7 @@ defmodule DeciduousMcp.Sync.Import do
       edge_type: e["edge_type"] || "leads_to",
       weight: as_float(e["weight"]),
       rationale: e["rationale"],
-      inserted_at: parse_time(e["created_at"], now),
+      inserted_at: elem(made_at(Map.take(e, ["created_at"]), now), 0),
       updated_at: now
     }
   end
@@ -819,18 +895,47 @@ defmodule DeciduousMcp.Sync.Import do
   def parse_time(nil, fallback), do: fallback
 
   def parse_time(value, fallback) when is_binary(value) do
-    case DateTime.from_iso8601(value) do
-      # The columns are :utc_datetime_usec, which rejects anything that is not
-      # 6-digit precision. CLI timestamps carry none ("2016-02-01T00:00:00-05:00"),
-      # and `DateTime.truncate/2` only ever removes precision, so it leaves a
-      # 0-digit value 0-digit and Ecto raises on dump. The precision has to be
-      # widened explicitly.
-      {:ok, dt, _offset} -> %{dt | microsecond: {elem(dt.microsecond, 0), 6}}
+    case read_time(value) do
+      {:ok, dt} -> dt
       _ -> fallback
     end
   end
 
   def parse_time(_, fallback), do: fallback
+
+  @doc """
+  Reads a timestamp a client sent: `{:ok, datetime}`, `:missing` for nil,
+  or `:error`. RFC 3339 with an offset, as the CLI writes it, or a naive
+  "YYYY-MM-DD HH:MM:SS" / "YYYY-MM-DDTHH:MM:SS", read as UTC (the CLI sends
+  those with its own offset since 1.0.12; older databases hold them).
+  Shared by /import and /ops so the two read a date the same way.
+  """
+  def read_time(nil), do: :missing
+
+  def read_time(value) when is_binary(value) do
+    # The columns are :utc_datetime_usec, which rejects anything that is not
+    # 6-digit precision. CLI timestamps carry none ("2016-02-01T00:00:00-05:00"),
+    # and `DateTime.truncate/2` only ever removes precision, so it leaves a
+    # 0-digit value 0-digit and Ecto raises on dump. The precision has to be
+    # widened explicitly.
+    widen = fn dt ->
+      dt = DateTime.truncate(dt, :microsecond)
+      {:ok, %{dt | microsecond: {elem(dt.microsecond, 0), 6}}}
+    end
+
+    case DateTime.from_iso8601(value) do
+      {:ok, dt, _offset} ->
+        widen.(dt)
+
+      _ ->
+        case NaiveDateTime.from_iso8601(value) do
+          {:ok, naive} -> widen.(DateTime.from_naive!(naive, "Etc/UTC"))
+          _ -> :error
+        end
+    end
+  end
+
+  def read_time(_), do: :error
 
   defp as_float(nil), do: 1.0
   defp as_float(n) when is_float(n), do: n
