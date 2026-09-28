@@ -730,10 +730,11 @@ impl Remote {
 
     /// Sends the local graph up. Used to seed a workspace and to carry local
     /// history that predates the remote; it is not the normal write path.
-    pub fn import(&self, graph: Value) -> Result<ImportReport, String> {
+    pub fn import(&self, mut graph: Value) -> Result<ImportReport, String> {
         if let Some(why) = self.write_blocker() {
             return Err(format!("nothing was sent: {why}"));
         }
+        wire_dates(&mut graph);
         let payload = serde_json::json!({
             "workspace": self.workspace,
             "repo_roots": self.repo_roots,
@@ -907,6 +908,27 @@ pub fn push_missing(remote: &Remote, graph: &Value) -> Result<Seeded, String> {
         }
     }
     remote.import(missing).map(|r| (Some(r), deleted, withheld))
+}
+
+/// Spells every node's and edge's timestamps as the server reads them
+/// (`records::wire_ts`): RFC 3339 unchanged, a naive one given this
+/// machine's offset. A naive `created_at` (stored as typed by `add --date`
+/// before 1.0) went up as written; the server's import could not read it
+/// and stamped the node with the time of the seed.
+fn wire_dates(graph: &mut Value) {
+    for (kind, keys) in [
+        ("nodes", &["created_at", "updated_at"][..]),
+        ("edges", &["created_at"][..]),
+    ] {
+        for row in graph[kind].as_array_mut().into_iter().flatten() {
+            for key in keys {
+                if let Some(s) = row[*key].as_str() {
+                    let wired = records::wire_ts(s);
+                    row[*key] = Value::String(wired);
+                }
+            }
+        }
+    }
 }
 
 /// Where a local row (a node, an edge or a document, as `deciduous graph`

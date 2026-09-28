@@ -6599,6 +6599,10 @@ fn print_sync_report_body(report: &SyncReport) {
     };
     push(report.nodes_imported, "nodes imported");
     push(report.nodes_updated, "nodes updated from records");
+    push(
+        report.nodes_redated,
+        "nodes given back the earlier created_at graph.json holds",
+    );
     push(report.nodes_deleted, "nodes deleted (tombstones)");
     push(report.nodes_exported, "nodes exported");
     push(report.edges_imported, "edges imported");

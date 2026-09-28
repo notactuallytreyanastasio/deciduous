@@ -1232,8 +1232,8 @@ impl Database {
             description: new.description.map(str::to_string),
             status: new.status.to_string(),
             metadata,
-            created_at: new.created_at.to_string(),
-            updated_at: new.updated_at.to_string(),
+            created_at: crate::records::wire_ts(new.created_at),
+            updated_at: crate::records::wire_ts(new.updated_at),
         })
     }
 
@@ -2829,14 +2829,26 @@ impl Database {
         })
     }
 
-    /// Overwrite a node's fields exactly as recorded.
+    /// Overwrite a node's fields exactly as recorded, and its `created_at`
+    /// when the record's is earlier (never later: see
+    /// `records::earlier_created`).
     pub(crate) fn update_node_record(&self, node_id: i32, rec: &NodeRecord) -> Result<()> {
         let mut conn = self.get_conn()?;
         let metadata = rec.metadata_json();
         conn.immediate_transaction(|conn| {
             let before = self.replaced_in_tx(conn, node_id)?;
+            let had: Option<String> = decision_nodes::table
+                .filter(decision_nodes::id.eq(node_id))
+                .select(decision_nodes::created_at)
+                .first(conn)
+                .optional()?;
+            let made = match &had {
+                Some(h) => crate::records::earlier_created(h, &rec.created_at),
+                None => &rec.created_at,
+            };
             diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
                 .set((
+                    decision_nodes::created_at.eq(made),
                     decision_nodes::node_type.eq(&rec.node_type),
                     decision_nodes::title.eq(&rec.title),
                     decision_nodes::description.eq(rec.description.as_deref()),
@@ -2851,6 +2863,27 @@ impl Database {
             };
             self.queue_git_in_tx(conn, bodies, crate::records::parse_ts(&rec.updated_at))?;
             Ok(())
+        })
+    }
+
+    /// Move a node's `created_at` to an earlier date a copy of it carries
+    /// (graph.json, after a migration re-stamped this database's row).
+    /// Refuses to move it later. Local only: no op changes a date on the
+    /// server, whose import keeps the earlier one by the same rule.
+    pub(crate) fn redate_node_record(&self, node_id: i32, created_at: &str) -> Result<bool> {
+        let mut conn = self.get_conn()?;
+        conn.immediate_transaction(|conn| {
+            let had: String = decision_nodes::table
+                .filter(decision_nodes::id.eq(node_id))
+                .select(decision_nodes::created_at)
+                .first(conn)?;
+            if !crate::records::created_before(created_at, &had) {
+                return Ok(false);
+            }
+            diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .set(decision_nodes::created_at.eq(created_at))
+                .execute(conn)?;
+            Ok(true)
         })
     }
 
@@ -3066,7 +3099,7 @@ impl Database {
             edge_type: rec.edge_type.clone(),
             rationale: rec.rationale.clone(),
             weight: new_edge.weight,
-            created_at: rec.created_at.clone(),
+            created_at: crate::records::wire_ts(&rec.created_at),
         });
         conn.immediate_transaction(|conn| {
             diesel::insert_into(decision_edges::table)
