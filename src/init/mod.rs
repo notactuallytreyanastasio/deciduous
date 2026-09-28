@@ -5,6 +5,7 @@
 
 pub mod guard;
 mod known_templates;
+pub mod remote_templates;
 pub mod templates;
 
 use crate::opencode;
@@ -18,6 +19,42 @@ use templates::{
     HOOK_BOARD_MENTIONS, HOOK_VERSION_CHECK, RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY,
     SKILL_NARRATIVES, SKILL_PULSE, SYNC_MD, WINDSURF_HOOKS_JSON, WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
+
+/// The templates whose text depends on where the project's graph lives: in
+/// `.deciduous/graph.json`, carried by git, or on a server (`[remote]`).
+struct GraphModelTemplates {
+    decision: &'static str,
+    recover: &'static str,
+    work: &'static str,
+    document: &'static str,
+    sync: &'static str,
+    claude_md: &'static str,
+}
+
+impl GraphModelTemplates {
+    fn for_project(root: &Path) -> Self {
+        use remote_templates as r;
+        if guard::remote_configured(root) {
+            GraphModelTemplates {
+                decision: r::DECISION_MD_REMOTE,
+                recover: r::RECOVER_MD_REMOTE,
+                work: r::WORK_MD_REMOTE,
+                document: r::DOCUMENT_MD_REMOTE,
+                sync: r::SYNC_MD_REMOTE,
+                claude_md: r::CLAUDE_MD_SECTION_REMOTE,
+            }
+        } else {
+            GraphModelTemplates {
+                decision: DECISION_MD,
+                recover: RECOVER_MD,
+                work: WORK_MD,
+                document: DOCUMENT_MD,
+                sync: SYNC_MD,
+                claude_md: CLAUDE_MD_SECTION,
+            }
+        }
+    }
+}
 
 /// Initialize a new deciduous project with AI assistant integration
 ///
@@ -88,6 +125,7 @@ pub fn init_project(
     std::env::set_var("DECIDUOUS_DB_PATH", &db_path);
 
     // 3. Create Claude Code configuration (if enabled)
+    let model = GraphModelTemplates::for_project(&cwd);
     if setup_claude {
         // Create .claude/commands directory
         let claude_dir = cwd.join(".claude").join("commands");
@@ -95,19 +133,27 @@ pub fn init_project(
 
         // Write decision.md slash command
         let decision_path = claude_dir.join("decision.md");
-        write_file_if_missing(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+        write_file_if_missing(
+            &decision_path,
+            model.decision,
+            ".claude/commands/decision.md",
+        )?;
 
         // Write recover.md slash command
         let recover_path = claude_dir.join("recover.md");
-        write_file_if_missing(&recover_path, RECOVER_MD, ".claude/commands/recover.md")?;
+        write_file_if_missing(&recover_path, model.recover, ".claude/commands/recover.md")?;
 
         // Write work.md slash command (transaction model)
         let work_path = claude_dir.join("work.md");
-        write_file_if_missing(&work_path, WORK_MD, ".claude/commands/work.md")?;
+        write_file_if_missing(&work_path, model.work, ".claude/commands/work.md")?;
 
         // Write document.md slash command
         let document_path = claude_dir.join("document.md");
-        write_file_if_missing(&document_path, DOCUMENT_MD, ".claude/commands/document.md")?;
+        write_file_if_missing(
+            &document_path,
+            model.document,
+            ".claude/commands/document.md",
+        )?;
 
         // Write build-test.md slash command
         let build_test_path = claude_dir.join("build-test.md");
@@ -131,7 +177,7 @@ pub fn init_project(
 
         // Write sync.md slash command
         let sync_path = claude_dir.join("sync.md");
-        write_file_if_missing(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
+        write_file_if_missing(&sync_path, model.sync, ".claude/commands/sync.md")?;
 
         // Write demo-swarm.md slash command (the multi-agent demo)
         let demo_path = claude_dir.join("demo-swarm.md");
@@ -197,7 +243,7 @@ pub fn init_project(
 
         // Append to or create CLAUDE.md
         let claude_md_path = cwd.join("CLAUDE.md");
-        append_config_md(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+        append_config_md(&claude_md_path, model.claude_md, "CLAUDE.md")?;
     }
 
     // 3b. Create OpenCode configuration (if enabled)
@@ -458,22 +504,31 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     // Create .claude/commands directory if needed
     let claude_dir = cwd.join(".claude").join("commands");
     create_dir_if_missing(&claude_dir)?;
+    let model = GraphModelTemplates::for_project(cwd);
 
     // Overwrite decision.md slash command
     let decision_path = claude_dir.join("decision.md");
-    write_file_overwrite(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+    write_file_overwrite(
+        &decision_path,
+        model.decision,
+        ".claude/commands/decision.md",
+    )?;
 
     // Overwrite recover.md slash command
     let recover_path = claude_dir.join("recover.md");
-    write_file_overwrite(&recover_path, RECOVER_MD, ".claude/commands/recover.md")?;
+    write_file_overwrite(&recover_path, model.recover, ".claude/commands/recover.md")?;
 
     // Overwrite work.md slash command
     let work_path = claude_dir.join("work.md");
-    write_file_overwrite(&work_path, WORK_MD, ".claude/commands/work.md")?;
+    write_file_overwrite(&work_path, model.work, ".claude/commands/work.md")?;
 
     // Overwrite document.md slash command
     let document_path = claude_dir.join("document.md");
-    write_file_overwrite(&document_path, DOCUMENT_MD, ".claude/commands/document.md")?;
+    write_file_overwrite(
+        &document_path,
+        model.document,
+        ".claude/commands/document.md",
+    )?;
 
     // Overwrite build-test.md slash command
     let build_test_path = claude_dir.join("build-test.md");
@@ -511,7 +566,7 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
 
     // Overwrite sync.md slash command
     let sync_path = claude_dir.join("sync.md");
-    write_file_overwrite(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
+    write_file_overwrite(&sync_path, model.sync, ".claude/commands/sync.md")?;
 
     // Overwrite demo-swarm.md slash command (the multi-agent demo)
     let demo_path = claude_dir.join("demo-swarm.md");
@@ -572,8 +627,7 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
 
     // Update CLAUDE.md section
     let claude_md_path = cwd.join("CLAUDE.md");
-    guard::backup(cwd, "CLAUDE.md")?;
-    replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+    replace_config_md_section(&claude_md_path, model.claude_md, "CLAUDE.md")?;
 
     // Update Windsurf if .windsurf directory exists
     let windsurf_dir = cwd.join(".windsurf");
@@ -1115,7 +1169,23 @@ fn write_guarded(
         guard::Outcome::Unchanged => label.dimmed(),
         _ => label.green(),
     };
-    println!("   {} {}", label, display_name);
+    let root = harness_root(path, display_name);
+    let left = std::path::Path::new(guard::TEMPLATE_DIR).join(display_name);
+    if outcome == guard::Outcome::KeptYours && root.join(&left).is_file() {
+        println!(
+            "   {} {} (edited by someone{}; the template it would have got: {})",
+            label,
+            display_name,
+            if guard::remote_configured(&root) {
+                ", and this project has a [remote], so nothing is appended"
+            } else {
+                ""
+            },
+            left.display()
+        );
+    } else {
+        println!("   {} {}", label, display_name);
+    }
     Ok(())
 }
 
@@ -1132,108 +1202,120 @@ fn remove_guarded(path: &Path, display_name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Where the deciduous section of a CLAUDE.md-style file sits: from its start
+/// marker (or, in a file older than the markers, its heading) to the end of
+/// its end marker, or to the next `## ` heading when the end marker is
+/// missing. `terminated` says which.
+struct SectionSpan {
+    start: usize,
+    end: usize,
+    terminated: bool,
+}
+
+fn find_section(existing: &str) -> Option<SectionSpan> {
+    const LEGACY_HEADINGS: [&str; 2] = [
+        "## Decision Graph Workflow",
+        "## MANDATORY: Decision Graph Workflow",
+    ];
+    let start = existing.find(guard::BLOCK_START).or_else(|| {
+        LEGACY_HEADINGS
+            .iter()
+            .filter_map(|m| existing.find(m))
+            .min()
+    })?;
+    if let Some(i) = existing[start..].find(guard::BLOCK_END) {
+        return Some(SectionSpan {
+            start,
+            end: start + i + guard::BLOCK_END.len(),
+            terminated: true,
+        });
+    }
+    // No end marker: the section runs to the next `## ` heading after its
+    // own. Its own is the first `## ` line from `start` on, which for a
+    // marked section comes after the marker. Searching from the heading
+    // instead of from the marker is what left 1.0.10's update with two start
+    // markers: the old one sat outside the span it replaced.
+    let heading = existing[start..]
+        .match_indices("## ")
+        .map(|(i, _)| start + i)
+        .find(|&i| i == 0 || existing.as_bytes()[i - 1] == b'\n')
+        .unwrap_or(start);
+    let after_heading = existing[heading..]
+        .find('\n')
+        .map_or(existing.len(), |i| heading + i);
+    let end = existing[after_heading..]
+        .find("\n## ")
+        .map_or(existing.len(), |i| after_heading + i + 1);
+    Some(SectionSpan {
+        start,
+        end,
+        terminated: false,
+    })
+}
+
+/// Replaces the deciduous section of `path` with `section_content`, when the
+/// section there is one deciduous wrote. A section someone edited is left
+/// exactly as it is, and the section it would have become is put in
+/// `.deciduous/update-templates/` for comparison. This used to overwrite any
+/// section, so a project that had rewritten its section for a graph server
+/// got the git workflow back on every update.
 fn replace_config_md_section(
     path: &Path,
     section_content: &str,
     file_name: &str,
 ) -> Result<(), String> {
-    const START_MARKER: &str = "<!-- deciduous:start -->";
-    const END_MARKER: &str = "<!-- deciduous:end -->";
-
-    // Legacy heading markers (for migration from pre-marker format)
-    let legacy_markers = [
-        "## Decision Graph Workflow",
-        "## MANDATORY: Decision Graph Workflow",
-    ];
-
-    if path.exists() {
-        let existing =
-            fs::read_to_string(path).map_err(|e| format!("Could not read {}: {}", file_name, e))?;
-
-        // Strategy 1: Use HTML comment markers (safe, precise)
-        if let (Some(start), Some(end_start)) =
-            (existing.find(START_MARKER), existing.find(END_MARKER))
-        {
-            let end = end_start + END_MARKER.len();
-            // Include any trailing newline after the end marker
-            let end = if existing[end..].starts_with('\n') {
-                end + 1
-            } else {
-                end
-            };
-
-            let before = &existing[..start];
-            let after = &existing[end..];
-
-            let new_content = format!(
-                "{}{}{}",
-                before,
-                section_content.trim(),
-                if after.is_empty() {
-                    String::new()
-                } else {
-                    format!("\n{}", after) // everything after the end marker is the user's, blank lines included
-                }
-            );
-
-            fs::write(path, new_content)
-                .map_err(|e| format!("Could not write {}: {}", file_name, e))?;
-            println!("   {} {} (section replaced)", "Updated".green(), file_name);
-            return Ok(());
-        }
-
-        // Strategy 2: Legacy migration — find old heading, replace with new marked content
-        let start_idx = legacy_markers.iter().filter_map(|m| existing.find(m)).min();
-
-        if let Some(start) = start_idx {
-            // Find the end: look for next ## heading after our section header line
-            let after_header = existing[start..]
-                .find('\n')
-                .map(|i| start + i)
-                .unwrap_or(start + 10);
-            let end_idx = existing[after_header..]
-                .find("\n## ")
-                .map(|i| after_header + i + 1) // +1 to keep the newline before next heading
-                .unwrap_or(existing.len());
-
-            let before = &existing[..start];
-            let after = &existing[end_idx..];
-
-            let new_content = format!(
-                "{}{}{}",
-                before,
-                section_content.trim(),
-                if after.is_empty() {
-                    String::new()
-                } else {
-                    format!("\n{}", after.trim_start())
-                }
-            );
-
-            fs::write(path, new_content)
-                .map_err(|e| format!("Could not write {}: {}", file_name, e))?;
-            println!(
-                "   {} {} (section replaced, markers added)",
-                "Updated".green(),
-                file_name
-            );
-        } else {
-            // No existing section found — append
-            let mut file = fs::OpenOptions::new()
-                .append(true)
-                .open(path)
-                .map_err(|e| format!("Could not open {} for append: {}", file_name, e))?;
-            use std::io::Write;
-            writeln!(file, "\n{}", section_content.trim())
-                .map_err(|e| format!("Could not append to {}: {}", file_name, e))?;
-            println!("   {} {} (section added)", "Updated".green(), file_name);
-        }
-    } else {
-        // File doesn't exist — create it
-        fs::write(path, section_content.trim())
-            .map_err(|e| format!("Could not create {}: {}", file_name, e))?;
+    let root = path.parent().unwrap_or(Path::new("."));
+    let section = section_content.trim();
+    let Ok(existing) = fs::read_to_string(path) else {
+        fs::write(path, section).map_err(|e| format!("Could not create {}: {}", file_name, e))?;
         println!("   {} {}", "Creating".green(), file_name);
+        return Ok(());
+    };
+
+    let Some(span) = find_section(&existing) else {
+        let body = format!("{}\n\n{}\n", existing.trim_end(), section);
+        guard::backup(root, file_name)?;
+        fs::write(path, body).map_err(|e| format!("Could not write {}: {}", file_name, e))?;
+        println!("   {} {} (section added)", "Updated".green(), file_name);
+        return Ok(());
+    };
+
+    let current = &existing[span.start..span.end];
+    if !guard::shipped_section(current) && current.trim() != section {
+        let left = guard::leave_template(root, file_name, section);
+        println!(
+            "   {} {} (its deciduous section was edited by someone and is left as it is{})",
+            "Kept yours".yellow(),
+            file_name,
+            left.map(|p| format!("; the section it would have got: {p}"))
+                .unwrap_or_default()
+        );
+        return Ok(());
     }
+
+    let after = &existing[span.end..];
+    let joint = match (span.terminated, after.is_empty()) {
+        (true, _) => "",
+        (false, true) => "\n",
+        (false, false) => "\n\n",
+    };
+    let body = format!("{}{}{}{}", &existing[..span.start], section, joint, after);
+    if body == existing {
+        println!("   {} {}", "Unchanged".dimmed(), file_name);
+        return Ok(());
+    }
+    guard::backup(root, file_name)?;
+    fs::write(path, &body).map_err(|e| format!("Could not write {}: {}", file_name, e))?;
+    println!(
+        "   {} {} ({})",
+        "Updated".green(),
+        file_name,
+        if span.terminated {
+            "section replaced"
+        } else {
+            "section replaced, markers added"
+        }
+    );
     Ok(())
 }
 
@@ -1557,27 +1639,6 @@ mod tests {
     }
 
     #[test]
-    fn replacing_the_marked_section_leaves_everything_after_it_byte_for_byte() {
-        let tmp = TempDir::new().unwrap();
-        let md = tmp.path().join("CLAUDE.md");
-        let user_before = "# Mine\n\nRules.\n\n";
-        let user_after = "\n## My Section\n\nText.\n";
-        fs::write(
-            &md,
-            format!(
-                "{user_before}<!-- deciduous:start -->\nold\n<!-- deciduous:end -->\n{user_after}"
-            ),
-        )
-        .unwrap();
-        let section = "<!-- deciduous:start -->\nnew\n<!-- deciduous:end -->";
-        replace_config_md_section(&md, section, "CLAUDE.md").unwrap();
-        let once = fs::read_to_string(&md).unwrap();
-        assert_eq!(once, format!("{user_before}{section}\n{user_after}"));
-        replace_config_md_section(&md, section, "CLAUDE.md").unwrap();
-        assert_eq!(fs::read_to_string(&md).unwrap(), once);
-    }
-
-    #[test]
     fn test_write_file_overwrite() {
         let tmp = TempDir::new().unwrap();
         fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
@@ -1701,101 +1762,120 @@ mod tests {
         );
     }
 
+    /// A section deciduous shipped, and the same text without its markers,
+    /// as installs from before the markers have it.
+    fn shipped_section() -> (&'static str, String) {
+        let marked = templates::CLAUDE_MD_SECTION.trim();
+        let legacy = marked
+            .lines()
+            .filter(|l| !l.starts_with("<!-- deciduous:"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        (marked, legacy)
+    }
+
     #[test]
-    fn test_replace_section_with_markers_preserves_surrounding() {
+    fn replacing_the_marked_section_leaves_everything_after_it_byte_for_byte() {
         let tmp = TempDir::new().unwrap();
         let md = tmp.path().join("CLAUDE.md");
-        fs::write(
-            &md,
-            "# My Project\n\nCustom rules here.\n\n<!-- deciduous:start -->\n## Decision Graph Workflow\n\nOld content.\n<!-- deciduous:end -->\n\n## My Other Section\n\nUser content after.\n",
-        )
-        .unwrap();
+        let (old, _) = shipped_section();
+        let user_before = "# Mine\n\nRules.\n\n";
+        let user_after = "\n\n## My Section\n\nText.\n";
+        fs::write(&md, format!("{user_before}{old}{user_after}")).unwrap();
+        let section = remote_templates::CLAUDE_MD_SECTION_REMOTE.trim();
+        replace_config_md_section(&md, section, "CLAUDE.md").unwrap();
+        let once = fs::read_to_string(&md).unwrap();
+        assert_eq!(once, format!("{user_before}{section}{user_after}"));
+        replace_config_md_section(&md, section, "CLAUDE.md").unwrap();
+        assert_eq!(fs::read_to_string(&md).unwrap(), once);
+    }
 
-        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew content.\n<!-- deciduous:end -->";
-        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
-
-        let result = fs::read_to_string(&md).unwrap();
-        assert!(
-            result.contains("Custom rules here."),
-            "Content before should be preserved"
-        );
-        assert!(
-            result.contains("New content."),
-            "New section should be inserted"
-        );
-        assert!(
-            !result.contains("Old content."),
-            "Old section should be removed"
-        );
-        assert!(
-            result.contains("My Other Section"),
-            "Content after should be preserved"
-        );
-        assert!(
-            result.contains("User content after."),
-            "Content after should be preserved"
+    #[test]
+    fn an_edited_marked_section_is_kept_byte_for_byte() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        let text = "# My Project\n\n<!-- deciduous:start -->\n## Decision Graph Workflow\n\nUse `deciduous remote pull`.\n<!-- deciduous:end -->\n\n## Mine\n";
+        fs::write(&md, text).unwrap();
+        replace_config_md_section(&md, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
+        assert_eq!(fs::read_to_string(&md).unwrap(), text);
+        assert_eq!(
+            fs::read_to_string(tmp.path().join(".deciduous/update-templates/CLAUDE.md")).unwrap(),
+            CLAUDE_MD_SECTION.trim()
         );
     }
 
     #[test]
-    fn test_replace_section_legacy_no_markers_migrates() {
+    fn a_legacy_section_gets_markers_and_the_next_heading_stays() {
         let tmp = TempDir::new().unwrap();
         let md = tmp.path().join("CLAUDE.md");
+        let (_, legacy) = shipped_section();
         fs::write(
             &md,
-            "# My Project\n\nCustom rules.\n\n## Decision Graph Workflow\n\nOld deciduous stuff.\n\n### Sub-heading\n\nMore old stuff.\n\n## My Custom Rules\n\nDo not delete this!\n",
+            format!("# My Project\n\nCustom rules.\n\n{legacy}\n\n## My Custom Rules\n\nDo not delete this!\n"),
         )
         .unwrap();
-
-        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew stuff.\n<!-- deciduous:end -->";
-        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
-
+        replace_config_md_section(&md, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
         let result = fs::read_to_string(&md).unwrap();
-        assert!(result.contains("Custom rules."), "Content before preserved");
-        assert!(result.contains("New stuff."), "New section inserted");
-        assert!(
-            !result.contains("Old deciduous stuff."),
-            "Old section removed"
-        );
-        assert!(
-            result.contains("My Custom Rules"),
-            "User H2 after preserved"
-        );
-        assert!(
-            result.contains("Do not delete this!"),
-            "User content after preserved"
-        );
-        assert!(
-            result.contains("<!-- deciduous:start -->"),
-            "Start marker added"
-        );
-        assert!(
-            result.contains("<!-- deciduous:end -->"),
-            "End marker added"
+        assert_eq!(
+            result,
+            format!(
+                "# My Project\n\nCustom rules.\n\n{}\n\n## My Custom Rules\n\nDo not delete this!\n",
+                CLAUDE_MD_SECTION.trim()
+            )
         );
     }
 
     #[test]
-    fn test_replace_section_legacy_last_section_no_trailing_content() {
+    fn a_start_marker_without_an_end_is_replaced_from_the_marker_once() {
+        // 1.0.10 searched for the heading, which sits after the marker, so
+        // the old marker survived beside the new one.
         let tmp = TempDir::new().unwrap();
         let md = tmp.path().join("CLAUDE.md");
+        let (_, legacy) = shipped_section();
         fs::write(
             &md,
-            "# My Project\n\nStuff.\n\n## Decision Graph Workflow\n\nOld content here.\n",
+            format!("# P\n\n<!-- deciduous:start -->\n{legacy}\n\n## Build\n\nmake\n"),
         )
         .unwrap();
+        replace_config_md_section(&md, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
+        let once = fs::read_to_string(&md).unwrap();
+        assert_eq!(once.matches(guard::BLOCK_START).count(), 1, "{once}");
+        assert_eq!(once.matches(guard::BLOCK_END).count(), 1);
+        assert!(once.ends_with("<!-- deciduous:end -->\n\n## Build\n\nmake\n"));
+        replace_config_md_section(&md, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
+        assert_eq!(fs::read_to_string(&md).unwrap(), once);
+    }
 
-        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew content.\n<!-- deciduous:end -->";
-        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
+    #[test]
+    fn a_file_with_the_doubled_marker_is_repaired() {
+        // What 1.0.10's update left: the user's start marker, then a whole
+        // shipped section with its own markers.
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        let (old, _) = shipped_section();
+        fs::write(
+            &md,
+            format!("# P\n\n<!-- deciduous:start -->\n{old}\n## Build\n"),
+        )
+        .unwrap();
+        replace_config_md_section(&md, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
+        let body = fs::read_to_string(&md).unwrap();
+        assert_eq!(body, format!("# P\n\n{old}\n## Build\n"));
+    }
 
-        let result = fs::read_to_string(&md).unwrap();
-        assert!(result.contains("Stuff."), "Content before preserved");
-        assert!(result.contains("New content."), "New section inserted");
-        assert!(!result.contains("Old content here."), "Old section removed");
-        assert!(
-            result.contains("<!-- deciduous:end -->"),
-            "End marker present"
-        );
+    #[test]
+    fn user_text_after_a_legacy_section_without_a_heading_is_kept() {
+        // The span of an unmarked section runs to the next `## `; with user
+        // notes under `###` that span holds them too, so it is not a shipped
+        // text and nothing is replaced. (It used to be eaten to the end.)
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        let (_, legacy) = shipped_section();
+        let text = format!("# My Project\n\n{legacy}\n\n### My Notes\n\nImportant.\n");
+        fs::write(&md, &text).unwrap();
+        replace_config_md_section(&md, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
+        assert_eq!(fs::read_to_string(&md).unwrap(), text);
     }
 
     #[test]
@@ -1833,33 +1913,6 @@ mod tests {
         assert!(result.contains("<!-- deciduous:end -->"));
     }
 
-    #[test]
-    fn test_replace_section_preserves_non_h2_content_after_legacy() {
-        let tmp = TempDir::new().unwrap();
-        let md = tmp.path().join("CLAUDE.md");
-        // Simulate: deciduous section last, followed by non-H2 user content
-        fs::write(
-            &md,
-            "# My Project\n\n## Decision Graph Workflow\n\nOld stuff.\n\n### My Notes\n\nThese are important notes without an H2.\n",
-        )
-        .unwrap();
-
-        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew stuff.\n<!-- deciduous:end -->";
-        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
-
-        let result = fs::read_to_string(&md).unwrap();
-        assert!(result.contains("New stuff."), "New section inserted");
-        // Legacy fallback eats to EOF when no next ## found — this is the migration case.
-        // After this update, markers are in place and future updates will preserve content.
-        assert!(
-            result.contains("<!-- deciduous:end -->"),
-            "End marker present for future safety"
-        );
-    }
-
-    /// Every file deciduous writes to tell an agent how to work says how
-    /// parallel agents coordinate: on the board, never in a scratch file.
-    /// Fails naming the template that lost it.
     #[test]
     fn every_agent_facing_template_teaches_the_board() {
         use crate::opencode as o;

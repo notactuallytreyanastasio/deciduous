@@ -13,13 +13,25 @@
 //! |---|---|
 //! | absent | write the template |
 //! | identical | nothing |
-//! | carries a `<!-- deciduous:start -->` block | replace only the block |
+//! | carries a `<!-- deciduous:start -->` block holding text deciduous shipped | replace only the block |
+//! | carries a block someone edited | keep it untouched |
 //! | written by deciduous (hash recorded in `.deciduous/harness.json`, or any template text deciduous ever shipped) | replace |
-//! | anything else, Markdown | keep it, append the template in a marked block |
+//! | anything else, Markdown, no `[remote]` | keep it, append the template in a marked block |
+//! | anything else, Markdown, project has a `[remote]` | keep it untouched |
 //! | anything else, script / TOML / other | keep it untouched |
 //!
 //! Every file about to change is first copied to
-//! `.deciduous/update-backups/<unix-seconds>/<path>`.
+//! `.deciduous/update-backups/<unix-seconds>/<path>`. Every file kept
+//! untouched gets the template it would have had written beside it, at
+//! `.deciduous/update-templates/<path>`, so `diff` shows what it is missing.
+//!
+//! Why a `[remote]` project gets no appended block: its graph lives on a
+//! server, so a Markdown file someone wrote there is usually the server
+//! workflow written by hand, because the shipped templates described the git
+//! one. Appending a template under it gives agents two sets of instructions
+//! for one graph. In a git project the appended block describes the model the
+//! user's own text describes, and 1.0.3 found 59 such files worth keeping
+//! both halves of, so that rule stays.
 
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -74,6 +86,58 @@ pub fn shipped_by_deciduous(text: &str) -> bool {
     super::known_templates::KNOWN_TEMPLATE_SHA256
         .binary_search(&sha(&normalise(text)).as_str())
         .is_ok()
+}
+
+/// Whether a marked section (a `CLAUDE.md` deciduous section, or the block
+/// `write` appends) holds text deciduous shipped. Marker lines are ignored:
+/// sections were shipped both with and without them, and a file damaged by
+/// 1.0.10's update carries a start marker twice.
+pub fn shipped_section(text: &str) -> bool {
+    let body = normalise(&strip_markers(text));
+    shipped_by_deciduous(&body)
+        || shipped_by_deciduous(&format!("{BLOCK_START}\n{body}\n{BLOCK_END}"))
+}
+
+fn strip_markers(text: &str) -> String {
+    text.replace("\r\n", "\n")
+        .lines()
+        .filter(|l| !matches!(l.trim(), BLOCK_START | BLOCK_END))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn block_sha(template: &str) -> String {
+    sha(&normalise(template))
+}
+
+/// A marked block is deciduous's to replace when it holds a shipped text, or
+/// the text this project's last update put there (recorded in the manifest
+/// under `<path>#block`). Anything else in it was written by someone.
+fn block_is_ours(block: &str, recorded: Option<&String>) -> bool {
+    shipped_section(block) || recorded.is_some_and(|h| *h == block_sha(&strip_markers(block)))
+}
+
+/// Whether the project at `root` keeps its graph on a server.
+pub fn remote_configured(root: &Path) -> bool {
+    crate::remote::config_at(&root.join(".deciduous"))
+        .map(|c| c.remote.is_configured())
+        .unwrap_or(false)
+}
+
+/// Where `write` leaves the template for a file it kept untouched.
+pub const TEMPLATE_DIR: &str = ".deciduous/update-templates";
+
+/// Puts `template` at `.deciduous/update-templates/<rel>` and returns that
+/// path, relative to `root`, for the report. `None` outside a project.
+pub fn leave_template(root: &Path, rel: &str, template: &str) -> Option<String> {
+    if !root.join(".deciduous").is_dir() {
+        return None;
+    }
+    let out = format!("{TEMPLATE_DIR}/{rel}");
+    let dst = root.join(&out);
+    fs::create_dir_all(dst.parent()?).ok()?;
+    fs::write(&dst, template).ok()?;
+    Some(out)
 }
 
 fn read_manifest(root: &Path) -> BTreeMap<String, String> {
@@ -196,10 +260,12 @@ pub fn write(
                     let end = s[start..]
                         .find(BLOCK_END)
                         .map(|i| start + i + BLOCK_END.len());
+                    let block_key = format!("{rel}#block");
                     match end {
-                        Some(end) => {
+                        Some(end) if block_is_ours(&s[start..end], manifest.get(&block_key)) => {
                             let block = format!("{BLOCK_START}\n{}\n{BLOCK_END}", template.trim());
                             let body = format!("{}{}{}", &s[..start], block, &s[end..]);
+                            manifest.insert(block_key, block_sha(template));
                             if body == *s {
                                 Outcome::Unchanged
                             } else {
@@ -209,7 +275,7 @@ pub fn write(
                                 Outcome::BlockReplaced
                             }
                         }
-                        None => Outcome::KeptYours,
+                        _ => Outcome::KeptYours,
                     }
                 }
                 Ok(ref s) if written_by_us || shipped_by_deciduous(s) => {
@@ -217,7 +283,7 @@ pub fn write(
                     put(&mut manifest, template)?;
                     Outcome::Updated
                 }
-                Ok(ref s) if rel.ends_with(".md") => {
+                Ok(ref s) if rel.ends_with(".md") && !remote_configured(root) => {
                     backup(root, &rel)?;
                     let body = format!(
                         "{}\n\n{BLOCK_START}\n{}\n{BLOCK_END}\n",
@@ -226,6 +292,7 @@ pub fn write(
                     );
                     fs::write(path, body).map_err(|e| format!("Could not write {rel}: {e}"))?;
                     manifest.remove(&rel);
+                    manifest.insert(format!("{rel}#block"), block_sha(template));
                     Outcome::Appended
                 }
                 _ => Outcome::KeptYours,
@@ -233,6 +300,9 @@ pub fn write(
         }
     };
     write_manifest(root, &manifest);
+    if outcome == Outcome::KeptYours {
+        leave_template(root, &rel, template);
+    }
     Ok(outcome)
 }
 
@@ -382,6 +452,7 @@ mod tests {
         // `python3 scripts/gen_known_templates.py > src/init/known_templates.rs`.
         // Without the regeneration, installs made from the old text would read
         // as the user's own on the next update and get appended to, not replaced.
+        use crate::init::remote_templates as r;
         use crate::init::templates as t;
         use crate::opencode as o;
         let current = [
@@ -405,6 +476,13 @@ mod tests {
             ("PLUGIN_VERSION_CHECK", o::PLUGIN_VERSION_CHECK),
             ("AGENT_DECIDUOUS", o::AGENT_DECIDUOUS),
             ("TOOL_DECIDUOUS", o::TOOL_DECIDUOUS),
+            ("CLAUDE_MD_SECTION", t::CLAUDE_MD_SECTION),
+            ("DECISION_MD_REMOTE", r::DECISION_MD_REMOTE),
+            ("RECOVER_MD_REMOTE", r::RECOVER_MD_REMOTE),
+            ("WORK_MD_REMOTE", r::WORK_MD_REMOTE),
+            ("DOCUMENT_MD_REMOTE", r::DOCUMENT_MD_REMOTE),
+            ("SYNC_MD_REMOTE", r::SYNC_MD_REMOTE),
+            ("CLAUDE_MD_SECTION_REMOTE", r::CLAUDE_MD_SECTION_REMOTE),
         ];
         let missing: Vec<&str> = current
             .iter()
@@ -415,6 +493,149 @@ mod tests {
             missing.is_empty(),
             "regenerate src/init/known_templates.rs; not listed: {missing:?}"
         );
+    }
+
+    fn remote_project() -> TempDir {
+        let t = project();
+        fs::write(
+            t.path().join(".deciduous/config.toml"),
+            "[remote]\nurl = \"https://graph.invalid/mcp\"\nworkspace = \"p\"\n",
+        )
+        .unwrap();
+        t
+    }
+
+    #[test]
+    fn a_users_markdown_on_a_remote_project_is_left_alone() {
+        let t = remote_project();
+        let p = t.path().join(".claude/commands/recover.md");
+        let mine = "# Recover\n\nRun `deciduous remote pull`.\n";
+        fs::write(&p, mine).unwrap();
+        assert_eq!(
+            write(t.path(), &p, "# Recover\n\nGeneric.\n", false).unwrap(),
+            Outcome::KeptYours
+        );
+        assert_eq!(fs::read_to_string(&p).unwrap(), mine);
+        assert_eq!(
+            fs::read_to_string(
+                t.path()
+                    .join(TEMPLATE_DIR)
+                    .join(".claude/commands/recover.md")
+            )
+            .unwrap(),
+            "# Recover\n\nGeneric.\n"
+        );
+    }
+
+    #[test]
+    fn a_block_someone_edited_is_kept() {
+        let t = project();
+        let p = t.path().join(".claude/commands/build-test.md");
+        fs::write(&p, "# Mine\n").unwrap();
+        write(t.path(), &p, "# Generic\n", false).unwrap();
+        let edited = fs::read_to_string(&p)
+            .unwrap()
+            .replace("# Generic", "# Generic, but run it in /tmp");
+        fs::write(&p, &edited).unwrap();
+        assert_eq!(
+            write(t.path(), &p, "# Generic v2\n", false).unwrap(),
+            Outcome::KeptYours
+        );
+        assert_eq!(fs::read_to_string(&p).unwrap(), edited);
+    }
+
+    #[test]
+    fn a_shipped_block_on_a_remote_project_becomes_the_remote_template() {
+        // A file 1.0.10 appended the git-model block to: the block is ours.
+        let t = remote_project();
+        let p = t.path().join(".claude/commands/recover.md");
+        let mine = "# Recover\n\nRun `deciduous remote pull`.";
+        fs::write(
+            &p,
+            format!(
+                "{mine}\n\n{BLOCK_START}\n{}\n{BLOCK_END}\n",
+                crate::init::templates::RECOVER_MD.trim()
+            ),
+        )
+        .unwrap();
+        let remote = crate::init::remote_templates::RECOVER_MD_REMOTE;
+        assert_eq!(
+            write(t.path(), &p, remote, false).unwrap(),
+            Outcome::BlockReplaced
+        );
+        let body = fs::read_to_string(&p).unwrap();
+        assert!(body.starts_with(mine));
+        assert!(body.contains("deciduous remote pull\ndeciduous remote status"));
+        assert!(!body.contains("deciduous sync  # Do this frequently!"));
+        assert_eq!(
+            write(t.path(), &p, remote, false).unwrap(),
+            Outcome::Unchanged
+        );
+    }
+
+    #[test]
+    fn remote_templates_track_the_git_ones() {
+        // The remote variants are the git ones with their sync passages
+        // rewritten. A shared line edited in one and not the other fails here.
+        use crate::init::remote_templates as r;
+        use crate::init::templates as t;
+        let git_model = [
+            "sync",
+            "graph.json",
+            "git pull",
+            "merge",
+            "push",
+            "daily workflow",
+            "0.17",
+            "teammate",
+            "live graph",
+            "ordinary git",
+            "work normally",
+        ];
+        for (name, git, remote) in [
+            ("DECISION_MD", t::DECISION_MD, r::DECISION_MD_REMOTE),
+            ("RECOVER_MD", t::RECOVER_MD, r::RECOVER_MD_REMOTE),
+            ("WORK_MD", t::WORK_MD, r::WORK_MD_REMOTE),
+            ("DOCUMENT_MD", t::DOCUMENT_MD, r::DOCUMENT_MD_REMOTE),
+            (
+                "CLAUDE_MD_SECTION",
+                t::CLAUDE_MD_SECTION,
+                r::CLAUDE_MD_SECTION_REMOTE,
+            ),
+        ] {
+            let have: std::collections::HashSet<&str> = remote.lines().collect();
+            let missing: Vec<&str> = git
+                .lines()
+                .filter(|l| {
+                    let l2 = l.to_lowercase();
+                    !git_model.iter().any(|w| l2.contains(w)) && !have.contains(l)
+                })
+                .collect();
+            assert!(missing.is_empty(), "{name}_REMOTE lacks {missing:#?}");
+        }
+    }
+
+    #[test]
+    fn remote_templates_never_send_agents_to_the_git_workflow() {
+        use crate::init::remote_templates as r;
+        for (name, text) in [
+            ("DECISION_MD_REMOTE", r::DECISION_MD_REMOTE),
+            ("RECOVER_MD_REMOTE", r::RECOVER_MD_REMOTE),
+            ("WORK_MD_REMOTE", r::WORK_MD_REMOTE),
+            ("DOCUMENT_MD_REMOTE", r::DOCUMENT_MD_REMOTE),
+            ("SYNC_MD_REMOTE", r::SYNC_MD_REMOTE),
+            ("CLAUDE_MD_SECTION_REMOTE", r::CLAUDE_MD_SECTION_REMOTE),
+        ] {
+            for bad in [
+                "\ndeciduous sync",
+                "git pull --rebase",
+                "git add .deciduous/graph.json",
+                "Before Every Sync",
+                "-> deciduous sync",
+            ] {
+                assert!(!text.contains(bad), "{name} still says {bad:?}");
+            }
+        }
     }
 
     #[test]
