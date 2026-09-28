@@ -2461,7 +2461,8 @@ fn reconcile_inner(
                 if rec.is_tombstone() {
                     if rec.effective_ts() >= row_ts {
                         if !dry_run {
-                            db.delete_node_local(row.id).map_err(db_err)?;
+                            db.delete_node_local(row.id, rec.effective_ts())
+                                .map_err(db_err)?;
                         }
                         tombstoned_nodes.insert(change_id.clone());
                         report.nodes_deleted += 1;

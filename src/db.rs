@@ -1011,19 +1011,39 @@ impl Database {
     }
 
     /// [`Self::queue_in_tx`] for what reconcile applies from graph.json.
+    /// `made` is the time the record carries for the change (its
+    /// `updated_at`, a tombstone's time, an edge's `created_at`): the op is
+    /// dated by it, not by when this machine queued it.
+    ///
+    /// The server orders an op against a delete by `at`: an edit revives a
+    /// deleted node only when made after the delete, and a delete's `at`
+    /// dates the tombstone. Stamped at queue time, an edit made before a
+    /// delete that reached this machine after it counted as made after it
+    /// and revived the node; and a delete that came through git dated its
+    /// tombstone after edits made since, which it then refused.
+    ///
+    /// The record's time is capped at now: a teammate's clock running ahead
+    /// cannot date a change later than the moment it was seen here, which is
+    /// how every such op was dated before. A time that does not parse is
+    /// read as reconcile read it (`records::parse_ts`: the epoch), so the
+    /// server orders the change the way this sync did.
     fn queue_git_in_tx(
         &self,
         conn: &mut SqliteConnection,
         bodies: Vec<crate::oplog::OpBody>,
+        made: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<Queued>> {
-        self.queue_in_tx_from(conn, bodies, Some(crate::oplog::GIT))
+        let at = made.min(chrono::Utc::now()).to_rfc3339();
+        self.queue_in_tx_from(conn, bodies, Some((crate::oplog::GIT, at.as_str())))
     }
 
+    /// `origin` is `git` and the time to date the op by, for a change that
+    /// came through git; None for a local write, dated now.
     fn queue_in_tx_from(
         &self,
         conn: &mut SqliteConnection,
         bodies: Vec<crate::oplog::OpBody>,
-        origin: Option<&str>,
+        origin: Option<(&str, &str)>,
     ) -> Result<Vec<Queued>> {
         if self
             .ops_suppressed
@@ -1034,7 +1054,10 @@ impl Database {
         let mut out = Vec::with_capacity(bodies.len());
         for body in bodies {
             let mut op = crate::oplog::OpLog::new_op(body);
-            op.origin = origin.map(str::to_string);
+            if let Some((origin, at)) = origin {
+                op.origin = Some(origin.to_string());
+                op.at = at.to_string();
+            }
             if let Some(at) = crate::oplog::nul_path(&op) {
                 return Err(DbError::Validation(format!(
                     "nothing was written: {at} holds a NUL character, which the shared server \
@@ -2782,7 +2805,11 @@ impl Database {
                     .first(conn)?
                 }
             };
-            self.queue_git_in_tx(conn, body.into_iter().collect())?;
+            self.queue_git_in_tx(
+                conn,
+                body.into_iter().collect(),
+                crate::records::parse_ts(&rec.updated_at),
+            )?;
             Ok(id)
         })
     }
@@ -2807,7 +2834,7 @@ impl Database {
                 Some(before) => Self::record_update_body(before, rec),
                 None => Vec::new(),
             };
-            self.queue_git_in_tx(conn, bodies)?;
+            self.queue_git_in_tx(conn, bodies, crate::records::parse_ts(&rec.updated_at))?;
             Ok(())
         })
     }
@@ -2959,9 +2986,15 @@ impl Database {
 
     /// Delete a node (and its edges) without writing tombstones: a delete
     /// that came through git. With a log, the node's delete is queued (its
-    /// edges go with it on the server, which hides a deleted node's edges).
-    pub(crate) fn delete_node_local(&self, node_id: i32) -> Result<()> {
-        self.delete_node_impl(node_id, false, false).map(|_| ())
+    /// edges go with it on the server, which hides a deleted node's edges),
+    /// dated `deleted`, when the tombstone says the node was deleted.
+    pub(crate) fn delete_node_local(
+        &self,
+        node_id: i32,
+        deleted: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        self.delete_node_impl(node_id, false, Some(deleted))
+            .map(|_| ())
     }
 
     /// Insert an edge exactly as recorded.
@@ -3028,7 +3061,11 @@ impl Database {
                 "last_insert_rowid()",
             ))
             .first(conn)?;
-            self.queue_git_in_tx(conn, body.into_iter().collect())?;
+            self.queue_git_in_tx(
+                conn,
+                body.into_iter().collect(),
+                crate::records::parse_ts(&rec.created_at),
+            )?;
             Ok(id)
         })
     }
@@ -3072,6 +3109,7 @@ impl Database {
                             edge_type: row.edge_type.clone(),
                             deleted_at: deleted_at.map(str::to_string),
                         }],
+                        deleted_at.map_or_else(chrono::Utc::now, crate::records::parse_ts),
                     )?;
                     Ok(None)
                 }
@@ -3659,15 +3697,18 @@ impl Database {
 
     /// Delete a node and all its connected edges
     pub fn delete_node(&self, node_id: i32, dry_run: bool) -> Result<DeleteSummary> {
-        self.delete_node_impl(node_id, dry_run, true)
+        self.delete_node_impl(node_id, dry_run, None)
     }
 
+    /// `from_git` is when a delete that came through graph.json was made;
+    /// None for a local delete, which is published and dated now.
     fn delete_node_impl(
         &self,
         node_id: i32,
         dry_run: bool,
-        publish: bool,
+        from_git: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<DeleteSummary> {
+        let publish = from_git.is_none();
         let _mirror = if !dry_run && publish {
             let guard = self.require_readable_store()?;
             self.require_branch_for_delete("delete it")?;
@@ -3786,11 +3827,9 @@ impl Database {
             // 5. Finally delete the node itself
             diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
                 .execute(conn)?;
-            // A delete that is not published came from graph.json.
-            let queued = if publish {
-                self.queue_in_tx(conn, bodies)?
-            } else {
-                self.queue_git_in_tx(conn, bodies)?
+            let queued = match from_git {
+                None => self.queue_in_tx(conn, bodies)?,
+                Some(made) => self.queue_git_in_tx(conn, bodies, made)?,
             };
             Ok::<_, DbError>((doomed_tags, queued))
         })?;
