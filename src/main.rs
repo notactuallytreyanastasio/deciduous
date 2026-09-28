@@ -581,13 +581,15 @@ enum BoardAction {
 enum RemoteAction {
     /// Connect this project to a shared graph server, step by step
     ///
-    /// Asks whether the graph lives on this machine (PostgreSQL and the server
-    /// in Docker, set up if needed) or on a server someone else runs (URL and
-    /// token, checked before anything is stored). Then it writes [remote],
-    /// stores the token and registers the server with Claude Code. --local or
-    /// --url answer the question for scripts.
+    /// Asks whether the graph lives on this machine or on a server someone
+    /// else runs (URL and token, checked before anything is stored). On this
+    /// machine the server runs as a background service (launchd or systemd)
+    /// against PostgreSQL on localhost:5432 or a PostgreSQL you name, or in
+    /// Docker if you prefer. Then it writes [remote], stores the token and
+    /// registers the server with Claude Code. Flags answer for scripts.
     Setup {
-        /// Use this machine's server, set up with Docker if it is not running
+        /// Use this machine's server; set it up if there is none (by default a
+        /// background service using PostgreSQL on localhost:5432 as $USER)
         #[arg(long, conflicts_with = "url")]
         local: bool,
 
@@ -595,11 +597,25 @@ enum RemoteAction {
         #[arg(long)]
         url: Option<String>,
 
-        /// Port to publish this machine's server on (default: asked, a free one
+        /// Port for this machine's server (default: asked, a free one
         /// suggested). Only used the first time it is set up; after that the
         /// port in ~/.config/deciduous/server/.env stands.
         #[arg(long, conflicts_with = "url")]
         port: Option<u16>,
+
+        /// PostgreSQL for this machine's server: postgres://USER[:PASSWORD]@HOST[:PORT]/DATABASE
+        /// (?sslmode=require|verify-ca|verify-full for TLS). The environment's
+        /// DATABASE_URL is never used unless passed here.
+        #[arg(long, value_name = "URL", conflicts_with_all = ["url", "docker_postgres"])]
+        database_url: Option<String>,
+
+        /// Run a new PostgreSQL in Docker for this machine's server (implies --docker)
+        #[arg(long, conflicts_with = "url")]
+        docker_postgres: bool,
+
+        /// Run this machine's server in Docker instead of as a background service
+        #[arg(long, conflicts_with = "url")]
+        docker: bool,
     },
 
     /// Store the API token outside every repository (mode 0600)
@@ -1523,17 +1539,36 @@ fn main() {
 
     // `remote setup` may run in a project with no .deciduous yet.
     if let Command::Remote {
-        action: RemoteAction::Setup { local, url, port },
+        action:
+            RemoteAction::Setup {
+                local,
+                url,
+                port,
+                database_url,
+                docker_postgres,
+                docker,
+            },
     } = &args.command
     {
+        use deciduous::local_server::{Database, LocalRequest};
+        use deciduous::server::SetupChoice;
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let choice = match (local, url) {
-            (true, _) => deciduous::server::SetupChoice::Local(*port),
-            (false, Some(u)) => deciduous::server::SetupChoice::Url(u.clone()),
-            // A port without --local still means this machine: nothing else
-            // has a port to choose.
-            (false, None) if port.is_some() => deciduous::server::SetupChoice::Local(*port),
-            (false, None) => deciduous::server::SetupChoice::Ask,
+        let database = match (database_url, docker_postgres) {
+            (Some(u), _) => Some(Database::Url(u.clone())),
+            (None, true) => Some(Database::DockerPostgres),
+            (None, false) => None,
+        };
+        let req = LocalRequest {
+            port: *port,
+            database,
+            docker: *docker,
+        };
+        // Any flag about this machine's server means this machine: nothing
+        // else has a port, a database or a container to choose.
+        let choice = match url {
+            Some(u) => SetupChoice::Url(u.clone()),
+            None if *local || req != LocalRequest::default() => SetupChoice::Local(req),
+            None => SetupChoice::Ask,
         };
         if let Err(e) = deciduous::server::setup_wizard(&cwd, choice) {
             eprintln!("{} {}", "Error:".red(), e);
