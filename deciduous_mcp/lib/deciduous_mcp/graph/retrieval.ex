@@ -31,6 +31,14 @@ defmodule DeciduousMcp.Graph.Retrieval do
   with content words that match nothing gets no anchors and lists those
   words in `unmatched_terms`: no type list stands in for a missing topic.
 
+  Before RRF, anchors are ordered by the rarity of the terms they hold
+  (`term_weights/2`): a term of art ("1.0.10", "4c7d8e0", "limit_req")
+  that no common word of the question is rarer than weighs `1 / df`, and
+  a node holding it outranks every node holding only the common words.
+  RRF orders nodes of equal weight, which on a question without such a
+  term is all of them. Every node holding such a term is a candidate,
+  whether or not either similarity list kept it.
+
   Words that switch on a route, the depth or recency ("why", "decided",
   "history", "latest") are routing, not content, and are removed from the
   text terms (`route_terms`) unless nothing else is left.
@@ -402,8 +410,9 @@ defmodule DeciduousMcp.Graph.Retrieval do
 
     scope_dyn = scope_dynamic(workspace_id, scope)
 
-    anchors = anchors(terms, hint, recency, scope_dyn, anchor_limit)
     term_hits = term_hits(terms, scope_dyn)
+    weights = term_weights(term_hits, question)
+    anchors = anchors(terms, weights, hint, recency, scope_dyn, anchor_limit)
     unmatched = for t <- terms, Map.get(term_hits, t, 0) == 0, do: t
     distinctive = distinctive_unmatched(unmatched, question)
 
@@ -644,11 +653,12 @@ defmodule DeciduousMcp.Graph.Retrieval do
 
   # --- Anchors -------------------------------------------------------------
 
-  defp anchors(terms, hint, recency, scope_dyn, limit) do
+  defp anchors(terms, weights, hint, recency, scope_dyn, limit) do
     trigram = trigram_list(terms, scope_dyn)
     fts = fts_list(terms, scope_dyn)
+    {weight_of, rare} = decisive_matches(weights, trigram ++ fts, scope_dyn)
 
-    lexical = Enum.uniq_by(trigram ++ fts, & &1.id)
+    lexical = Enum.uniq_by(trigram ++ fts ++ rare, & &1.id)
 
     # With content terms, a type or status word only re-ranks their matches
     # ("what decisions about auth": the auth matches that are decisions get
@@ -677,10 +687,15 @@ defmodule DeciduousMcp.Graph.Retrieval do
     by_id =
       lists
       |> Enum.flat_map(fn {_, nodes} -> nodes end)
+      |> Kernel.++(rare)
       |> Map.new(&{&1.id, &1})
 
+    # A node reached only through the rare list has no rank in any fused
+    # list; it still enters, ordered by its matched weight.
+    ranks = Enum.reduce(rare, %{}, &Map.put_new(&2, &1.id, %{}))
+
     ranks =
-      Enum.reduce(lists, %{}, fn {name, nodes}, acc ->
+      Enum.reduce(lists, ranks, fn {name, nodes}, acc ->
         nodes
         |> Enum.with_index(1)
         |> Enum.reduce(acc, fn {n, rank}, acc2 ->
@@ -693,12 +708,13 @@ defmodule DeciduousMcp.Graph.Retrieval do
       rrf = r |> Map.values() |> Enum.reduce(0.0, fn rank, s -> s + 1 / (@rrf_k + rank) end)
       {id, r, rrf}
     end)
-    # Ties: better trigram rank, then better fts rank, then newer, then id.
+    # The matched weight first (term_weights/2), then RRF. Ties: better
+    # trigram rank, then better fts rank, then newer, then id.
     |> Enum.sort_by(fn {id, r, rrf} ->
       n = Map.fetch!(by_id, id)
 
-      {-rrf, Map.get(r, :trigram, 1_000_000), Map.get(r, :fts, 1_000_000),
-       -DateTime.to_unix(n.inserted_at, :microsecond), id}
+      {-Map.get(weight_of, id, 0.0), -rrf, Map.get(r, :trigram, 1_000_000),
+       Map.get(r, :fts, 1_000_000), -DateTime.to_unix(n.inserted_at, :microsecond), id}
     end)
     |> Enum.take(limit)
     |> Enum.map(fn {id, r, rrf} ->
@@ -865,6 +881,127 @@ defmodule DeciduousMcp.Graph.Retrieval do
   defp term_hits([], _scope_dyn), do: %{}
 
   defp term_hits(terms, scope_dyn) do
+    counted =
+      from(h in subquery(term_matches(terms, scope_dyn)),
+        group_by: h.term,
+        select: {h.term, count(h.id)}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    Map.new(terms, &{&1, Map.get(counted, &1, 0)})
+  end
+
+  # --- Rarity --------------------------------------------------------------
+
+  # A decisive term in more nodes than this does not single anything out:
+  # it is past what one similarity list keeps.
+  @decisive_max_df @lexical_pool
+
+  @doc """
+  How much each term counts toward an anchor's rank: `1 / df` for a
+  decisive term, 0 for every other. `term_hits` is `%{term => df}`, the
+  number of nodes in scope that contain each term.
+
+  A term is decisive when it is
+
+    * distinctive, by the test the absent-topic stop uses: written as a
+      name ("IPv6", "Redis" mid-sentence, a digit next to a letter) or not
+      a common English word (`CommonWords`: "1.0.10", "4c7d8e0",
+      "limit_req", "src/db.rs"), and
+    * in no more nodes than any common word of the question that matched,
+      and in at most #{@decisive_max_df}.
+
+  A question with fewer than two matching terms has none: there is
+  nothing for one term to outweigh.
+
+  Why not the textbook `log(N / df)`: it compresses the gap that matters.
+  On the shared server "Why did the 1.0.10 release not publish?" had df
+  {"1.0.10": 5, "publish": 90, "release": 236} over 2,022 nodes; log idf
+  gives 6.0 against 3.1 + 2.1 = 5.2, one more common word from flipping,
+  where `1 / df` gives 0.200 against 0.015.
+
+  Why not `1 / df` for every term: on a small graph an ordinary word is
+  rare by accident. Over the 56-node fixture "engine", "keep" and "see"
+  occur once each, and weighting them sent "What layout engine draws the
+  graph in the browser viewer?" to the storage-engine goal (held-out R@10
+  0.826 -> 0.743). Why the ceiling: "cli" (6 nodes) is not English but is
+  no rarer than "store" (2); ranking every node that says "cli" first took
+  "What does the CLI use to store the graph locally?" from RR 1.0 to 0.12.
+  The counts cannot tell "engine" from "1.0.10"; the word's form can,
+  which is what the absent-topic stop found too.
+  """
+  def term_weights(term_hits, question) do
+    matched = Enum.filter(term_hits, fn {_t, df} -> df > 0 end)
+    names = name_words(question)
+
+    {distinct, common} =
+      Enum.split_with(matched, fn {t, _} ->
+        MapSet.member?(names, t) or not CommonWords.common?(t)
+      end)
+
+    ceiling =
+      common
+      |> Enum.map(&elem(&1, 1))
+      |> Enum.min(fn -> @decisive_max_df end)
+      |> min(@decisive_max_df)
+
+    decisive =
+      if length(matched) < 2,
+        do: %{},
+        else: for({t, df} <- distinct, df <= ceiling, into: %{}, do: {t, 1.0 / df})
+
+    Map.new(term_hits, fn {t, _} -> {t, Map.get(decisive, t, 0.0)} end)
+  end
+
+  # Every node in scope holding a decisive term, with its matched weight
+  # (the decisive weights it holds over their total), in one query: each
+  # decisive term is in at most @decisive_max_df nodes, so this is at most
+  # 50 rows per term. Returns {%{id => weight}, nodes not already in
+  # `have`}. The second part is why the query is not restricted to the
+  # candidates: trigram and fts each keep 50, ranked over all the terms,
+  # and a node holding only the rare word can miss both. Matching is
+  # term_hits' own (ILIKE, or full text, so "migrations" still matches
+  # "migration").
+  defp decisive_matches(weights, have, scope_dyn) do
+    decisive = for {t, w} <- weights, w > 0, do: t
+
+    if decisive == [] do
+      {%{}, []}
+    else
+      total = decisive |> Enum.map(&Map.fetch!(weights, &1)) |> Enum.sum()
+
+      weight_of =
+        from(h in subquery(term_matches(decisive, scope_dyn)),
+          distinct: true,
+          select: {h.id, h.term}
+        )
+        |> Repo.all()
+        |> Enum.reduce(%{}, fn {id, t}, acc ->
+          Map.update(acc, id, Map.fetch!(weights, t), &(&1 + Map.fetch!(weights, t)))
+        end)
+        |> Map.new(fn {id, w} -> {id, Float.round(w / total, 9)} end)
+
+      have_ids = MapSet.new(have, & &1.id)
+      missing = weight_of |> Map.keys() |> Enum.reject(&MapSet.member?(have_ids, &1))
+
+      rare =
+        if missing == [] do
+          []
+        else
+          from(n in Node, where: n.id in type(^missing, {:array, :binary_id}))
+          |> order_by([n], desc: n.inserted_at, asc: n.id)
+          |> Repo.all()
+        end
+
+      {weight_of, rare}
+    end
+  end
+
+  # {term, node id} for every node in scope each term matches: ILIKE on
+  # title, description and metadata values, or full text on the stemmed
+  # title + description.
+  defp term_matches(terms, scope_dyn) do
     tsqs = Enum.map(terms, &("'" <> &1 <> "'"))
 
     # One branch per term with the pattern as a query parameter: joined
@@ -898,15 +1035,7 @@ defmodule DeciduousMcp.Graph.Retrieval do
         select: %{term: t.term, id: n.id}
       )
 
-    counted =
-      from(h in subquery(union(text, ^stemmed)),
-        group_by: h.term,
-        select: {h.term, count(h.id)}
-      )
-      |> Repo.all()
-      |> Map.new()
-
-    Map.new(terms, &{&1, Map.get(counted, &1, 0)})
+    union(text, ^stemmed)
   end
 
   # --- Expansion -----------------------------------------------------------
