@@ -71,9 +71,35 @@ defmodule DeciduousMcp.Eval.AskGraph do
         cats -> Enum.filter(Fixture.probe_set(), &(&1.category in cats))
       end
 
+    rare =
+      case opts[:only] do
+        nil -> Fixture.rare_term_set()
+        cats -> Enum.filter(Fixture.rare_term_set(), &(&1.category in cats))
+      end
+
     rows = Enum.map(questions, &ask_and_score(client, ws, ids, &1))
     held_rows = Enum.map(held, &ask_and_score(client, ws, ids, &1))
     probe_rows = Enum.map(probe, &ask_and_score(client, ws, ids, &1))
+
+    # The rare-term set asks a graph with the release history added, in a
+    # workspace of its own, so the other sets keep scoring the graph they
+    # were written for.
+    rare_rows =
+      if rare == [] do
+        []
+      else
+        rare_ws = ws <> "-rare"
+
+        rare_ids =
+          load!(
+            client,
+            rare_ws,
+            Fixture.nodes() ++ Fixture.release_nodes(),
+            Fixture.edges() ++ Fixture.release_edges()
+          )
+
+        Enum.map(rare, &ask_and_score(client, rare_ws, rare_ids, &1))
+      end
 
     %{
       summary: aggregate(rows) |> Map.put(:load_ms, load_ms) |> Map.put(:nodes, map_size(ids)),
@@ -88,6 +114,11 @@ defmodule DeciduousMcp.Eval.AskGraph do
         summary: aggregate(probe_rows),
         by_category: by_category(probe_rows),
         questions: probe_rows
+      },
+      rare_term: %{
+        summary: aggregate(rare_rows),
+        by_category: by_category(rare_rows),
+        questions: rare_rows
       }
     }
   end
@@ -119,9 +150,11 @@ defmodule DeciduousMcp.Eval.AskGraph do
 
   # --- loading --------------------------------------------------------------
 
-  defp load!(client, ws) do
+  defp load!(client, ws), do: load!(client, ws, Fixture.nodes(), Fixture.edges())
+
+  defp load!(client, ws, nodes, edges) do
     ids =
-      Map.new(Fixture.nodes(), fn {key, type, title, attrs} ->
+      Map.new(nodes, fn {key, type, title, attrs} ->
         args =
           %{"workspace" => ws, "node_type" => type, "title" => title, "branch" => "main"}
           |> put_opt("description", attrs[:description])
@@ -133,7 +166,7 @@ defmodule DeciduousMcp.Eval.AskGraph do
         {key, id}
       end)
 
-    for {from, to, type, rationale} <- Fixture.edges() do
+    for {from, to, type, rationale} <- edges do
       args =
         %{
           "workspace" => ws,
@@ -282,6 +315,12 @@ defmodule DeciduousMcp.Eval.AskGraph do
         "probe set: QUESTIONS questions without any route cue word; adversarial ones wrap an " <>
           "absent word in generic words the graph contains, answerable ones carry one rare " <>
           "word it contains (not used to tune)"
+      ) <>
+      section(
+        result[:rare_term],
+        "rare-term set: QUESTIONS questions pairing one term few nodes contain (a version, " <>
+          "an identifier, a run id) with words many nodes contain, over the fixture plus a " <>
+          "release history (written before the rarity weighting; not used to tune)"
       )
   end
 
