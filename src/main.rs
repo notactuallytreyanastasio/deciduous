@@ -622,6 +622,13 @@ enum RemoteAction {
         /// Workspace name. Defaults to the git repository's root directory.
         #[arg(long)]
         workspace: Option<String>,
+
+        /// Make this URL the machine's default instead: written to
+        /// ~/.deciduous/config.toml and used by every project and worktree
+        /// whose own .deciduous/config.toml has no [remote]. No workspace is
+        /// recorded; each project keeps deriving its own.
+        #[arg(long, conflicts_with = "workspace")]
+        user: bool,
     },
 
     /// Show how far the local database has drifted from the server
@@ -2585,8 +2592,40 @@ fn main() {
                     }
                 }
 
-                RemoteAction::Init { url, workspace } => {
+                RemoteAction::Init { url, workspace, user } => {
                     let url = url.trim_end_matches('/').to_string();
+                    if user {
+                        // The machine default. Checked, not required, to
+                        // answer: a laptop is set up offline more often than a
+                        // project is, and the URL is used only where a project
+                        // has no [remote] of its own.
+                        let mut probe = Config::default();
+                        probe.remote.url = Some(url.clone());
+                        match deciduous::remote::Remote::resolve(&probe, &cwd)
+                            .and_then(|r| r.health())
+                        {
+                            Ok(_) => {}
+                            Err(e) => eprintln!(
+                                "{} {url} did not answer ({e}); written anyway, check it with `deciduous remote status` in a project",
+                                "Warning:".yellow()
+                            ),
+                        }
+                        match Config::save_user_remote(&url) {
+                            Ok(path) => {
+                                println!("{} {}", "Machine default:".green(), url);
+                                println!("  written to {}", path.display());
+                                println!(
+                                    "  used by every project whose .deciduous/config.toml has no [remote]; each keeps its own workspace name"
+                                );
+                                println!("  token: `deciduous remote login --url {url}` (read from stdin)");
+                            }
+                            Err(e) => {
+                                eprintln!("{} could not write the per-user config: {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                        return;
+                    }
                     let ws = workspace
                         .clone()
                         .unwrap_or_else(|| deciduous::remote::workspace_for(&cwd));
@@ -2715,7 +2754,15 @@ fn main() {
                         }
                     };
 
-                    println!("{} {}", "Remote:".bold(), remote.url);
+                    match &cfg.remote_from {
+                        Some(path) => println!(
+                            "{} {}  (machine default from {})",
+                            "Remote:".bold(),
+                            remote.url,
+                            path.display()
+                        ),
+                        None => println!("{} {}", "Remote:".bold(), remote.url),
+                    }
                     println!("{} {}", "Workspace:".bold(), remote.workspace.cyan());
 
                     // The queue first: it is this machine's half of any

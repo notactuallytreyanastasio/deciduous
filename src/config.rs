@@ -1,6 +1,11 @@
 //! Configuration file support for deciduous
 //!
-//! Reads from .deciduous/config.toml
+//! Reads from .deciduous/config.toml. The `[remote]` section alone also has a
+//! per-user fallback: when the project's file has no `[remote]`, the URL is
+//! taken from `~/.deciduous/config.toml`, then `$XDG_CONFIG_HOME/deciduous/
+//! config.toml` (`~/.config/deciduous/config.toml`). A machine with one shared
+//! server points every checkout and worktree at it once, and a fresh worktree
+//! is never silently local-only.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -32,6 +37,12 @@ pub struct Config {
     /// DECIDUOUS_MCP_TOKEN so that committing this file leaks nothing.
     #[serde(default)]
     pub remote: crate::remote::RemoteConfig,
+
+    /// Set when `remote.url` came from a per-user file rather than the
+    /// project's own config.toml, so `remote status` and `remote init` can say
+    /// so. Never written to a file.
+    #[serde(skip)]
+    pub remote_from: Option<PathBuf>,
 }
 
 /// Hooks configuration for Claude Code integration
@@ -214,10 +225,31 @@ pub fn parse_with_table(existing: &str, name: &str) -> Result<toml_edit::Documen
         .map_err(|e| e.to_string())
 }
 
+/// The `[remote] url` of a config file's text, if it has one. Tolerant of an
+/// otherwise unparseable file: a broken per-user file must not break every
+/// project on the machine, it just contributes nothing.
+pub fn remote_url_in(contents: &str) -> Option<String> {
+    let doc: toml::Value = toml::from_str(contents).ok()?;
+    let url = doc.get("remote")?.get("url")?.as_str()?.trim().trim_end_matches('/');
+    if url.is_empty() {
+        None
+    } else {
+        Some(url.to_string())
+    }
+}
+
 impl Config {
-    /// Load config from .deciduous/config.toml
-    /// Returns default config if file doesn't exist
+    /// Load config from .deciduous/config.toml, then fill a missing `[remote]`
+    /// from the per-user files (see the module doc). Returns the default
+    /// config, still subject to the user fallback, if the project has no file.
     pub fn load() -> Self {
+        let mut config = Self::load_project();
+        Self::apply_user_remote(&mut config, &Self::user_config_paths());
+        config
+    }
+
+    /// The project's own config.toml, and nothing else.
+    pub fn load_project() -> Self {
         if let Some(path) = Self::find_config_path() {
             if let Ok(contents) = std::fs::read_to_string(&path) {
                 if let Ok(config) = toml::from_str(&contents) {
@@ -226,6 +258,72 @@ impl Config {
             }
         }
         Self::default()
+    }
+
+    /// Per-user config files, most specific first: `~/.deciduous/config.toml`,
+    /// then `$XDG_CONFIG_HOME/deciduous/config.toml` (the directory that
+    /// already holds the credentials file).
+    pub fn user_config_paths() -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            paths.push(home.join(".deciduous").join("config.toml"));
+        }
+        let xdg = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")));
+        if let Some(base) = xdg {
+            paths.push(base.join("deciduous").join("config.toml"));
+        }
+        paths
+    }
+
+    /// Where `remote init --user` writes: the first per-user path.
+    pub fn user_config_path() -> Option<PathBuf> {
+        Self::user_config_paths().into_iter().next()
+    }
+
+    /// If `config` has no remote, take the URL from the first per-user file
+    /// that names one. Only the URL: a workspace name is per project, and a
+    /// machine-wide one would fold every repository into a single graph.
+    pub fn apply_user_remote(config: &mut Self, user_paths: &[PathBuf]) {
+        if config.remote.is_configured() {
+            return;
+        }
+        for path in user_paths {
+            let Ok(contents) = std::fs::read_to_string(path) else { continue };
+            if let Some(url) = remote_url_in(&contents) {
+                config.remote.url = Some(url);
+                config.remote_from = Some(path.clone());
+                return;
+            }
+        }
+    }
+
+    /// Write `[remote] url` into the per-user config file, creating it, and
+    /// keep whatever else the file holds exactly as it was.
+    pub fn save_user_remote(url: &str) -> std::io::Result<PathBuf> {
+        let path = Self::user_config_path().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "HOME is not set")
+        })?;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        let mut doc = parse_with_table(&existing, "remote").map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("{} is not valid TOML: {e}", path.display()),
+            )
+        })?;
+        let table = doc["remote"].or_insert(toml_edit::table());
+        table["url"] = toml_edit::value(url.to_string());
+        if let Some(t) = table.as_table_mut() {
+            // A workspace in a per-user file is never honoured (see
+            // apply_user_remote); do not leave one there to mislead.
+            t.remove("workspace");
+        }
+        std::fs::write(&path, doc.to_string())?;
+        Ok(path)
     }
 
     /// Write the `[remote]` section into `.deciduous/config.toml`, leaving
@@ -496,5 +594,48 @@ mod remote_config_tests {
     #[test]
     fn a_config_with_no_remote_is_not_configured() {
         assert!(!Config::default().remote.is_configured());
+    }
+
+    #[test]
+    fn remote_url_in_reads_only_a_remote_url() {
+        assert_eq!(
+            remote_url_in("[remote]\nurl = \"https://x.example/\"\n"),
+            Some("https://x.example".to_string())
+        );
+        assert_eq!(remote_url_in("[branch]\nauto_detect = true\n"), None);
+        assert_eq!(remote_url_in("[remote]\nurl = \"\"\n"), None);
+        assert_eq!(remote_url_in("this is not toml = = ="), None);
+    }
+
+    #[test]
+    fn a_project_without_a_remote_takes_the_first_user_file_that_has_one() {
+        let dir = std::env::temp_dir().join(format!("deciduous-user-cfg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let first = dir.join("first.toml");
+        let second = dir.join("second.toml");
+        std::fs::write(&first, "[branch]\nauto_detect = true\n").unwrap();
+        std::fs::write(
+            &second,
+            "[remote]\nurl = \"https://second.example/mcp\"\nworkspace = \"everything\"\n",
+        )
+        .unwrap();
+
+        let mut cfg = Config::default();
+        Config::apply_user_remote(&mut cfg, &[dir.join("missing.toml"), first.clone(), second.clone()]);
+        assert_eq!(cfg.remote.url.as_deref(), Some("https://second.example/mcp"));
+        assert_eq!(cfg.remote_from.as_deref(), Some(second.as_path()));
+        assert!(
+            cfg.remote.workspace.is_none(),
+            "a per-user workspace must not be inherited"
+        );
+
+        // A project remote wins and the user files are not consulted.
+        let mut cfg = Config::default();
+        cfg.remote.url = Some("https://project.example".into());
+        Config::apply_user_remote(&mut cfg, &[second]);
+        assert_eq!(cfg.remote.url.as_deref(), Some("https://project.example"));
+        assert!(cfg.remote_from.is_none());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

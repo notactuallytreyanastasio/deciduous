@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **A machine-wide default server.** When a project's `.deciduous/config.toml` has no `[remote]`, the URL is taken from `~/.deciduous/config.toml`, then `$XDG_CONFIG_HOME/deciduous/config.toml`. Only the URL: each project keeps deriving its own workspace name. `deciduous remote init --user <url>` writes that file (an unreachable URL is a warning, not a refusal), and `remote status` says "machine default from <path>" when the fallback is in use. A team with one shared server sets it once per machine; a new worktree or a repository nobody ran `remote init` in is no longer silently local-only. A per-user file that does not parse contributes nothing and breaks no project.
+
 ## [1.0.10] - 2026-09-26
 
 `ask_graph` used to match question words with ILIKE, rank by insert time and return 25 nodes whatever it found: recall@10 0.611 and MRR 0.264 on a 43-question eval, 0 of 7 questions about things never recorded answered as such. 1.0.10 rebuilds it on ideas from the Jev-Mem paper (arXiv 2609.23986), deterministically, with no model calls, and fixes five convergence bugs the integration battery kept hitting.

@@ -438,11 +438,16 @@ pub const QUICK_OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_sec
 /// from the current directory. Default when there is none.
 pub fn config_at(data_dir: &Path) -> Result<Config, String> {
     let path = data_dir.join("config.toml");
-    match std::fs::read_to_string(&path) {
-        Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
-        Err(e) => Err(format!("{}: {e}", path.display())),
-    }
+    let mut cfg: Config = match std::fs::read_to_string(&path) {
+        Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Config::default(),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    // A project with no [remote] of its own takes this machine's default, so
+    // a new worktree or a repository nobody ran `remote init` in still writes
+    // to the shared server instead of, silently, only to its own database.
+    Config::apply_user_remote(&mut cfg, &Config::user_config_paths());
+    Ok(cfg)
 }
 
 impl Remote {
