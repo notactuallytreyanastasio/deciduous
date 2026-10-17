@@ -59,7 +59,8 @@ What made it work is one server, reachable over MCP from every directory, with t
 - **Provenance.** A `took_from` edge records a borrow across branches, and `log_observation` writes the observation and the edge in one call. In the arena the borrows lived in observation titles and had to be recovered with a regular expression; that is the wrong place for them.
 - **The message board.** Agents working at the same time post interface changes, questions and answers with `post_message` (or `deciduous board post`), address each other with `@label`, and answer with `reply_to`. `read_messages` with `unanswered_for` your own label (`deciduous board read --unanswered <label>`) is what is waiting for you. It replaces the scratch `board.md` agents otherwise invent: a file has no ids to answer and no way to ask what is addressed to you. Messages are coordination, not graph: never in `graph.json`, never exported or synced. See [The Message Board](#the-message-board).
 
-Set it up with `deciduous remote init <url>` once the server is running (`deciduous_mcp/DEPLOY.md`).
+`deciduous init` sets the server up, or points at one you already run; see
+[First-time setup](#first-time-setup).
 
 ---
 
@@ -211,32 +212,33 @@ sudo mv deciduous-darwin-arm64 /usr/local/bin/deciduous
 
 ### Self-host the shared graph server
 
-Download and extract `deciduous-mcp-docker.tar.gz` from
-[GitHub Releases](https://github.com/notactuallytreyanastasio/deciduous/releases),
-then run:
+The server needs a PostgreSQL. On a developer machine you do not install it by
+hand: `deciduous init` (or `deciduous remote setup`) downloads the release's
+`deciduous-mcp-*` executable, one file with Erlang/OTP and Elixir inside, and
+runs it as a user service against the PostgreSQL on localhost:5432. The server
+creates its database if it is missing and migrates at every start, so a
+machine with PostgreSQL needs nothing else. See [First-time
+setup](#first-time-setup).
+
+For a server a team shares, run the same executable on the host, against the
+PostgreSQL there or any other by URL. The [deployment
+guide](deciduous_mcp/DEPLOY.md) walks through the settings file, the service
+unit, TLS to the database, a reverse proxy, backups and upgrades.
+
+Without a PostgreSQL to point at, Docker can run one. Download and extract
+`deciduous-mcp-docker.tar.gz` from the same release, then:
 
 ```bash
 cd deciduous-mcp-docker
 ./scripts/setup.sh
 ```
 
-Docker with Compose is the only runtime prerequisite. Setup creates private
-credentials, starts PostgreSQL with persistent storage, applies migrations, and
-waits until the server can query the database. It picks a free port in
-20000-32767 unless `DECIDUOUS_PORT` says otherwise, and prints the resulting MCP
-endpoint; the port and bearer token are in `.env`. Running setup again keeps the
-same credentials, port and database.
-
-Already have a Deciduous PostgreSQL database? The same setup can connect to it
-and apply pending migrations. See the [deployment guide](deciduous_mcp/DEPLOY.md)
-for that path, client configuration, backups, and upgrades. From a repository
-checkout, run `./deciduous_mcp/scripts/setup.sh`.
-
-Releases also include Burrito-built `deciduous-mcp-*` native executables with
-Erlang/OTP and Elixir included; `deciduous remote setup` installs one as a user
-service by default. Given a settings file they create their database if it is
-missing and migrate at every start, so a machine with PostgreSQL needs nothing
-else. The deployment guide covers running one by hand.
+Setup creates private credentials, starts PostgreSQL 17 with persistent
+storage, applies migrations, and waits until the server can query the
+database. It picks a free port in 20000-32767 unless `DECIDUOUS_PORT` says
+otherwise, and prints the resulting MCP endpoint; the port and bearer token
+are in `.env`. Running setup again keeps the same credentials, port and
+database. `deciduous remote setup --docker-postgres` does all of this for you.
 
 ### Via Cargo
 
@@ -334,7 +336,8 @@ claude mcp add deciduous -- deciduous mcp
 ```
 
 Claude Code reads MCP servers from `claude mcp add` (or a project `.mcp.json`),
-not from `.claude/settings.local.json`. For the shared server, see step 4 of
+not from `.claude/settings.local.json`. The shared server needs no line here:
+`deciduous init` registers it at user scope, see step 2 of
 [First-time setup](#first-time-setup).
 
 **Claude Desktop**:

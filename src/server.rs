@@ -192,6 +192,17 @@ const SCRIPTED_CHOICES: &str = "    \
     deciduous remote setup --docker-postgres        # this machine: PostgreSQL and the server in Docker\n    \
     deciduous remote setup --url <url>              # a server someone else runs\n";
 
+/// What to do when nothing answers on localhost:5432: the default needs a
+/// PostgreSQL, and a machine without one is told how to get one rather than
+/// left with a refused connection. Shown under the menu, and again if choice
+/// 1 is taken anyway.
+const NO_POSTGRES_HINT: &str = "\n\n\
+    Nothing answers on localhost:5432, so choice 1 needs a PostgreSQL first:\n    \
+    macOS:          brew install postgresql@17 && brew services start postgresql@17\n    \
+    Debian/Ubuntu:  sudo apt install postgresql\n  \
+    Or name another PostgreSQL (choice 2, --database-url), or let Docker run one\n  \
+    for you (choice 3, --docker-postgres).";
+
 /// Points the project at this machine's server, setting it up if needed.
 fn connect_local(project: &Path, req: &LocalRequest, interactive: bool) -> Result<(), LocalError> {
     let (url, token) = local_server(req, interactive)?;
@@ -356,9 +367,11 @@ fn ask_where() -> Result<SetupChoice, String> {
         };
     }
     let system = DbUrl::system_default(&current_user());
-    let status = match tcp_answers(&system) {
-        Ok(()) => "answering now".green().to_string(),
-        Err(_) => "nothing answers there now".yellow().to_string(),
+    let postgres_answers = tcp_answers(&system).is_ok();
+    let status = if postgres_answers {
+        "answering now".green().to_string()
+    } else {
+        "nothing answers there now".yellow().to_string()
     };
     println!(
         "  1) This machine: the deciduous server as a background service, using PostgreSQL on\n     \
@@ -369,6 +382,9 @@ fn ask_where() -> Result<SetupChoice, String> {
     println!("     (any host, port, user, password)");
     println!("  3) This machine, in Docker: a new PostgreSQL and the server in containers");
     println!("  4) A server someone else runs: you need its URL and token\n");
+    if !postgres_answers {
+        println!("  {}\n", NO_POSTGRES_HINT.trim_start());
+    }
     println!(
         "  1 and 2 install the release's server executable in {}\n  \
          and start it at login. --docker runs that server in Docker instead.\n",
@@ -634,9 +650,7 @@ fn database_url(database: &Database) -> Result<DbUrl, LocalError> {
     };
     if let Err(e) = tcp_answers(&db) {
         let hint = if *database == Database::System {
-            "\n\nIs PostgreSQL installed and running? (brew services list; systemctl status \
-             postgresql). Or name another PostgreSQL with --database-url, or run one in Docker \
-             with --docker-postgres."
+            NO_POSTGRES_HINT
         } else {
             ""
         };

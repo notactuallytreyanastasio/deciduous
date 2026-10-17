@@ -94,16 +94,28 @@
 <span class="output">Created .claude/skills/ (3 skills: pulse, narratives, archaeology)</span>
 <span class="output">Created CLAUDE.md (project instructions)</span>
 <span class="output">Created docs/ (GitHub Pages viewer)</span>
-<span class="output">Ready! Run /decision-graph to graph existing history, or just start working.</span></div>
+<span class="output">Ready! Run /decision-graph to graph existing history, or just start working.</span>
+<span class="output">   This project has no server yet ([remote] in .deciduous/config.toml).</span>
+<span class="output"></span>
+<span class="output">Where should this project's graph live?</span>
+<span class="output"></span>
+<span class="output">  1) This machine: the deciduous server as a background service, using PostgreSQL on</span>
+<span class="output">     localhost:5432 as you (answering now)</span>
+<span class="output">  2) This machine: the server as a background service, using a PostgreSQL you name</span>
+<span class="output">     (any host, port, user, password)</span>
+<span class="output">  3) This machine, in Docker: a new PostgreSQL and the server in containers</span>
+<span class="output">  4) A server someone else runs: you need its URL and token</span>
+<span class="output"></span>
+<span class="output">Choose 1-4 [1]:</span></div>
             </div>
 
-            <p>That single command scaffolds everything deciduous needs. Let's walk through what each piece does.</p>
+            <p>That single command scaffolds everything deciduous needs, then asks where the project's graph should live. The default, choice 1, installs the graph server on this machine as a background service against the PostgreSQL on localhost:5432, asks for a port (a free one is suggested), stores the token in <code>~/.config/deciduous/credentials</code>, writes <code>[remote]</code> to <code>.deciduous/config.toml</code>, and registers the server with Claude Code. Every later project on the machine finds the same server. In a script there is no terminal to ask, so <code>deciduous remote setup --local</code>, <code>--database-url</code>, <code>--docker-postgres</code> or <code>--url</code> gives the answer. Let's walk through what each piece does.</p>
 
             <h2>What Gets Created</h2>
 
             <h3><code>.deciduous/deciduous.db</code> &mdash; The Graph Database</h3>
 
-            <p>This is the SQLite database that stores your decision graph: every node, edge, status, confidence score, prompt, and commit link. It lives locally and is gitignored by default. Each developer on a team has their own copy, and decisions are shared through the patch/sync system rather than by committing the database file.</p>
+            <p>This is the SQLite database that stores your decision graph: every node, edge, status, confidence score, prompt, and commit link. It lives locally and is gitignored by default. It is a cache: every write also goes to the shared graph server chosen above, which is where teammates and agents in other directories read it.</p>
 
             <h3><code>.deciduous/config.toml</code> &mdash; Configuration</h3>
 

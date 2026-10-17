@@ -497,15 +497,32 @@
               <span class="session-title">setup, once per machine</span>
             </div>
             <div class="quickstart-content">
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous remote login</span></div>
-              <div class="qs-output">Token: stored in ~/.config/deciduous/credentials</div>
-              <div class="qs-output">&nbsp;&nbsp;mode 0600, outside every repository</div>
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous remote adopt ~/code --url https://example.com/deciduous-mcp</span></div>
-              <div class="qs-success">90 configured, 1 left alone</div>
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous init</span></div>
+              <div class="qs-output">&nbsp;&nbsp;&nbsp;This project has no server yet ([remote] in .deciduous/config.toml).</div>
+              <div class="qs-output">&nbsp;</div>
+              <div class="qs-output">Where should this project's graph live?</div>
+              <div class="qs-output">&nbsp;</div>
+              <div class="qs-output">&nbsp;&nbsp;1) This machine: the deciduous server as a background service, using PostgreSQL on</div>
+              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;localhost:5432 as you (answering now)</div>
+              <div class="qs-output">&nbsp;&nbsp;2) This machine: the server as a background service, using a PostgreSQL you name</div>
+              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(any host, port, user, password)</div>
+              <div class="qs-output">&nbsp;&nbsp;3) This machine, in Docker: a new PostgreSQL and the server in containers</div>
+              <div class="qs-output">&nbsp;&nbsp;4) A server someone else runs: you need its URL and token</div>
+              <div class="qs-output">&nbsp;</div>
+              <div class="qs-output">Choose 1-4 [1]:</div>
+              <div class="qs-output">&nbsp;</div>
+              <div class="qs-output">The server needs a port on this machine. 24871 is free right now; anything</div>
+              <div class="qs-output">already using the port you pick (a dev server on 4000, say) would stop this</div>
+              <div class="qs-output">server from starting.</div>
+              <div class="qs-output">&nbsp;</div>
+              <div class="qs-output">Port [24871]:</div>
+              <div class="qs-success">&nbsp;&nbsp;&nbsp;Stored token in ~/.config/deciduous/credentials</div>
+              <div class="qs-success">&nbsp;&nbsp;&nbsp;Wrote .deciduous/config.toml [remote] url = http://127.0.0.1:24871</div>
+              <div class="qs-success">&nbsp;&nbsp;&nbsp;Registered Claude Code: deciduous MCP at http://127.0.0.1:24871/mcp (user scope; restart Claude Code)</div>
             </div>
           </div>
           <p class="feature-desc">
-            The token is never written to a config file. It lives in a credentials file outside every repository, so committing your config leaks a hostname and nothing else. You run the server yourself &mdash; it is an Elixir app and a Postgres database, and it ships in the repo.
+            Choice 1 is the default: the server runs on this machine as a background service (a launchd LaunchAgent on macOS, a systemd user unit on Linux) against the PostgreSQL you already have on localhost:5432, and every later project on the machine finds it. Choice 2 names any PostgreSQL by URL, choice 3 has Docker run both, choice 4 is a server someone else runs. The token is never written to a config file. It lives in a credentials file outside every repository, so committing your config leaks a hostname and nothing else. The server is an Elixir app and a Postgres database, and it ships in the repo.
           </p>
           <div class="buttons">
             <a href="remote.html" class="btn btn-primary">Set up the shared graph</a>

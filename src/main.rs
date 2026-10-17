@@ -2712,7 +2712,8 @@ fn main() {
                                 }
                             }
                             println!(
-                                "\nWritten to .deciduous/config.toml. The token stays in {}.",
+                                "\nWritten to .deciduous/config.toml. The token stays in \
+                                 ~/.config/deciduous/credentials (or {}), never here.",
                                 deciduous::remote::TOKEN_ENV
                             );
                         }
