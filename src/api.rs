@@ -603,12 +603,25 @@ struct QuerySlot;
 impl QuerySlot {
     fn take() -> Option<Self> {
         use std::sync::atomic::Ordering;
-        QUERIES_RUNNING
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < QUERY_MAX_RUNNING).then_some(n + 1)
-            })
-            .ok()
-            .map(|_| QuerySlot)
+        // A compare-exchange loop, not `fetch_update`: the stable Rust of
+        // 2026-10 deprecates `fetch_update` in favour of `try_update`, this
+        // crate denies warnings, and `try_update` does not exist on the
+        // toolchains a year older that still build this crate.
+        let mut n = QUERIES_RUNNING.load(Ordering::Acquire);
+        loop {
+            if n >= QUERY_MAX_RUNNING {
+                return None;
+            }
+            match QUERIES_RUNNING.compare_exchange_weak(
+                n,
+                n + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Some(QuerySlot),
+                Err(now) => n = now,
+            }
+        }
     }
 }
 
@@ -937,4 +950,19 @@ fn respond_json(request: Request, status: u16, body: &Value) -> std::io::Result<
         .with_status_code(status)
         .with_header(header);
     request.respond(response)
+}
+
+#[cfg(test)]
+mod slot_tests {
+    use super::*;
+
+    #[test]
+    fn the_fifth_query_waits_until_one_finishes() {
+        let held: Vec<QuerySlot> = (0..QUERY_MAX_RUNNING)
+            .map(|i| QuerySlot::take().unwrap_or_else(|| panic!("slot {i} refused")))
+            .collect();
+        assert!(QuerySlot::take().is_none(), "a fifth slot was given out");
+        drop(held);
+        assert!(QuerySlot::take().is_some());
+    }
 }
