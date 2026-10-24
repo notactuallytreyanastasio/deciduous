@@ -1538,6 +1538,44 @@ fn run_api_daemon(
     }
 }
 
+/// Whether a command is recorded in the command log: everything that can
+/// change the graph, the project files or the server; not the reads.
+fn records_itself(command: &Command) -> bool {
+    !matches!(
+        command,
+        Command::Nodes { .. }
+            | Command::Edges
+            | Command::Show { .. }
+            | Command::Graph
+            | Command::Commands { .. }
+            | Command::Serve { .. }
+            | Command::Dot { .. }
+            | Command::Writeup { .. }
+            | Command::Pulse { .. }
+            | Command::Completion { .. }
+            | Command::DemoSwarm { .. }
+            | Command::Mcp { .. }
+            | Command::CheckUpdate { .. }
+            | Command::Integration { .. }
+            | Command::LogLoop { .. }
+    )
+}
+
+/// Marks a command-log row finished when the command returns normally.
+/// A command that calls `exit` drops nothing, and its row stays unfinished.
+struct CommandLogGuard<'a> {
+    db: &'a Database,
+    id: i32,
+    started: std::time::Instant,
+}
+
+impl Drop for CommandLogGuard<'_> {
+    fn drop(&mut self) {
+        let ms = self.started.elapsed().as_millis().min(i32::MAX as u128) as i32;
+        let _ = self.db.complete_command(self.id, 0, None, None, ms);
+    }
+}
+
 fn main() {
     // A `serve --api` daemon runs each /query in a child of this executable,
     // so a query past its time limit can be killed wherever it is.
@@ -1851,6 +1889,34 @@ fn main() {
     // Declared after `db`, so it drops first: whatever this command queued
     // for the server is sent before the process exits.
     let _replay = deciduous::remote::ReplayOnExit;
+
+    // `deciduous commands` reads command_log, and until 1.1.1 nothing wrote
+    // it: the table was made for shell commands an agent would run through
+    // deciduous, a feature that was never wired, so /recover's "what
+    // happened recently" step always read an empty table. Every command
+    // that can change something is recorded as it starts and marked
+    // finished when it returns normally; one that exits early stays
+    // "unfinished", which is the truth. Reads are not recorded: the log
+    // is what changed, not what was looked at.
+    let _command_log = if records_itself(&args.command) {
+        let line = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
+        let cwd = std::env::current_dir()
+            .ok()
+            .map(|p| p.display().to_string());
+        match db.log_command(&line, None, cwd.as_deref()) {
+            Ok(id) => Some(CommandLogGuard {
+                db: &db,
+                id,
+                started: std::time::Instant::now(),
+            }),
+            Err(e) => {
+                eprintln!("note: this command was not recorded in the command log: {e}");
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     // The local database follows graph.json when git changed it since the
     // last command (checkout, reset, pull, stash): what every command reads
@@ -4185,12 +4251,13 @@ fn main() {
                 } else {
                     for c in commands {
                         println!(
-                            "[{}] {} (exit: {})",
+                            "[{}] {} ({})",
                             c.started_at,
                             truncate(&c.command, 60),
-                            c.exit_code
-                                .map(|c| c.to_string())
-                                .unwrap_or_else(|| "running".to_string())
+                            match c.exit_code {
+                                Some(code) => format!("exit {code}"),
+                                None => "unfinished".to_string(),
+                            }
                         );
                     }
                 }

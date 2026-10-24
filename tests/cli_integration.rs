@@ -458,8 +458,16 @@ fn test_command_log() {
     );
 
     let out = stdout(&output);
-    // Command log should show something
-    assert!(!out.is_empty());
+    // Writes are recorded with their command line and marked finished;
+    // the read that listed them is not in the list.
+    assert!(out.contains("add goal Logged Goal"), "{out}");
+    assert!(out.contains("add action Logged Action"), "{out}");
+    assert!(out.contains("(exit 0)"), "{out}");
+    assert!(!out.contains("] commands"), "reads are not logged:\n{out}");
+
+    run_deciduous(&["nodes"], &db_path);
+    let again = stdout(&run_deciduous(&["commands"], &db_path));
+    assert!(!again.contains("] nodes"), "reads are not logged:\n{again}");
 }
 
 // =============================================================================
