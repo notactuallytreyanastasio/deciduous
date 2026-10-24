@@ -1,416 +1,221 @@
-# Decision Graph Concepts
+# The Three Skills: pulse, narratives, archaeology
 
-Deciduous captures design decisions as a queryable graph. This document explains the conceptual model and the three skills for working with it.
+A codebase has two stories. "How does this work?" is answered by the decisions
+that define the current design. "How did we get here?" is answered by the
+approaches that were tried, the ones that were left, and why. `deciduous init`
+installs three skills in `.claude/skills/` that map one story each and then
+join them:
+
+| Skill | Mode | Question | Writes |
+|---|---|---|---|
+| `/pulse` | Now | What decisions define how this works today? | goals, options, decisions |
+| `/narratives` | History | How did it evolve, and where did the model change? | `.deciduous/narratives.md` |
+| `/archaeology` | Structure | Make the history queryable | observations, revisits, superseded decisions |
+
+```
+/pulse                           /narratives
+"what decisions define           "how did we get to
+ how this works?"                 these decisions?"
+       │                                │
+       ▼                                ▼
+[current model as a            [evolution stories
+ goal → options → decision      in narratives.md,
+ tree]                          each PIVOT marked]
+       │                                │
+       └──────────────┬─────────────────┘
+                      ▼
+               /archaeology
+         [one graph: now ◄── revisit ◄── history]
+```
+
+The model they produce is the one in [CONCEPTS.md](CONCEPTS.md). This page is
+about using the skills and the commands behind them, all of which exist in
+1.1.0 (`deciduous pulse`, `deciduous narratives`, `deciduous archaeology`).
 
 ---
 
-## The Two Modes
+## /pulse: map the current model
 
-Every system has two stories:
-
-| Mode | Question | What it captures |
-|------|----------|------------------|
-| **Now** | "How does this work?" | Current design decisions |
-| **History** | "How did we get here?" | Evolution, pivots, dead ends |
-
-Both are valuable:
-- **Now** → Explain to a new team member
-- **History** → Prevent repeating mistakes
-
----
-
-## The Three Skills
-
-| Skill | Mode | Purpose |
-|-------|------|---------|
-| `/pulse` | Now | Map current design as decisions |
-| `/narratives` | History | Understand how things evolved |
-| `/archaeology` | Structure | Transform narratives into queryable graph |
-
-### How They Connect
+Start from the health report:
 
 ```
-/pulse                              /narratives
-"What decisions define             "How did we get to
- how this works?"                   these decisions?"
-        │                                  │
-        ▼                                  ▼
-[Current model as                   [Evolution stories
- decision tree]                      with pivots]
-        │                                  │
-        └────────────┬─────────────────────┘
-                     │
-                     ▼
-              /archaeology
-              "Make it queryable"
-                     │
-                     ▼
-              [Connected graph]
-              Now ←── revisit ←── History
+$ deciduous pulse --summary
+=== PULSE ===
+
+Summary:
+  Nodes: 8 | Edges: 7
+  Types:  goal(1) option(2) decision(1) action(1) outcome(1) observation(1) revisit(1)
+  Status: pending(6) superseded(1) completed(1)
+  Confidence: high(6) medium(2) low(0) unset(0)
 ```
 
----
+Without `--summary` it also lists active goals, recent nodes (`-r N`), orphan
+nodes and coverage gaps; `--json` for a program, `-b <branch>` to scope it.
 
-## /pulse - The Now Mode
+Then pick a scope (a feature, a subsystem, a boundary), read the code, and ask
+what design questions had to be answered for it to work. Model questions
+("what happens on fetch failure?"), not implementation ones ("which library?").
+Write the answers as the canonical flow:
 
-**Purpose:** Map the current system as a tree of design decisions.
-
-**When to use:**
-- Understanding an unfamiliar codebase
-- Documenting current architecture
-- Before making changes
-
-**How it works:**
-
-1. Pick a scope (a feature, subsystem, or behavior)
-2. Ask: "What decisions define how this works?"
-3. Build a decision tree
-
-**Example output:**
-
-```
-[GOAL: Suspense fallback behavior]
-    │
-    ├── [DECISION: How should timeout work?]
-    │       ├── [DECISION: Configurable per-component?]
-    │       │       └── [OPTION: Yes, via prop] (chosen)
-    │       └── [DECISION: Default timeout value?]
-    │               └── [OPTION: 1000ms] (chosen)
-    │
-    ├── [DECISION: What happens on fetch failure?]
-    │       └── [OPTION: Propagate to error boundary] (chosen)
-    │
-    └── [DECISION: How do nested Suspense interact?]
-            └── [DECISION: Independent or coordinated?]
-                    └── [OPTION: Coordinated with parent] (chosen)
-```
-
-**Key insight:** This is about the MODEL, not the code. Not "which library" but "what's the behavior."
-
-**Commands:**
 ```bash
-deciduous add goal "Suspense fallback behavior" -c 90
-deciduous add decision "How should timeout work?" -c 85
-deciduous link 1 2 -r "leads_to"
-deciduous add option "1000ms default" -c 90
-deciduous link 2 3 -r "resolved_by"
-deciduous status 3 chosen
+deciduous add goal "Suspense fallback: what the user sees while data loads" -c 90
+deciduous add option "Show the fallback immediately" -c 85
+deciduous link 1 2 -r "possible approach"
+deciduous add option "Wait up to a timeout, then show the fallback" -c 85
+deciduous link 1 3 -r "possible approach"
+deciduous add decision "Timeout before fallback, 1000ms default, over immediate" -c 90
+deciduous link 3 4 -t chosen -r "avoids flashing a spinner on fast networks"
+deciduous link 2 4 -t rejected -r "spinner flash on every navigation"
 ```
 
----
+A question still open stays as options without a decision. The decision's
+title names what it beat, so the graph reads without opening every node.
 
-## /narratives - The History Mode
+## /narratives: understand the evolution
 
-**Purpose:** Understand how the system evolved to its current state.
+Narratives are conceptual. Commits are evidence for them, not the source of
+truth: the story "we moved from JWT everywhere to sessions for the web" is
+spread across a dozen commits and lives in none of them.
 
-**When to use:**
-- Investigating why something works a certain way
-- Before proposing changes (to avoid repeating past mistakes)
-- Building institutional memory
+```
+$ deciduous narratives init
+Created .deciduous/narratives.md with 1 goal section(s)
 
-**The core insight:** Narratives are conceptual, not tied to commits.
+$ deciduous narratives show
+# Narratives
 
-**How it works:**
+<!-- Generated by deciduous narratives init -->
+<!-- Fill in evolution stories for each goal -->
 
-1. Look at the current system and ask "how did this get this way?"
-2. Infer narratives from the design (hybrid systems suggest pivots)
-3. Find evidence (commits, PRs, docs) to support the narrative
-4. Identify pivots - where the model changed
+## Rate limit the public API
+> Node #1 | Status: pending
 
-**Example output:**
-
-```markdown
-## Authentication
-> How users prove their identity to the system.
-
-**Current state:** Hybrid - JWT for API, sessions for web.
+**Current state:** [How it works today]
 
 **Evolution:**
-1. Started with JWT everywhere - stateless, simple
-2. **PIVOT:** Mobile hit 4KB cookie limits with JWT payloads
-3. Added sessions for web, kept JWT for API
+1. [First approach] - [why]
+2. **PIVOT:** [what changed] - [why it changed]
+3. [Current approach] - [why this is better]
 
-**Why the pivot:** JWT tokens contained permissions, grew to 3KB+.
-Mobile Safari's cookie limit caused silent auth failures.
-
-**Connects to:** "Rate Limiting" (auth method affects rate limit keys)
+**Evidence:** [PRs, commits, docs]
+**Connects to:** [Other narratives]
+**Status:** active
 ```
 
-**Key insight:** Commits are evidence, not the source of truth. The narrative exists at the conceptual level.
+`init` writes one section per active goal (`--force` to overwrite, `-o` for
+another path). The skill then has the agent read the code before git: name
+the major pieces, describe how each works today, infer how it got that way,
+and mark each **PIVOT**, the point where the conceptual model changed. Signs
+of one: two approaches coexisting, a comment that says "we used to", config
+for the old and new system both, deprecation warnings. Evidence (PRs,
+commits, attached documents from `deciduous doc list`) comes last and is
+optional.
 
----
-
-## /archaeology - Structuring for Query
-
-**Purpose:** Transform narratives into a queryable decision graph.
-
-**When to use:**
-- After `/pulse` and/or `/narratives` have captured the understanding
-- When you want to query the graph programmatically
-- When you want to visualize connections
-
-**How it works:**
-
-1. Read the narratives
-2. Map narrative elements to graph nodes
-3. Connect with edges
-4. Set status (active/superseded/abandoned)
-
-**Mapping rules:**
-
-| Narrative Element | Graph Node |
-|-------------------|------------|
-| Narrative title | `goal` |
-| Design question | `decision` |
-| Answer/choice | `option` |
-| What was learned | `observation` |
-| **PIVOT** | `revisit` |
-| Pre-pivot work | Status: `superseded` |
-| Cross-narrative link | Edge |
-
-**The revisit pattern:**
-
-Every pivot becomes:
-```
-[Previous approach]
-        │
-        ▼
-[Observation: what was learned]
-        │
-        ▼
-[Revisit: reconsidering X]
-        │
-        ▼
-[New approach]
-```
-
----
-
-## Core Concepts
-
-### Narratives (not Chains)
-
-Old deciduous used "chains" tied to git branches. This is replaced by **narratives** - semantic groupings that tell coherent stories.
-
-| Old (Chains) | New (Narratives) |
-|--------------|------------------|
-| Grouped by git branch | Grouped by meaning |
-| Automatic, implicit | Explicit, intentional |
-| One per branch | Multiple anywhere |
-| No cross-links | Connected via revisits |
-
-### The Revisit Node
-
-When a design approach is abandoned and replaced, create a **revisit** node:
+`deciduous narratives pivots` shows the pivots already in the graph, each
+with its chain:
 
 ```
-[Old Decision]              [Observation: why it failed]
-        │                              │
-        └──────────┬───────────────────┘
-                   │
-                   ▼
-            ╔════════════════════╗
-            ║      REVISIT       ║
-            ║ "Reconsidering X"  ║
-            ╚════════════════════╝
-                   │
-                   ▼
-            [New Decision]
+$ deciduous narratives pivots
+=== PIVOTS === (2 found)
+
+Pivot #1: [revisit #8] "Reconsidering per-IP fallback"
+  ──────────────────────────────────────────────────
+
+Pivot #2: [revisit #10] "Reconsidering: Token bucket per key over fixed window per IP"
+  Old approach: #4 [decision] "Token bucket per key over fixed window per IP" (superseded)
+  Triggered by: #9 [observation] "Per-key buckets starve batch clients that share one key"
+  New approach: #11 [decision] "Per-key bucket with a per-client burst allowance"
 ```
 
-The revisit captures:
-- WHAT is being reconsidered
-- WHY (via linked observations)
-- The pivot point between old and new
+Pivot #1 is a revisit with nothing linked to it, which is what an incomplete
+chain looks like.
 
-### Node Status
+## /archaeology: structure the history
 
-| Status | Meaning |
-|--------|---------|
-| `active` | Current truth |
-| `superseded` | Replaced by newer approach |
-| `abandoned` | Tried and rejected |
+Turn each narrative into a subgraph. The mapping:
+
+| In the narrative | In the graph |
+|---|---|
+| the section title | `goal`, backdated with `--date` |
+| an approach, first or later | `decision` |
+| what was learned | `observation` |
+| **PIVOT** | `revisit`, and the old decision `superseded` |
+| a link between narratives | an edge with a rationale |
+
+One command writes a pivot's three nodes and three edges and supersedes the
+old approach. Preview it first:
+
+```
+$ deciduous archaeology pivot 4 "Per-key buckets starve batch clients that share one key" \
+    "Per-key bucket with a per-client burst allowance" -c 80 -r "batch clients" --dry-run
+=== PIVOT (dry run) ===
+
+  ?? [observation] "Per-key buckets starve batch clients that share one key"
+    └── linked from #4 "Token bucket per key over fixed window per IP"
+  ?? [revisit] "Reconsidering: Token bucket per key over fixed window per IP"
+    └── linked from ?? [observation]
+  ?? [decision] "Per-key bucket with a per-client burst allowance"
+    └── linked from ?? [revisit]
+
+  Superseded: #4 "Token bucket per key over fixed window per IP" -> status: superseded
+
+  Summary: 3 nodes would be created, 3 edges would be created, 1 node would be superseded
+```
+
+Without `--dry-run` the `??` become ids (`#9`, `#10`, `#11` in the run behind
+the pivots listing above). For approaches that were replaced outside a pivot:
 
 ```bash
-deciduous status <node_id> superseded
+deciduous archaeology supersede <id>             # one node
+deciduous archaeology supersede <id> --cascade   # and everything under it
+deciduous archaeology timeline -t revisit        # the pivots in date order
+deciduous archaeology timeline -l 20             # the last twenty nodes
 ```
 
-### Now vs History Queries
+Backdating matters here: `--date "YYYY-MM-DD"` on `add` puts a reconstructed
+node where it belongs in `archaeology timeline` and in the viewer, instead of
+on the day the archaeology was done.
+
+## Now and history, queried
 
 ```bash
-# Now mode - only active nodes
-deciduous nodes --status active
-
-# History mode - everything
-deciduous nodes
-
-# Just the pivots
-deciduous nodes --type revisit
-
-# What was abandoned
-deciduous nodes --status superseded
+deciduous nodes -t revisit             # the pivot points
+deciduous narratives pivots            # each with old approach, trigger, new approach
+deciduous show <revisit_id>            # what led in and out
+deciduous archaeology timeline         # everything, oldest first
+deciduous nodes                        # the STATUS column tells active from superseded
 ```
 
----
+There is no `nodes --status`; status is a column, and `pulse` counts it.
 
-## Workflows
+## The person in the room
 
-### Prospective: Building as You Work
+The point of all three is to leave behind the person who was in the room when
+the decisions were made, able to say: "we tried that, here is why it failed"
+(a superseded decision with its observation); "we could not do X because Y"
+(the observation); "Y no longer holds because Z" (a newer observation, and a
+revisit). `/pulse` gives that person the current design, `/narratives` the
+story, `/archaeology` a graph the next session can read instead of asking.
 
-Use deciduous in real-time during development:
-
-```bash
-# Map the current design question (pulse)
-deciduous add goal "API authentication" -c 90
-deciduous add decision "Token strategy" -c 85
-deciduous link 1 2 -r "leads_to"
-
-# Choose an approach
-deciduous add option "JWT tokens" -c 85
-deciduous link 2 3 -r "resolved_by"
-deciduous status 3 chosen
-
-# Later, when problems emerge
-deciduous add observation "JWT too large for mobile"
-deciduous link 3 4 -r "discovered"
-
-# Pivot
-deciduous add revisit "Reconsidering token strategy"
-deciduous link 4 5 -r "forced rethinking"
-deciduous status 3 superseded
-
-# New approach
-deciduous add decision "Session-based auth"
-deciduous link 5 6 -r "new direction"
-```
-
-### Retrospective: Understanding Existing Systems
-
-For codebases without deciduous history:
-
-1. **Run /pulse** - Map current design as decisions
-2. **Run /narratives** - Understand evolution from code + evidence
-3. **Run /archaeology** - Structure into queryable graph
-
-```bash
-# Pulse: What decisions define auth today?
-deciduous add goal "Auth system" -c 90
-deciduous add decision "Token type for API?" -c 85
-# ... map current design
-
-# Narratives: How did it evolve?
-# (Captured in .deciduous/narratives.md)
-
-# Archaeology: Structure the history
-deciduous add observation "Mobile cookie limits discovered"
-deciduous add revisit "JWT → Sessions pivot"
-deciduous link <pulse_decision> <revisit> -r "evolved from"
-```
-
----
-
-## The "Person in the Room"
-
-The goal is to create **the equivalent of "the person who was in the room when these decisions got made"** - someone who can say:
-
-- **"Wait, this won't work"** - We tried it, here's why it failed (superseded nodes)
-- **"We couldn't do X before because Y"** - Constraint captured in observation
-- **"But Y doesn't apply anymore because Z"** - New observation invalidates old constraint
-
-### Two types of queries:
-
-**"How does it work?"** (Now)
-- `/pulse` → Current design as decision tree
-- `deciduous nodes --status active`
-
-**"How did we get here?"** (History)
-- `/narratives` → Evolution stories
-- `deciduous nodes` → Full graph with superseded paths
-
----
-
-## Quick Reference
-
-### Skills
+## Example: one pivot, end to end
 
 ```
-/pulse       - Map current model as decisions (Now)
-/narratives  - Understand evolution (History)
-/archaeology - Transform to queryable graph
-```
-
-### Node Types
-
-```
-goal        - What we're trying to achieve
-decision    - A design question
-option      - An answer to a decision
-action      - Work that was done
-outcome     - Result of an action
-observation - Something learned
-revisit     - Pivot point (connects old → new)
-```
-
-### Status
-
-```
-active      - Current truth
-superseded  - Replaced
-abandoned   - Dead end
-```
-
-### Commands
-
-```bash
-# Add nodes
-deciduous add <type> "title" -c <confidence>
-
-# Link nodes
-deciduous link <from> <to> -r "reason"
-
-# Set status
-deciduous status <id> active|superseded|abandoned
-
-# Query
-deciduous nodes --status active    # Now mode
-deciduous nodes --type revisit     # Pivot points
-deciduous nodes                    # Everything
-
-# Visualize
-deciduous serve                    # Web viewer
-```
-
----
-
-## Example: Full Graph
-
-```
-[GOAL: API Rate Limiting]
+[GOAL: Rate limit the public API]
         │
-        ▼
-[DECISION: How to identify users?]
-        │
-        ├── [OPTION: IP address] ←── chosen, then superseded
-        │           │
-        │           ▼
-        │   [OBSERVATION: Shared IPs blocking legitimate users]
-        │           │
-        │           ▼
-        │   [REVISIT: IP-based too coarse]
-        │           │
-        │           └──────────────────────┐
-        │                                  │
-        └── [OPTION: User ID when auth'd]  │
-                    │◄─────────────────────┘
-                    │
-                    ▼
-            [DECISION: What about unauthenticated?]
-                    │
-                    └── [OPTION: Fall back to IP] (chosen)
+        ├── [OPTION: Fixed window per IP] ──rejected──┐
+        │        ▲                                     │
+        │   [OBSERVATION: Shared IPs behind carrier NAT] (blocks)
+        │                                              ▼
+        └── [OPTION: Token bucket per API key] ──chosen──► [DECISION: Token bucket per key
+                                                            over fixed window per IP]  superseded
+                                                                 │
+                                          [OBSERVATION: Per-key buckets starve batch clients]
+                                                                 │
+                                          [REVISIT: Reconsidering: Token bucket per key ...]
+                                                                 │
+                                          [DECISION: Per-key bucket with a per-client burst allowance]
 ```
 
-This graph captures:
-- **Now**: User ID when auth'd, IP when not (active options)
-- **History**: Started with IP-only, pivoted when it caused problems
-- **Why**: Observation explains the pivot
-- **Connections**: Revisit links old approach to new
+Now: the burst-allowance decision. History: per-IP was rejected for NAT, plain
+per-key was superseded for batch clients. Why: two observations. Connection:
+the revisit, which `narratives pivots` finds.

@@ -1,319 +1,136 @@
 # Web Viewer
 
-The web viewer is a React/TypeScript application that provides multiple ways to explore the decision graph.
+`deciduous serve` puts the local graph in a browser. The viewer is one React
+page (`web/src/App.tsx`, built with Vite and embedded in the binary as
+`src/viewer.html`) that groups the graph into narratives, draws the one you
+pick as a tree and a D3 graph, and shows a node's full record beside it. It
+reads the local database, so with a `[remote]` run `deciduous remote pull`
+first to see what agents wrote on the server.
+
+```
+$ deciduous serve
+🌳 Deciduous
+   Graph viewer: http://localhost:3000
+   Press Ctrl+C to stop
+```
+
+`-p <port>` changes the port. The server binds `127.0.0.1` and does not open a
+browser for you.
 
 ---
 
-## Access Methods
+## What is on the page
 
-### Local Development Server
+**Narratives.** The left panel lists narratives: connected trees of the graph,
+each rooted at a node, as cards with the root's title, size and date range.
+A selector in the header chooses how the graph is cut into them:
+
+| Mode | Narratives are |
+|---|---|
+| Major Narratives (10+ nodes) | goal-rooted trees with ten or more nodes (the default) |
+| All Goals | one tree per goal |
+| By Git Branch | one per `metadata.branch` |
+| By Key Decisions (3+ edges) | one per node with three or more edges, a hub |
+
+Click a card to focus it: the left panel becomes an expandable tree (type,
+confidence, id, title per row, edge labels on the way down) and the right
+panel splits into the selected node's detail on top and a D3 graph of the
+narrative below. The graph can go full screen, with its own node list and a
+"commits only" filter.
+
+**Detail panel.** For the selected node: type and title; status, confidence,
+branch, commit (linked to GitHub, using `[github] commit_repo` from
+`config.toml` when set), created time and change id; the files it names; its
+themes as coloured chips; its attached documents (filename, size, MIME type,
+description, an `(AI)` mark for descriptions the `claude` CLI wrote; listed,
+not linked: the page does not fetch the file); the
+description; the verbatim prompt; incoming and outgoing edges with their type
+and rationale; and the raw metadata.
+
+**Search.** Full text over titles and descriptions, newest first, with a
+toggle per node type and a chip per theme. A result shows which narratives
+contain it.
+
+**Ask AI.** A dialogue that sends your question plus what is on screen (the
+selected node, the visible nodes, the current branch, the focused narrative)
+to `POST /api/ask`, which runs `claude -p` on the machine serving the page
+and returns its Markdown answer. Without the Claude Code CLI installed the
+panel shows `Claude CLI not found`. Questions and answers are kept in the
+local database (`qa_interactions`) and listed through `/api/qa`.
+
+**Edge styles.** `took_from` draws dash-dot; the legend lists every edge and
+node type.
+
+## What it does not show
+
+- `metadata.evidence` (proven or inferred), `metadata.consulted` and
+  `metadata.file_hashes` from transcript imports. They appear in the raw
+  metadata block only; `deciduous show` prints them properly. CHANGELOG 1.1.0
+  lists this under "Not done".
+- The message board. Messages are not graph and have no API route here.
+- Live updates. The page loads the graph once; reload it to see new nodes.
+  There is no polling and no event stream from `serve`.
+- Document bytes. `GET /api/documents/file/<id>` serves them, but nothing in
+  the page calls it; `deciduous doc open <id>` does.
+- Roadmap items, the command log and git history have routes (below) but no
+  view in the current page.
+
+## Data
+
+The page asks, in order, `/api/graph`, `./graph-data.json`, `/graph-data.json`
+and uses the first that answers with `{ok, data}` or a bare `{nodes, ...}`.
+
+Routes `deciduous serve` answers:
+
+| Route | Returns |
+|---|---|
+| `GET /api/graph` | `{ok, data: {nodes, edges, themes, node_themes, documents, config?}}`; `config` only when `[github] commit_repo` is set |
+| `GET /api/documents?node_id=N` | documents attached to node N |
+| `GET /api/documents/file/<id>` | the file's bytes |
+| `POST /api/ask` | `{question, context}` → `claude -p`'s answer |
+| `GET /api/qa`, `GET /api/qa/search?q=`, `GET`/`DELETE /api/qa/<id>` | stored questions and answers |
+| `GET /api/git-history` | commits for every node that names one |
+| `GET /api/roadmap`, `POST /api/roadmap/checkbox` | ROADMAP.md items; toggle one |
+| `GET /api/commands` | the command log (empty in 1.1.0 projects) |
+| `GET /api/sync-status` | whether `graph.json` exists and what `sync` would import or export |
+| anything else | the embedded page |
+
+### A static copy
+
+`deciduous sync` stopped writing `docs/graph-data.json` in 1.0.5, and `init`
+no longer sets up GitHub Pages. The page still reads `./graph-data.json` when
+there is no API, so a static copy is the viewer HTML next to a graph export:
 
 ```bash
-deciduous serve --port 3000
+deciduous graph > docs/graph-data.json    # {nodes, edges, themes, node_themes[, documents]}
+cp src/viewer.html docs/demo/index.html   # the embedded page; this repository keeps one there
 ```
 
-Opens a browser to `http://localhost:3000`. Data refreshes every 30 seconds.
-
-### GitHub Pages (Static)
-
-```bash
-deciduous sync
-git add docs/
-git commit -m "Update decision graph"
-git push
-```
-
-The graph is then available at `https://<user>.github.io/<repo>/`
-
----
-
-## Views
-
-The viewer provides multiple browsing modes, each optimized for different questions:
-
-### Archaeology View (Default)
-
-**Question:** How did this system evolve?
-
-Shows:
-- **Narratives**: Story arcs extracted from the graph
-- **Pivots**: Decision points where direction changed
-- **Evolution timeline**: How understanding developed
-
-This is the default because it shows the **why** behind the current state.
-
-### DAG View
-
-**Question:** What's connected to what?
-
-Shows:
-- Hierarchical layout (goals at top, outcomes at bottom)
-- All edges visualized
-- Click nodes to see details
-
-Uses dagre for automatic layout.
-
-### Chains View
-
-**Question:** Show me everything related to X.
-
-Shows:
-- Connected components grouped together
-- Chains rooted at goals
-- Session grouping (4-hour gaps)
-
-### Timeline View
-
-**Question:** What happened when?
-
-Shows:
-- Chronological list of nodes and git commits
-- Merged timeline of decisions and code changes
-- Commit messages linked to decision nodes
-
-### Story View
-
-**Question:** What's the full context for this goal?
-
-Shows:
-- Full decision tree starting from a goal
-- All descendants (actions, outcomes, observations)
-- Complete narrative for one feature
-
-### Graph View
-
-**Question:** I want to explore freely.
-
-Shows:
-- Force-directed graph (D3)
-- Interactive pan/zoom
-- Click to select nodes
-
-### Roadmap View
-
-**Question:** What work is planned?
-
-Shows:
-- ROADMAP.md items parsed and displayed
-- GitHub Issue sync status
-- Completion checkboxes
-- Links to related decision nodes
-
-### Log View
-
-**Question:** What commands were run?
-
-Shows:
-- deciduous CLI command history
-- Timestamps and results
-- Useful for debugging
-
----
-
-## Key Algorithms
-
-### Chain Building (`web/src/utils/graphProcessing.ts`)
-
-```typescript
-function buildChains(graphData: GraphData): Chain[]
-```
-
-1. Find root nodes:
-   - All `goal` nodes
-   - Any node with no incoming edges
-
-2. Sort roots: goals first, then by creation time
-
-3. BFS from each root:
-   - Follow **both** outgoing and incoming edges
-   - This captures the full connected component
-   - No node limit (MAX_CHAIN_NODES = 0)
-
-4. Sort chains: newest first
-
-**Why bidirectional?** A node might be linked TO (incoming) but not FROM the root. We want the full component.
-
-### Session Grouping (`web/src/utils/graphProcessing.ts`)
-
-```typescript
-function buildSessions(nodes: DecisionNode[], chains: Chain[]): Session[]
-```
-
-1. Sort all nodes by creation time
-2. Walk through nodes:
-   - If gap > 4 hours, start new session
-   - Otherwise, extend current session
-3. Associate chains with sessions (by first node time)
-4. Reverse to show newest first
-
-**Why 4 hours?** Represents a typical "work session" - lunch break or end of day creates a natural gap.
-
-### Pivot Detection (`web/src/utils/archaeologyProcessing.ts`)
-
-```typescript
-function findPivots(graphData: GraphData): Pivot[]
-```
-
-1. Find all `revisit` nodes
-2. For each revisit:
-   - Get incoming edges → observations, old decisions
-   - Get outgoing edges → new decisions
-3. Build pivot context:
-   - `before`: What was the old approach?
-   - `after`: What's the new approach?
-   - `reasons`: What observations caused the pivot?
-
-**Why revisit nodes?** They explicitly mark direction changes, making pivots queryable.
-
-### Path Tracing (`web/src/utils/graphProcessing.ts`)
-
-```typescript
-function tracePath(nodeId: number, graphData: GraphData): DecisionNode[]
-```
-
-1. Start at given node
-2. Follow incoming edges backwards
-3. Build path from root to node
-4. Return ordered array
-
-**Use case:** "How did we get to this outcome?"
-
----
-
-## Data Sources
-
-### Local Server (`deciduous serve`)
-
-| Endpoint | Returns |
-|----------|---------|
-| `GET /api/graph` | `{ nodes: [...], edges: [...] }` |
-| `GET /api/git-history` | Git commits with hashes and messages |
-| `GET /api/roadmap` | Parsed ROADMAP.md items |
-| `GET /api/commands` | CLI command history |
-| `GET /api/documents?node_id=N` | Documents attached to node N |
-| `GET /api/documents/file/<id>` | Serve document file content |
-
-### Static Files (GitHub Pages)
-
-| File | Content |
-|------|---------|
-| `./graph-data.json` | Decision graph |
-| `./git-history.json` | Git commits |
-| `./roadmap-items.json` | Roadmap items |
-
-The viewer auto-detects which mode based on hostname/port.
-
----
-
-## TypeScript Types
-
-### Core Types (`web/src/types/graph.ts`)
-
-```typescript
-// Node in the decision graph
-interface DecisionNode {
-  id: number;
-  change_id: string;
-  node_type: NodeType;  // 'goal' | 'decision' | 'action' | ...
-  title: string;
-  description: string | null;
-  status: NodeStatus;   // 'active' | 'superseded' | ...
-  created_at: string;
-  updated_at: string;
-  metadata_json: string | null;
-}
-
-// Edge connecting nodes
-interface DecisionEdge {
-  id: number;
-  from_node_id: number;
-  to_node_id: number;
-  edge_type: EdgeType;  // 'leads_to' | 'chosen' | ...
-  rationale: string | null;
-  created_at: string;
-}
-
-// Connected component
-interface Chain {
-  root: DecisionNode;
-  nodes: DecisionNode[];
-  edges: DecisionEdge[];
-}
-
-// Time-grouped nodes
-interface Session {
-  startTime: number;
-  endTime: number;
-  nodes: DecisionNode[];
-  chains: Chain[];
-}
-```
-
-### Document Attachment Type
-
-```typescript
-// Document attached to a decision node
-interface NodeDocument {
-  id: number;
-  change_id: string;
-  node_id: number;
-  node_change_id: string;
-  content_hash: string;
-  original_filename: string;
-  storage_filename: string;
-  mime_type: string;
-  file_size: number;
-  description: string | null;
-  description_source: 'none' | 'manual' | 'ai';
-  attached_at: string;
-  attached_by: string | null;
-  detached_at: string | null;
-}
-```
-
-### Metadata Access
-
-Node metadata is stored as JSON. Helper functions extract it:
-
-```typescript
-// Get commit hash linked to node
-getCommit(node: DecisionNode): string | null
-
-// Get branch name
-getBranch(node: DecisionNode): string | null
-
-// Get confidence level (0-100)
-getConfidence(node: DecisionNode): number | null
-
-// Get verbatim prompt
-getPrompt(node: DecisionNode): string | null
-
-// Get associated files
-getFiles(node: DecisionNode): string[]
-
-// Get active (non-detached) documents for a node
-getNodeDocuments(nodeId: number, graphData: GraphData): NodeDocument[]
-
-// Format file size to human-readable string
-formatFileSize(bytes: number): string
-```
-
----
-
-## Development
-
-### Build Process
+The Ask panel needs the server and does not work from a static copy. The `docs/graph-data.json` in this repository is such a hand-made export
+(1465 nodes, 1313 edges when it was last written), not something a command
+maintains.
+
+## Building it
 
 ```bash
 cd web
 npm install
-npm run dev      # Development server
-npm run build    # Production build
+npm run dev            # Vite dev server against a running `deciduous serve`
+npm run typecheck      # tsc --noEmit
+npm run test           # vitest
+npm run build          # tsc && vite build -> web/dist/index.html, one self-contained file
 ```
 
-### Embedding in Rust Binary
+Three Vite configs:
 
-After building:
+| Config | Output | For |
+|---|---|---|
+| `vite.config.ts` | `web/dist/index.html`, single file, `base: './'` | the embedded viewer |
+| `vite.embed.config.ts` | `web/dist-embed/` | the same, kept separately |
+| `vite.pages.config.ts` | `../docs/demo/`, `base: '/deciduous/demo/'` | the static demo for this repository's GitHub Pages |
+
+After a change under `web/src`, the built file has to be copied into the two
+places it is served from, then the binary rebuilt:
 
 ```bash
 cp web/dist/index.html src/viewer.html
@@ -321,48 +138,18 @@ cp web/dist/index.html docs/demo/index.html
 cargo build --release
 ```
 
-The viewer is embedded as a string in `serve.rs` and served at `/`.
+`src/viewer.html` is `include_str!`ed by `src/serve.rs`. It is a build product;
+do not edit it by hand.
 
-### Build Configurations
+## Types
 
-| Config | Output | Purpose |
-|--------|--------|---------|
-| `vite.config.ts` | Standard SPA | Development |
-| `vite.embed.config.ts` | Single HTML file | Embed in Rust binary |
-| `vite.pages.config.ts` | Static assets | GitHub Pages |
+`web/src/types/graph.ts` mirrors `src/db.rs`: `NODE_TYPES` (seven, including
+`revisit`), `EDGE_TYPES` (seven, including `took_from`), `NodeMetadata`
+(`confidence`, `commit`, `prompt`, `files`, `branch`, GitHub fields, and
+anything else as `unknown`), `Theme`, `NodeThemeAssociation`, `NodeDocument`.
+The generated `DecisionNode` and `DecisionEdge` come from `types/generated/`.
 
----
-
-## Styling
-
-- Node colors by type (green for goals, blue for decisions, etc.)
-- Edge colors by type
-- Responsive layout
-- Dark mode support via CSS variables
-
----
-
-## URL Structure
-
-Deep linking is supported:
-
-| URL | View |
-|-----|------|
-| `/` | Archaeology (default) |
-| `/dag` | DAG view |
-| `/dag/:nodeId` | DAG with node selected |
-| `/chains` | Chains view |
-| `/chains/:chainId` | Specific chain |
-| `/timeline` | Timeline view |
-| `/graph` | Force-directed graph |
-| `/roadmap` | Roadmap view |
-| `/story` | Story view |
-
----
-
-## Performance Notes
-
-- **Polling interval**: 30 seconds when running locally
-- **No SSE yet**: Disabled until deciduous serve supports it
-- **Chain limit removed**: MAX_CHAIN_NODES = 0 shows full components
-- **Session gap**: 4 hours (configurable via SESSION_GAP_MS constant)
+One mismatch to know about: `NODE_STATUSES` in `graph.ts` lists four statuses
+(`pending`, `active`, `completed`, `rejected`) while the binary accepts six
+(`superseded` and `abandoned` too). Nodes with those statuses load and display;
+the type is narrower than the data.

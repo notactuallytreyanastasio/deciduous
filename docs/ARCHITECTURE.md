@@ -1,455 +1,219 @@
 # Deciduous Architecture
 
-> Decision graph tooling for AI-assisted development. Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
-
-## The Core Problem
-
-AI assistants have **context limits**. When you work on a complex feature across multiple sessions:
-
-1. **Context compaction** - The AI summarizes to fit limits, losing nuance
-2. **Session boundaries** - New sessions start fresh with no memory
-3. **Decision amnesia** - Why did we choose approach A over B? Lost.
-4. **Pivot confusion** - We changed direction, but the old code remains. Why?
-
-**Deciduous solves this by externalizing the AI's reasoning into a queryable graph.**
+One graph per repository: goals, options, decisions, actions, outcomes,
+observations and revisits, joined by typed edges. Three things write it (the
+CLI, the MCP tools an agent calls while it works, and since 1.1.0 an import of
+the Claude Code transcript after the fact), and the whole design question is
+where the graph lives and how the copies agree. This page is that story for
+1.1.0.
 
 ---
 
-## System Goals
+## Where the graph lives
 
-### 1. Survive Context Loss
-
-When an AI session ends or context is compacted, all the reasoning is gone. Deciduous captures decisions **in real-time** so they persist beyond any single session.
-
-```
-Session 1: "Let's use JWT tokens" → logged to graph
-Session 2: "What auth approach did we choose?" → query the graph
-```
-
-### 2. Track Design Evolution
-
-Codebases evolve. Decisions get revisited. Deciduous captures **pivots** - when and why you changed direction:
+`deciduous init` asks. The answer decides which of two models a project runs
+under, and most of the architecture follows from it.
 
 ```
-[Old Decision: JWT] → [Observation: Too large for mobile] → [REVISIT] → [New Decision: Session cookies]
+Where should this project's graph live?
+
+  1) This machine: the deciduous server as a background service, using PostgreSQL on
+     localhost:5432 as you (answering now)
+  2) This machine: the server as a background service, using a PostgreSQL you name
+     (any host, port, user, password)
+  3) This machine, in Docker: a new PostgreSQL and the server in containers
+  4) A server someone else runs: you need its URL and token
 ```
 
-### 3. Enable Context Recovery
+| Store | Path | Tracked in git | Role |
+|---|---|---|---|
+| SQLite database | `.deciduous/deciduous.db` | no | A per-machine cache. Every CLI command reads and writes it. Holds local-only data too: the agent board (local model), roadmap state, Q&A history. |
+| Graph file | `.deciduous/graph.json` | yes, in the git model | The shared graph for projects with no `[remote]`: every node, edge, theme and tag, keyed by `change_id`. Every database write is mirrored into it at once; a `git checkout`, `pull`, `reset` or `stash` is followed by the next command. `deciduous sync` reconciles the two. |
+| Shared server | PostgreSQL behind an Elixir MCP endpoint, `[remote] url` in `.deciduous/config.toml` | the config is; the data is not | The truth for projects with a `[remote]`. One workspace per repository. Agents write to it over HTTP; the CLI writes locally and replays each write as an op. |
+| Op log | `.deciduous/remote-log.jsonl` | no | This machine's writes on their way to the server, one op per field change, replayed through `POST /ops` after each write and by `remote push`. Only kept when the project has a `[remote]`. |
+| Documents | `.deciduous/documents/<name>.<hash8>` | no | Files attached to nodes, named by original filename plus the first eight hex digits of their SHA-256. With a `[remote]`, `remote push --seed` sends them, bytes included. |
+| Token | `~/.config/deciduous/credentials` (mode 0600) | outside every repository | The server's bearer token. Also read from `DECIDUOUS_MCP_TOKEN`. Never in `config.toml`. |
+| This machine's server | `~/.config/deciduous/server/` | no | The release's single-file server executable, its `.env` (database URL, token, port, `DECIDUOUS_SERVER_MODE`), logs, and a launchd or systemd user service. |
 
-Start a new session with `/recover` and the AI can rebuild its understanding from the graph:
+How the roles shifted, release by release, matters because older pages still
+tell older stories:
 
-```bash
-deciduous nodes        # What decisions exist?
-deciduous edges        # How are they connected?
-deciduous show 42      # What was the reasoning for node 42?
-```
+- **0.17** kept one JSON file per record under `.deciduous/sync/`; **0.18**
+  folded that into the single `graph.json` and made the git merge driver the
+  mechanism (`deciduous merge-record`, registered by `init`, `update` and
+  `sync`). A `.deciduous/sync/` directory today is a leftover `sync` folds in
+  once and deletes.
+- **0.19 and 1.0.0** added the shared server. "Nothing writes back from the
+  server to SQLite except `remote pull`. The local database is a cache."
+- **1.0.5** removed the GitHub Pages export: `deciduous sync` only reconciles
+  `graph.json` with the database and no longer writes `docs/graph-data.json`.
+- **1.0.8** replaced snapshot pushes with the op log, so a status change
+  cannot put back a title an agent changed meanwhile.
+- **1.0.11** made the local database follow `graph.json` on every checkout,
+  so a node added on one branch no longer appears on every branch, and made
+  "this machine's server" a native user service against PostgreSQL on 5432
+  instead of Docker.
+- **1.0.12** made `update` keep every section and command file the user
+  edited, and give projects with a `[remote]` remote-aware templates.
 
-### 4. Enforce Discipline
+In the remote model `init` and `update` skip `.gitignore`, `.gitattributes`,
+the merge driver and `graph.json`: the graph lives on the server, and a
+worktree whose config lacks `[remote]` sends to its main checkout's server.
+Themes and tags are not sent to the server; the board is never in `graph.json`
+or any export.
 
-Through hooks, Deciduous **blocks** the AI from making code changes without first logging what it's doing:
-
-```
-[AI tries to edit code]
-  ↓
-[Hook checks: Is there a recent action node?]
-  ↓
-[No? Block the edit. Force the AI to log first.]
-```
-
----
-
-## How It All Fits Together
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           USER + AI ASSISTANT                                │
-│                                                                              │
-│  User: "Add authentication"                                                 │
-│  AI:   Creates goal node → deciduous add goal "Add auth" --prompt "..."     │
-│  AI:   Logs decision → deciduous add decision "JWT vs sessions"             │
-│  AI:   Links them → deciduous link 1 2                                      │
-│  AI:   Makes code changes                                                   │
-│  AI:   Logs outcome → deciduous add outcome "Auth implemented"              │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              HOOKS LAYER                                     │
-│                                                                              │
-│  Pre-Tool-Use Hooks:                                                        │
-│  ├── require-action-node.sh                                                 │
-│  │   "Before Edit/Write, verify recent action node exists"                  │
-│  │   Blocks: "You must log what you're doing first!"                        │
-│  │                                                                          │
-│  Post-Tool-Use Hooks:                                                       │
-│  └── post-commit-reminder.sh                                                │
-│      "After Bash commit, remind to link commit to graph"                    │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            DECIDUOUS CLI                                     │
-│                                                                              │
-│  Commands:                                                                  │
-│  ├── add <type> <title>   → Create nodes (goal/decision/action/outcome)     │
-│  ├── link <from> <to>     → Connect nodes with rationale                    │
-│  ├── nodes/edges/graph    → Query the graph                                 │
-│  ├── doc attach/list/show → Document attachments on nodes                   │
-│  ├── serve                → Start web viewer                                │
-│  └── sync                → Multi-user sync + GitHub Pages export            │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           SQLITE DATABASE                                    │
-│                                                                              │
-│  .deciduous/deciduous.db                                                    │
-│  ├── decision_nodes      → All nodes with types, titles, metadata           │
-│  ├── decision_edges      → Connections with rationale                       │
-│  ├── node_documents      → File attachments with metadata                   │
-│  ├── command_log         → CLI operation history                            │
-│  └── roadmap_items       → ROADMAP.md sync state                            │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    ▼                ▼                ▼
-         ┌─────────────────┐  ┌───────────┐  ┌──────────────────┐
-         │   WEB VIEWER    │  │    TUI    │  │  GITHUB PAGES    │
-         │                 │  │           │  │                  │
-         │ React app with  │  │ Ratatui   │  │ Static export    │
-         │ multiple views: │  │ terminal  │  │ via sync         │
-         │ - Archaeology   │  │ interface │  │                  │
-         │ - DAG          │  │           │  │ docs/             │
-         │ - Chains       │  │           │  │ ├── index.html    │
-         │ - Timeline     │  │           │  │ ├── graph.json    │
-         │ - Roadmap      │  │           │  │ └── git-history   │
-         └─────────────────┘  └───────────┘  └──────────────────┘
-```
-
----
-
-## Node Types and Their Meaning
-
-| Type | Shape | Purpose | Example |
-|------|-------|---------|---------|
-| **goal** | House | What you're trying to achieve | "Add user authentication" |
-| **decision** | Diamond | A choice point with options | "How to identify users?" |
-| **option** | Box | Possible choice for a decision | "Use JWT tokens" |
-| **action** | Rounded box | Work being done | "Implementing auth middleware" |
-| **outcome** | Ellipse | Result of work | "Auth working in staging" |
-| **observation** | Note | Something noticed | "Sessions scale better for mobile" |
-| **revisit** | Octagon | Reconsidering past decisions | "Rethinking token strategy" |
-
-### The Revisit Pattern (Pivots)
-
-When you change direction, the graph captures **why**:
+## What writes the graph
 
 ```
-[Decision: Use JWT]
-       │
-       ▼
-[Option: JWT chosen] ──────► [Action: Implement JWT]
-       │                              │
-       ▼                              ▼
-[Observation: JWT payloads         [Outcome: JWT works but
- too large for mobile]              mobile has issues]
-       │                              │
-       └──────────┬───────────────────┘
-                  ▼
-           [REVISIT: Reconsidering
-            token strategy]
-                  │
-                  ▼
-           [Decision: Session-based auth]
-                  │
-                  ▼
-           [Option: Server sessions chosen]
+you / the agent
+  │
+  ├─ deciduous add | link | status | prompt | delete | unlink | doc | tag | archaeology …
+  │      → SQLite, mirrored to graph.json (git model) or logged as an op and sent (remote model)
+  │
+  ├─ MCP tools, two servers with different tool sets:
+  │      deciduous mcp         stdio, 34 tools, writes the local database like the CLI
+  │      the shared server     HTTP, 21 tools (add_node, capture_conversation_turn, ask_graph,
+  │                            post_message, check_activity …), writes PostgreSQL directly
+  │
+  └─ deciduous transcript import <session>      (1.1.0)
+         → reads ~/.claude/projects/<slug>/<session>.jsonl, derives goals from prompts,
+           actions from edits and commits, outcomes from test runs, each with
+           metadata.evidence = proven | inferred
 ```
 
----
+The transcript path exists because an agent that logs its own decisions is an
+agent that can forget to. Up to 1.0.2 deciduous tried to force it with a hook
+that denied the agent's next tool call until it wrote to the graph; 1.0.3
+removed it, because a rule that blocks work has to be one the agent can
+satisfy every time and this one could not (a graph write sent beside the next
+action did not count, and an environment variable typed into the session never
+reached the hook). The hooks `init` installs now, `version-check.sh` and
+`board-mentions.sh`, never block. Logging is encouraged by the `CLAUDE.md`
+section, the MCP tools' own descriptions and replies, and the instructions the
+shared server sends on `initialize`; and whatever the agent did not log, the
+transcript import recovers afterwards with the evidence labelled.
 
-## The Three Interfaces
-
-### 1. CLI (`deciduous <command>`)
-
-For AI assistants and power users. Fast, scriptable, integrates with hooks.
-
-```bash
-# Add a decision
-deciduous add decision "How to structure the API?" -c 85
-
-# Link it to a goal
-deciduous link 1 2 -r "API design is part of auth goal"
-
-# See the graph
-deciduous nodes
-deciduous edges
-deciduous graph | jq '.nodes | length'
-```
-
-### 2. TUI (`deciduous tui`)
-
-Interactive terminal interface for exploring the graph. Vim-style navigation.
-
-- **Views**: Timeline, DAG, Roadmap
-- **Features**: File picker, syntax highlighting, git diff viewer
-- **Pattern**: Elm Architecture (TEA) - messages, update, render
-
-### 3. Web Viewer (`deciduous serve` or GitHub Pages)
-
-React application with multiple browsing modes:
-
-| View | Purpose |
-|------|---------|
-| **Archaeology** | Default. Shows pivots and narratives - how design evolved |
-| **DAG** | Directed graph visualization with hierarchical layout |
-| **Chains** | Connected component chains rooted at goals |
-| **Timeline** | Chronological view of nodes + git commits |
-| **Story** | Goal-focused tree showing full decision tree from a goal |
-| **Roadmap** | ROADMAP.md items synced with GitHub Issues |
-
----
-
-## Multi-User Sync
-
-The database is local (`.deciduous/deciduous.db` is gitignored). How do teammates share decisions?
-
-### The Dual-ID Model (jj-inspired)
-
-Every node has two IDs:
-- **`id`** (integer): Local database primary key, different on each machine
-- **`change_id`** (UUID): Globally unique, stable across all machines
-
-### The Graph File
-
-`.deciduous/graph.json` holds the whole shared graph — `nodes`, `edges`, `themes`,
-and `tags`, each a map keyed by `change_id` — and is committed with the code. The
-database layer writes it on every mutation, so the CLI, the MCP server, and the
-HTTP API all publish. `deciduous sync` reconciles the file with the local database
-in both directions; the newer `updated_at` wins per record, deletions are
-tombstones, and edges import once both endpoints exist locally.
-
-```bash
-git pull && deciduous sync          # receive
-git add .deciduous/graph.json && git push  # share
-```
-
-Records only ever reference `change_id`s. Because everyone writes one file, git
-sees a conflict on every concurrent change and hands both versions to the
-`deciduous merge-record` driver, which merges the document record by record: an
-addition from either side survives, and a record both sides changed merges field by
-field. See [MULTI_USER_SYNC.md](MULTI_USER_SYNC.md).
-
----
-
-## AI Assistant Integration
-
-Deciduous supports multiple AI assistants:
-
-| Assistant | Integration Directory | Config File |
-|-----------|----------------------|-------------|
-| Claude Code | `.claude/` | `CLAUDE.md` |
-| OpenCode | `.opencode/` | `AGENTS.md` |
-| Windsurf | `.windsurf/` | `rules/deciduous.md` |
-
-### Hook Enforcement
-
-```toml
-# .deciduous/config.toml
-[hooks]
-enabled = true
-
-[[hooks.pre_tool_use]]
-name = "require-action-node"
-matcher = "Edit|Write"
-description = "Block code edits without recent action node"
-enabled = true
-
-[[hooks.post_tool_use]]
-name = "post-commit-reminder"
-matcher = "Bash"
-description = "Remind to link commits to graph"
-enabled = true
-```
-
-When the AI tries to edit code:
-1. Hook script runs
-2. Checks: Is there an action node in the last 15 minutes?
-3. No? **Blocks the edit** with a message telling the AI to log first
-
----
-
-## Key Data Flows
-
-### Flow 1: Real-Time Decision Capture
+A transcript-derived action, from a scratch project:
 
 ```
-User says "Add dark mode"
-         │
-         ▼
-AI creates goal node:
-deciduous add goal "Add dark mode" --prompt "Add dark mode..."
-         │
-         ▼
-AI decides approach:
-deciduous add decision "How to implement theming?" -c 85
-deciduous link 1 2 -r "Theme decision for dark mode"
-         │
-         ▼
-AI implements:
-deciduous add action "Implementing CSS variables theme system"
-[Code changes happen]
-deciduous add outcome "Dark mode working" --commit HEAD
+$ deciduous show 13
+
+Node #13 action
+────────────────────────────────────────────────────────────
+Title: Edit src/lib.rs, src/widget.rs
+Description: Reading the module, then adding the widget.
+Status: pending
+Change ID: 09d8fc49-fbc7-8448-83b2-6286a557c26a
+Created: 2026-10-01T10:00:08Z
+Updated: 2026-10-01T10:00:08Z
+
+Metadata
+  Branch: feat/widget
+  Files: src/lib.rs (git:3048f12804ac39bd0b0adee36ab1ba9b09b4b151), src/widget.rs (git:d456351e4e617162562a1093bcee361646b4c8ee)
+  Consulted: src/lib.rs
+  Evidence: proven transcript, session 0f1e2d3c, 2 tool call(s)
+
+Connections
+  Incoming (1):
+    #12 ─[leads_to]→ here: files changed in this turn
+  Outgoing (1):
+    here ─[leads_to]→ #14: command run in this turn
 ```
 
-### Flow 2: Context Recovery
+Decisions and options are not derived from transcripts; see
+[transcripts.md](transcripts.md).
 
-```
-New session starts
-         │
-         ▼
-User runs /recover (or AI reads CLAUDE.md instructions)
-         │
-         ▼
-AI queries graph:
-├── deciduous nodes --branch main
-├── deciduous edges
-└── git log --oneline -10
-         │
-         ▼
-AI rebuilds understanding:
-"Ah, we're working on auth. We chose JWT but there were mobile
- issues logged as observations. There's a revisit node suggesting
- we might switch to sessions."
-```
+## What reads it
 
-### Flow 3: Graph Export for Visualization
+| Reader | What it gives |
+|---|---|
+| `deciduous nodes`, `edges`, `show <id>`, `graph` | The local database as text or JSON. `show` prints evidence, consulted files and file hashes; `show --json` prints `metadata_json` raw. |
+| `deciduous serve` | The embedded React viewer on `http://localhost:3000`, reading the local database through `/api/graph`. See [WEB_VIEWER.md](WEB_VIEWER.md). |
+| `deciduous dot`, `deciduous writeup` | Graphviz DOT (and PNG with graphviz installed) and a PR body from a node range. |
+| `deciduous pulse`, `narratives pivots`, `archaeology timeline` | Health, pivot chains and a chronological listing. |
+| `ask_graph`, `query_nodes`, `show_node` (shared server) | Retrieval across one workspace or every workspace (`workspace: "*"`), with the route each answer took. |
+| `deciduous remote status`, `remote watch` | Drift between this copy and the server, field by field; a live line per write. |
 
-```
-deciduous serve --port 3000
-         │
-         ▼
-HTTP server starts with embedded React app
-         │
-         ├── GET /api/graph        → Full graph JSON
-         ├── GET /api/git-history  → Commit info
-         └── GET /api/roadmap      → ROADMAP items
-         │
-         ▼
-React app loads data
-         │
-         ├── buildChains()    → Find connected components
-         ├── buildSessions()  → Group by time
-         └── findPivots()     → Detect revisit patterns
-         │
-         ▼
-User browses with multiple views
-```
+## The model, in one screen
 
-### Flow 4: Static Export for GitHub Pages
+`goal -> options -> decision -> actions -> outcomes`. Observations attach
+anywhere; a revisit marks a pivot and leads to the new decision. Edge types:
+`leads_to`, `requires`, `chosen`, `rejected`, `blocks`, `enables`, `took_from`
+(a borrow, usually across branches). Statuses: `pending`, `active`,
+`completed`, `rejected`, `superseded`, `abandoned`. Every node has a local `id`
+(different on every machine), a `change_id` (the same everywhere), and on the
+server a server id; the CLI takes all three. The full treatment is
+[CONCEPTS.md](CONCEPTS.md).
 
-```
-deciduous sync
-         │
-         ├── docs/graph-data.json     → Decision graph
-         ├── docs/git-history.json    → Commit metadata
-         ├── docs/roadmap-items.json  → Roadmap state
-         └── docs/index.html          → Embedded viewer
-         │
-         ▼
-git push → GitHub Pages serves static files
-         │
-         ▼
-Anyone can browse: https://user.github.io/repo/
-```
+## Agent coordination
 
-### Flow 5: Document Attachment
+Agents working in parallel on one repository talk on the message board
+(`deciduous board post|read|show`, `post_message` and `read_messages` on both
+MCP servers), not in a scratch file. Locally it lives in the main worktree's
+database, so every worktree reads one board; with a `[remote]`, in the
+server's `agent_messages` table. `@label` addresses a message, `--reply-to`
+answers one, and `board read --unanswered <label>` is what a session reads at
+start. On the server, `check_activity` reports who has written to which branch
+in the last five minutes, and `GET /events` streams every write.
 
-```
-User: "Attach this diagram to the auth goal"
-         │
-         ▼
-AI runs: deciduous doc attach 42 architecture.png -d "Auth architecture"
-         │
-         ▼
-File hashed (SHA-256), copied to .deciduous/documents/
-         │
-         ▼
-Record created in node_documents table
-(change_id for sync, content_hash for dedup)
-         │
-         ├── Web viewer shows document in node detail panel
-         ├── GET /api/documents?node_id=42 → document list
-         └── GET /api/documents/file/1 → serve file content
-```
-
----
-
-## Source Code Organization
+## Source layout
 
 ```
 src/
-├── main.rs           # CLI command dispatcher (clap)
-├── lib.rs            # Public API exports
-├── db.rs             # SQLite database (Diesel ORM)
-├── schema.rs         # Database table definitions
-├── config.rs         # .deciduous/config.toml loader
-├── init/             # deciduous init
-│   ├── mod.rs        # Project initialization
-│   └── templates.rs  # File templates (CLAUDE.md, hooks, etc.)
-├── serve.rs          # HTTP server for web viewer
-├── export.rs         # DOT export, PR writeup generation
-├── records.rs        # Multi-user sync: per-record JSON store + reconcile
-├── events.rs         # Reader for the pre-0.17 JSONL event log (migration only)
-├── hooks.rs          # Claude Code hook management
-├── opencode.rs       # OpenCode integration
-├── github.rs         # GitHub API client
-├── roadmap.rs        # ROADMAP.md parsing and sync
-├── changelog.rs      # Embedded release notes
-└── tui/              # Terminal UI
-    ├── mod.rs        # Event loop, file watcher
-    ├── app.rs        # Application state
-    ├── msg.rs        # TEA messages
-    ├── update.rs     # State transitions
-    ├── state.rs      # Pure state transformations
-    ├── ui.rs         # Rendering
-    ├── events.rs     # Keyboard/mouse handling
-    └── views/        # Timeline, DAG, Roadmap views
+├── main.rs            CLI: clap definitions and command dispatch
+├── lib.rs             crate exports
+├── db.rs              SQLite via Diesel: nodes, edges, documents, themes, board, mirror digest
+├── schema.rs          Diesel tables (decision_nodes, decision_edges, node_documents, themes,
+│                      node_themes, agent_messages, command_log, roadmap_*, qa_interactions …)
+├── config.rs          .deciduous/config.toml: [branch], [github], [hooks], [remote]
+├── records.rs         graph.json: the record store, reconcile, follow-on-checkout, merge driver
+├── oplog.rs           .deciduous/remote-log.jsonl: ops queued for the server, acks, compaction
+├── remote.rs          client of the shared server: setup, init, status, push, pull, adopt
+├── server.rs          installing and checking "this machine's server" from init and update
+├── local_server.rs    the pure decisions behind that: database URL, mode, .env, service units
+├── watch.rs           `remote watch`: the GET /events WebSocket client
+├── board.rs           the message board, local and remote backends
+├── transcript.rs      `transcript import` and `transcript list` (1.1.0)
+├── mcp/               `deciduous mcp`, the stdio server
+│   ├── protocol.rs    JSON-RPC and MCP message types
+│   ├── tools.rs       the 34 tool definitions and dispatch
+│   ├── handlers.rs    tool handlers over Database
+│   └── query.rs       pure graph analysis used by the reporting tools
+├── serve.rs           `deciduous serve`: the viewer's HTTP API, embeds viewer.html
+├── api.rs             `deciduous serve --api`: the multi-graph bearer-token daemon
+├── export.rs          DOT export and PR writeups
+├── archaeology.rs     pivot, timeline, supersede
+├── narratives.rs      .deciduous/narratives.md and pivot chains
+├── pulse.rs           the health report
+├── hooks.rs           hooks listed in config.toml (deciduous ships none since 1.0.3)
+├── init/
+│   ├── mod.rs         init and update
+│   ├── templates.rs   CLAUDE.md section, commands, skills, hook scripts (git model)
+│   ├── remote_templates.rs   the same for projects with a [remote]
+│   ├── guard.rs       how update replaces only what deciduous wrote
+│   └── known_templates.rs    every template text ever shipped, for recognising old installs
+├── opencode.rs        OpenCode integration (.opencode/, AGENTS.md)
+├── roadmap.rs, github.rs   ROADMAP.md and GitHub Issues sync through `gh`
+├── events.rs          reader for the pre-0.17 JSONL event log, migration only
+├── changelog.rs       release notes shown by `update`
+├── demo_swarm/        `deciduous demo-swarm` (hidden): the multi-agent Tetris demonstration
+└── viewer.html        the built viewer, generated from web/
 
-web/                  # React/TypeScript web viewer
-├── src/
-│   ├── App.tsx       # Router setup, data loading
-│   ├── types/        # TypeScript interfaces
-│   ├── utils/        # Graph algorithms
-│   │   ├── graphProcessing.ts      # Chain/session building
-│   │   └── archaeologyProcessing.ts # Pivot detection
-│   ├── hooks/        # React custom hooks
-│   ├── components/   # Reusable UI components
-│   └── views/        # Browsing mode views
-└── vite.config.ts    # Build configuration
+deciduous_mcp/         the shared server: Elixir on Bandit, PostgreSQL;
+                       21 MCP tools, /ops, /import, /export, /events, /messages
+web/                   the viewer's source (React, Vite); web/src/App.tsx is most of it
 ```
 
----
+Not in 1.1.0: a terminal UI (`deciduous tui` is not a command), GitHub Pages
+export from `sync`, `diff export`/`diff apply` patches, `.deciduous/sync/`,
+and blocking hooks.
 
-## Testing
+## Tests
 
 ```bash
-# Run all tests
-cargo test
-
-# Integration tests use temporary databases
-# See: tests/cli_integration.rs
+cargo test            # unit and CLI tests against temporary databases
+cargo clippy          # warnings denied in CI; the toolchain is pinned to 1.92.0 by rust-toolchain.toml
 ```
-
-Tests verify:
-- CLI commands work correctly
-- Database operations are consistent
-- Graph queries return expected results
-- Export formats are valid
 
 ### The integration battery
 
@@ -464,6 +228,7 @@ HTTP MCP. A plain `cargo test` skips all of it (each test prints one
 | `e2e_bridge.rs` | CLI writes reaching the server: offline replay, deletes, no stale overwrites, `remote status` |
 | `e2e_server.rs` | The HTTP MCP server: workspace pins, atomicity, validation, protocol edges, auth on every route |
 | `e2e_gitsync.rs` | Teammates through git: merge driver failures, clock skew, `sync --check` |
+| `e2e_conflicts.rs` | Three clones, one server, some offline: stale ops refused, edits arriving through git and the server in both orders |
 | `e2e_stdio.rs` | The stdio server and API daemon: id range, path confinement, hangs, error ids |
 | `e2e_concurrency.rs` | Many processes on one project: every acknowledged write lands, no "database is locked" |
 | `e2e_model.rs` | Seeded random interleavings of every surface, checked against a model at each sync |
@@ -497,38 +262,30 @@ makes it longer. CI runs the whole battery on every pull request
 (`.github/workflows/integration.yml`) against a server built from the same
 commit, plus `mix test` for the server itself.
 
----
-
-## Development Workflow
+## Development workflow
 
 ```bash
-# Build
 cargo build --release
-
-# Run
 ./target/release/deciduous <command>
 
-# Web viewer development
-cd web && npm run dev
-
-# Rebuild embedded viewer after web changes
-cd web && npm run build
-cp dist/index.html ../src/viewer.html
-cp dist/index.html ../docs/demo/index.html
+# The viewer: after any change under web/src
+cd web && npm run build && cd ..
+cp web/dist/index.html src/viewer.html        # embedded by serve.rs
+cp web/dist/index.html docs/demo/index.html   # the static demo; the two files are identical
 cargo build --release
 ```
 
----
+`src/viewer.html` is generated; do not hand-edit it.
 
-## Summary
+## Known gaps in 1.1.0
 
-Deciduous is **external memory for AI-assisted development**. It:
-
-1. **Captures decisions in real-time** before context is lost
-2. **Enforces discipline** through hooks that block unlogged work
-3. **Enables recovery** by providing a queryable graph of past reasoning
-4. **Tracks evolution** by capturing pivots when direction changes
-5. **Enables collaboration** through the git-tracked graph file `.deciduous/graph.json`
-6. **Visualizes everything** through web and terminal interfaces
-
-The system works because it's integrated at the workflow level - AI assistants are trained (via CLAUDE.md) to use deciduous commands, and hooks prevent them from skipping the logging step.
+- The viewer does not show evidence kind, consulted files or file hashes;
+  `show` and `show --json` do.
+- `deciduous commands` prints "No commands logged." in a fresh 1.1.0 project:
+  nothing in the CLI writes `command_log` any more.
+- `deciduous add --help` lists six node types and `status --help` four
+  statuses; the binary accepts seven and six (`revisit`; `superseded`,
+  `abandoned`).
+- A write made on a branch while a server is configured is on the server for
+  every branch: the server has no branches.
+- Themes and tags are not sent to the server.

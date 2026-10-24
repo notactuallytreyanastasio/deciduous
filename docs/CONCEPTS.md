@@ -1,386 +1,256 @@
 # Deciduous Concepts
 
-This document explains the mental models behind deciduous - why it exists and how to think about it.
+The graph records why the code is the way it is: what was asked, which
+approaches were on the table, which one won and why, what was done about it,
+and what happened. Since 1.1.0 every node can also say what it is backed by.
+This page is the model. How the pieces are built is
+[ARCHITECTURE.md](ARCHITECTURE.md); the three skills for using it are
+[narratives.md](narratives.md).
 
 ---
 
-## The Context Problem
+## Why externalize reasoning
 
-AI assistants are powerful but forgetful. Every session:
+An agent's context ends with the session, or is compacted mid-way. The code
+that results says what, not why: not that per-IP rate limiting was tried and
+rejected, not that it was rejected because mobile clients share carrier NAT
+addresses. Six months later the only trace of that reasoning is in whoever
+remembers it. The graph is that memory, outside any one session, queryable.
 
-1. **Starts fresh** - no memory of past work
-2. **Gets compacted** - long conversations get summarized, losing detail
-3. **Loses nuance** - "we tried X but it didn't work" becomes just "we did Y"
+## The graph
 
-This creates problems:
+A directed graph. Nodes are things that happened; edges say how they relate.
 
-- **Repeated mistakes**: "Let's try JWT" ... "Actually we tried JWT last week and it had issues"
-- **Lost reasoning**: The code uses approach A, but WHY? The decision is gone.
-- **Pivot confusion**: We changed direction, but which code is old vs new?
+### Node types
 
----
+Seven. `deciduous add --help` lists six; `revisit` is accepted too.
 
-## The Solution: Externalize Reasoning
+| Type | What it records | From a scratch project |
+|---|---|---|
+| `goal` | What was asked for. Carries the user's words verbatim in `metadata.prompt`. | `Rate limit the public API` |
+| `option` | One approach that was on the table | `Token bucket per API key`, `Fixed window per IP` |
+| `decision` | The choice, titled with what it beat | `Token bucket per key over fixed window per IP` |
+| `action` | Work done: code written, a commit made | `Add token bucket middleware` |
+| `outcome` | What happened: a test result, a number, an error | `Middleware passes load test at 10k rps` |
+| `observation` | A fact that bears on the plan; the description holds the detail | `Shared IPs behind carrier NAT` |
+| `revisit` | An earlier choice being reconsidered: the pivot point | `Reconsidering: Token bucket per key over fixed window per IP` |
 
-Deciduous captures decisions **as they happen**, creating a persistent graph that survives:
-
-- Session boundaries
-- Context compaction
-- Memory limits
-
-The graph becomes **external memory** that any future session can query.
-
----
-
-## The Decision Graph
-
-Think of it as a DAG (Directed Acyclic Graph) where:
-
-- **Nodes** = Things that happened (goals, decisions, actions, outcomes)
-- **Edges** = Relationships between them (leads_to, requires, chosen)
-
-### Node Types
-
-| Type | When to Use | Example |
-|------|-------------|---------|
-| **goal** | User wants something | "Add user authentication" |
-| **decision** | A choice must be made | "How to store sessions?" |
-| **option** | One possible choice | "Use Redis" or "Use JWT" |
-| **action** | Work is being done | "Implementing session middleware" |
-| **outcome** | Work is complete | "Sessions working in dev" |
-| **observation** | Something was noticed (title + description) | "Redis adds infrastructure cost" + -d "Running Redis requires a managed instance or self-hosted server, adding $50/mo minimum and ops burden" |
-| **revisit** | Reconsidering past work | "Rethinking session approach" |
-
-### Edge Types
-
-| Type | Meaning | Example |
-|------|---------|---------|
-| **leads_to** | One thing causes another | goal → option |
-| **chosen** | Option was selected | option → decision |
-| **rejected** | Option was not selected | option (marked rejected) |
-| **requires** | Dependency | action → another action |
-| **blocks** | Prevents progress | observation → action |
-| **enables** | Makes something possible | action → outcome |
-
----
-
-## Real-Time Logging
-
-The key insight: **Log BEFORE you do, not after.**
+### The canonical flow
 
 ```
-BAD (retroactive):
-  1. Write code
-  2. Commit
-  3. "Oh I should log that"  ← Often forgotten, context lost
-
-GOOD (real-time):
-  1. deciduous add action "Implementing X"  ← What you're ABOUT to do
-  2. Write code
-  3. deciduous add outcome "X complete"  ← What happened
-  4. deciduous link <action> <outcome>  ← Connect them
+goal -> options -> decision -> actions -> outcomes
 ```
 
-Real-time logging works because:
-- The AI knows what it's about to do
-- The full context exists right now
-- Hooks can enforce it
-
----
-
-## The Revisit Pattern
-
-When you change direction, capture the **pivot**:
+Goals lead to options, options to a decision, the decision to actions, actions
+to outcomes. Observations attach wherever they bear. Goals do not lead
+straight to decisions; a decision with no options recorded is a decision whose
+alternatives are lost. A decision node is created when an option is chosen,
+not before.
 
 ```
-Old Approach                          New Approach
-────────────                          ────────────
-[Decision: Use JWT]                   [Decision: Use sessions]
-      │                                     ▲
-      ▼                                     │
-[Option: JWT chosen]                  [Option: Sessions chosen]
-      │                                     │
-      ▼                                     │
-[Action: Implement JWT]               ┌─────┘
-      │                               │
-      ▼                               │
-[Outcome: Working but...]             │
-      │                               │
-      ▼                               │
-[Observation: JWT too large]──────────┤
-      │                               │
-      └─────►[REVISIT]────────────────┘
-             "Reconsidering token strategy"
+$ deciduous edges
+ID    FROM   TO     TYPE         RATIONALE
+----------------------------------------------------------------------
+1     1      2      leads_to     possible approach
+2     1      3      leads_to     possible approach
+3     2      4      chosen       survives NAT
+4     3      4      rejected     carrier NAT
+5     4      5      leads_to     implementation
+6     5      6      leads_to     result
+7     7      3      blocks       why per-IP fails
 ```
 
-The **revisit** node:
-1. Links to observations that caused the rethink
-2. Links to the old decision being superseded
-3. Leads to the new decision
+### Edge types
 
-This captures **WHY** we changed, not just **WHAT** changed.
+| Type | Meaning | Typical direction |
+|---|---|---|
+| `leads_to` | the default: one thing follows from another | goal → option, decision → action, action → outcome |
+| `chosen` | this option won | option → decision |
+| `rejected` | this option lost | option → decision |
+| `requires` | a dependency | action → action |
+| `blocks` | prevents progress | observation → option or action |
+| `enables` | makes something possible | action → outcome |
+| `took_from` | a borrow: `from` is the node taken from, `to` is the node that used it; crosses branches on purpose | another branch's decision → your observation |
 
----
+Every edge can carry a rationale (`-r`), which is where "why" lives for the
+connection itself.
 
-## Node Status
+### Status
 
-Nodes have status to show their state:
+Six. `deciduous status --help` lists four; the binary accepts all six and
+names them when refused:
+
+```
+$ deciduous status 3 bogus
+Error: unknown status 'bogus'; expected one of: pending, active, completed, rejected, superseded, abandoned
+```
 
 | Status | Meaning |
-|--------|---------|
-| `active` | Current truth - this is how things work now |
-| `superseded` | Replaced by newer approach |
-| `abandoned` | Tried and rejected, not replaced |
-| `pending` | Not yet started |
-| `completed` | Finished successfully |
+|---|---|
+| `pending` | the default on creation |
+| `active` | current truth: this is how things work now |
+| `completed` | finished |
+| `rejected` | an option that lost |
+| `superseded` | replaced by a later approach (a pivot) |
+| `abandoned` | tried and dropped, not replaced |
 
-When querying, you can filter:
+There is no `nodes --status` filter. `deciduous nodes` filters by branch
+(`-b`), type (`-t`) and theme (`--theme`); the status is a column in its
+output and in `show`.
 
-```bash
-# Current state of the system
-deciduous nodes --status active
+### The pivot
 
-# Everything including history
-deciduous nodes
+When direction changes, the graph keeps the old path and says why it was left:
 
-# Find pivot points
-deciduous nodes --type revisit
+```
+[old decision] ──► [observation: what was learned] ──► [revisit] ──► [new decision]
+      status: superseded
 ```
 
----
+`deciduous archaeology pivot <old_id> "<observation>" "<new approach>"` writes
+all of that in one command (three nodes, three edges, the old node
+superseded); `--dry-run` shows it first. `deciduous narratives pivots` lists
+every revisit with its chain.
 
-## Sessions
+## Identity
 
-Nodes are grouped into **sessions** based on time proximity.
+Three ids name one node, and every command that takes a node takes any of
+them:
 
-- Gap threshold: 4 hours
-- Nodes within 4 hours = same session
-- Gap > 4 hours = new session
+| Id | Looks like | Scope |
+|---|---|---|
+| local id | `4`, or `#4` | this machine's database; differs on every clone |
+| `change_id` | `918ffbe9-8004-4ab8-bfdf-0f995cead45e`, or 4+ hex characters of it | everywhere: the same in every clone, in `graph.json`, on the server |
+| server id | a UUID the MCP tools return | the shared server; resolved last, only with a `[remote]` |
 
-Sessions help answer "what did I do yesterday?" vs "what did I do last week?"
+`deciduous nodes` prints the first eight characters of the `change_id` in its
+CHANGE column. To link to a teammate's node, use that, never their local id:
+`deciduous link 8311856e 42 -r "implements their goal"`.
 
----
+## The prompt
 
-## Chains
+The most valuable field for recovery is the user's exact words. A summary
+("user asked for auth") throws away the constraints that shaped every decision
+under it. `add goal -p "..."` stores it; `--prompt-stdin` takes several lines;
+`deciduous prompt <id>` adds or replaces it later. The CLI warns when a prompt
+looks like a summary:
 
-A **chain** is a connected component of the graph.
-
-Starting from root nodes (goals, or nodes with no incoming edges), BFS traverses all connected nodes. This groups related decisions together.
-
-Chains answer "show me everything related to authentication."
-
----
-
-## The Prompt Field
-
-The most important field for context recovery.
-
-When a user asks for something, capture their **exact words**:
-
-```bash
-# BAD - summary loses context
-deciduous add goal "Add auth" -p "User wants login"
-
-# GOOD - verbatim prompt enables full recovery
-deciduous add goal "Add auth" --prompt-stdin << 'EOF'
-I need to add user authentication to the app. Users should be able to sign up
-with email/password, and we need OAuth support for Google and GitHub. The auth
-should use JWT tokens with refresh token rotation.
-EOF
+```
+Warning: Prompt is only 110 chars. This looks like a summary, not a full prompt.
 ```
 
-The prompt field stores the **verbatim user message**. Future sessions can read this and understand exactly what was requested.
+Transcript-derived goals carry the prompt verbatim without anyone typing it.
 
----
+## Evidence (1.1.0)
 
-## Document Attachments
+A node written by hand or by an agent is a claim. A node derived from a Claude
+Code transcript says what backs it, in `metadata.evidence`:
 
-Decision nodes can have **files attached** — architecture diagrams, screenshots, specs, PDFs.
+| `evidence.kind` | Means | Where it comes from |
+|---|---|---|
+| `proven` | the transcript recorded the thing happening | a tool call and its result (an `Edit`, a `cargo test` exit, a `git commit` hash), or the user's own words |
+| `inferred` | the assistant said so | the closing text of a turn |
 
-```bash
-deciduous doc attach <node_id> <file> -d "Description"
-deciduous doc list <node_id>
-deciduous doc open <doc_id>
+Both kinds sit side by side, labelled, so "all tests pass" in the assistant's
+report and the test runner's own result are two nodes and the graph says which
+is which:
+
+```
+$ deciduous show 14
+Node #14 outcome
+Title: cargo test passed
+Description: 5 passed, 0 failed
+  Evidence: proven transcript, session 0f1e2d3c, 1 tool call(s), exit ok
+
+$ deciduous show 16
+Node #16 outcome
+Title: Done. The widget is in and all 5 tests pass.
+  Evidence: inferred transcript, session 0f1e2d3c
 ```
 
-Why attach documents?
+Proven actions also carry `metadata.consulted` (the files the agent `Read`
+since its previous action) and `metadata.file_hashes` (git blob ids of the
+files it touched, `git:<sha1>`, the id `git log --find-object` takes;
+`sha256:` without git). `show --json` prints the metadata raw:
 
-- **Visual context**: Architecture diagrams explain decisions better than text
-- **Evidence**: Screenshots capture the state at a specific point in time
-- **Reference**: Specs and PDFs linked to the goal that consumed them
-- **Recovery**: Future sessions can view attached documents to rebuild context
-
-Files are stored in `.deciduous/documents/` with content-hash naming. Duplicate files are deduplicated automatically. Soft-delete with `detach`; garbage-collect with `gc`.
-
-The web viewer displays attached documents in the node detail panel with filename, size, MIME type, and description. AI-generated descriptions are marked with an **(AI)** badge.
-
----
-
-## Multi-User Sync
-
-The database (`.deciduous/deciduous.db`) is local and gitignored. How do teams share?
-
-### The Dual-ID Model
-
-Every node has:
-- `id` (integer): Local primary key, different on each machine
-- `change_id` (UUID): Globally unique, stable everywhere
-
-### The Graph File
-
-`.deciduous/graph.json` holds every node, edge, theme, and tag, and is committed
-with the code. Every `add`, `link`, `status`, and `delete` writes it immediately.
-Records reference each other by `change_id`, never by local id, so they mean the
-same thing on every machine.
-
-```bash
-git pull
-deciduous sync        # import teammates' records, export yours, refresh docs/graph-data.json
-git add .deciduous/graph.json && git commit -m "graph: ..." && git push
+```json
+"evidence": {
+  "kind": "proven",
+  "session": "0f1e2d3c-0000-4000-8000-000000000001",
+  "source": "transcript",
+  "tool_use_ids": ["t2", "t3"],
+  "uuids": ["a3", "a4"]
+}
 ```
 
-Concurrent changes always conflict in git — it is one file — and are always merged
-by the `deciduous` merge driver, record by record, so both sides' additions survive.
-Deleting writes a tombstone rather than dropping the record. To link to a teammate's
-node, use the change_id prefix from the CHANGE column of `deciduous nodes`:
+Nodes written through the CLI or MCP have no `evidence` field. The web viewer
+does not show evidence or file hashes yet; `show` does. Decisions and options
+are never derived from a transcript: see [transcripts.md](transcripts.md).
 
-```bash
-deciduous link a1b2c3d4 42 -r "our action implements their goal"
-```
+## Where the graph lives
 
-See [MULTI_USER_SYNC.md](MULTI_USER_SYNC.md) for the full design.
+Two models, chosen when `deciduous init` asks.
 
----
+**A shared server** (the default since 1.0.11: PostgreSQL on this machine,
+or in Docker, or someone else's). The server is the truth, one workspace per
+repository. Agents write to it over MCP. The CLI writes `.deciduous/deciduous.db`
+and replays each write to the server as an op; `remote pull` refreshes the
+local copy; `remote status` shows the gap. Nothing about the graph is
+committed except `[remote] url` and `workspace` in `.deciduous/config.toml`.
 
-## Hook Enforcement
+**Git** (no `[remote]`). The shared graph is `.deciduous/graph.json`, committed
+with the code and merged record by record by a git merge driver. The local
+database mirrors it: every write lands in both, and a checkout, pull or reset
+is followed by the next command, so the graph you see is the graph of the
+commit you have checked out. `deciduous sync` reconciles the two and `sync
+--check` exits 1 when anything is pending.
 
-Hooks make logging **mandatory**, not optional.
+In both, `.deciduous/deciduous.db` is a per-machine cache and is never
+committed. [MULTI_USER_SYNC.md](MULTI_USER_SYNC.md) has both workflows.
 
-```toml
-# .deciduous/config.toml
-[[hooks.pre_tool_use]]
-name = "require-action-node"
-matcher = "Edit|Write"
-enabled = true
-```
+## Themes and tags
 
-When the AI tries to edit code:
+A theme is a named colour (`deciduous themes create rate-limiting -c "#ef4444"`);
+a tag puts a node under it (`deciduous tag add 1 rate-limiting`). `nodes
+--theme <name>` filters, and the viewer offers each theme as a filter chip.
+Themes and tags travel in `graph.json`; they are not sent to the server.
 
-1. Claude Code runs the pre-tool-use hook
-2. Hook checks: Is there an action node in the last 15 minutes?
-3. No? **Block the edit** with a message
+## Documents
 
-This forces the AI to log first, then edit.
+Files attach to nodes: `deciduous doc attach <node> <file> -d "..."`. They are
+stored under `.deciduous/documents/` as `<filename>.<first 8 hex of sha256>`,
+so the same file attached twice is one file on disk. Detach is a soft delete;
+`doc gc` removes files nothing references. The viewer shows a node's documents
+in its detail panel. Documents are not in `graph.json`; with a `[remote]`,
+`remote push --seed` sends them. The full process is
+[DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md](DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md).
 
----
+## What is not graph
 
-## Three Browsing Modes
+**Messages.** Agents working in parallel coordinate on the board (`deciduous
+board`, `post_message`/`read_messages`). Messages have ids, replies and
+`@label` addressing; they are never in `graph.json`, never exported, never
+synced. One board serves every worktree of a repository, or the server when
+there is a `[remote]`.
 
-### Now Mode: How does this work?
+**Roadmap items** sync through `ROADMAP.md` itself (`deciduous roadmap`).
 
-Query the current state of the system:
+**The Q&A history** of the viewer's ask panel stays in the local database.
 
-```bash
-deciduous nodes --status active
-```
+## When to write
 
-View: DAG, Chains, Graph
+| Moment | Node |
+|---|---|
+| The user asks for something | `goal`, with the message verbatim |
+| More than one way to do it | one `option` each |
+| One is picked | `decision`, titled with what it beat |
+| Code or config is about to change | `action` |
+| It works, or fails | `outcome`, with the number or the error |
+| A fact changes the plan | `observation` |
+| An earlier choice turns out wrong | `revisit` |
 
-### History Mode: How did we get here?
-
-Query evolution and pivots:
-
-```bash
-deciduous nodes --type revisit
-deciduous show <revisit_id>  # See what caused the pivot
-```
-
-View: Archaeology, Timeline, Narratives
-
-### Roadmap Mode: What's next?
-
-Query planned work:
-
-```bash
-deciduous roadmap list
-deciduous roadmap sync  # Sync with GitHub Issues
-```
-
-View: Roadmap
-
----
-
-## Best Practices
-
-### 1. Log Before You Do
-
-```bash
-deciduous add action "Implementing X" -c 85
-# ... do the work ...
-deciduous add outcome "X complete" -c 95
-deciduous link <action> <outcome>
-```
-
-### 2. Link Immediately
-
-Don't create orphan nodes:
-
-```bash
-deciduous add decision "How to do X?"
-deciduous link <goal_id> <new_decision_id> -r "X is part of goal"
-```
-
-### 3. Capture Verbatim Prompts
-
-For goals that come from user requests:
-
-```bash
-deciduous add goal "Title" --prompt-stdin << 'EOF'
-The full user message here...
-EOF
-```
-
-### 4. Use Observations
-
-When you notice something that might matter later:
-
-```bash
-deciduous add observation "Redis requires additional infrastructure" -c 70 -d "Running Redis requires a managed instance or self-hosted server. Adds operational complexity and ~$50/mo minimum cost."
-deciduous link <action> <observation> -r "Discovered during implementation"
-```
-
-### 5. Create Revisit Nodes for Pivots
-
-When changing direction:
-
-```bash
-deciduous add revisit "Reconsidering X approach"
-deciduous link <observation_that_caused_it> <revisit>
-deciduous link <revisit> <new_decision>
-deciduous status <old_decision> superseded
-```
-
-### 6. Audit Before Sync
-
-```bash
-# Check for orphans
-deciduous edges  # Any nodes missing connections?
-
-# Then sync
-deciduous sync
-```
-
----
-
-## Summary
-
-Deciduous externalizes AI reasoning into a queryable graph.
-
-**Core ideas:**
-- Log in real-time, not retroactively
-- Connect everything with edges
-- Capture pivots with revisit nodes
-- Store verbatim prompts for recovery
-- Enforce with hooks
-
-**Result:** AI-assisted development that survives context loss.
+Not: reading, searching, planning, running tests to look. Those are the
+agent's process, not the project's decisions, and the transcript import keeps
+them only as an action's `consulted` list. Link every node when you create it
+(`add_node` with `parent_id` over MCP, `link` on the CLI); root goals are the
+only valid orphans.
