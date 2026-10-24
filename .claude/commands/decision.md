@@ -169,9 +169,10 @@ The graph viewer shows a branch dropdown in the stats bar:
 - `doc detach <id>` -> `deciduous doc detach <id>` (soft-delete)
 - `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
 
-### Sync (teammates)
-- `sync` -> `deciduous sync` (reconcile `.deciduous/graph.json` with the local DB both ways)
-- `sync --check` -> report pending changes without writing (exit 1 if any)
+### The graph server (this project has a `[remote]`)
+- `sync` -> `deciduous remote status` (what differs between this copy and the server; exit 1 if anything)
+- `pull` -> `deciduous remote pull` (send what is waiting, then refresh the local cache from the server)
+- `push` -> `deciduous remote push` (send writes still waiting in `.deciduous/remote-log.jsonl`)
 - Node references: every command that takes a node id also takes a `change_id` prefix (the CHANGE column in `deciduous nodes`). Use the prefix to point at a teammate's node, since local ids differ per machine.
 
 ### Message board (parallel agents)
@@ -249,7 +250,7 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 ```
 
 ### When to Audit
-- Before every `deciduous sync`
+- After `deciduous remote pull` brings in other people's nodes
 - After creating multiple nodes quickly
 - At session end
 - When the web UI graph looks disconnected
@@ -273,30 +274,23 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 - Forces you to review exactly what you're committing
 - Catches unintended changes before they enter git history
 
-## Multi-User Sync
+## The Graph Server
 
-Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/graph.json`: one JSON file holding every node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes into it immediately; `deciduous sync` reconciles the file with the database in both directions.
+This project has a `[remote]` in `.deciduous/config.toml`. The server holds the graph; `.deciduous/deciduous.db` is this machine's cache of it. There is no `.deciduous/graph.json` to commit, no merge driver, and `deciduous sync` is not the step here.
 
-**Why it merges cleanly:** two people adding records never touch the same file. Only editing the *same* node concurrently conflicts, on one tiny JSON file. There is no log to replay, no checkpoint to compact.
+Every `add`, `link`, `status`, `delete` is queued in `.deciduous/remote-log.jsonl` and sent before the command exits. A write made while the server is down waits in the log and goes with the next write or `deciduous remote push`. MCP tools write to the server directly.
 
-**Daily workflow:**
 ```bash
-git pull
-deciduous sync                # import teammates' records, export anything missing
-# ... work normally; records are written as you go ...
-git add .deciduous/graph.json && git commit -m "graph: <what you decided>"
-git push
+deciduous remote status   # every node, edge and document that differs, with the command that fixes it
+deciduous remote pull     # send what is waiting, then refresh the local cache (deletions included)
+deciduous remote push     # send what is waiting; --retry-rejected once a refusal's cause is fixed
 ```
 
-**Linking to a teammate's node:** local ids differ per machine, so use the change_id prefix shown in the CHANGE column of `deciduous nodes`:
+**Linking to a teammate's node:** local ids differ per machine, so use the change_id prefix shown in the CHANGE column of `deciduous nodes`, or the server id an agent quotes:
 ```bash
 deciduous nodes                          # 57   a1b2c3d4  goal  ...  (a1b2c3d4 is stable everywhere)
 deciduous link a1b2c3d4 58 -r "builds on their goal"
 ```
-
-**Two people edited the graph?** Git hands both versions to the `deciduous` merge driver (`deciduous sync` registers it in each clone), which merges them record by record: additions from both sides survive, and one record both sides changed merges field by field. If the file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way.
-
-**Upgrading from 0.17 or earlier:** `deciduous sync` folds `.deciduous/sync/` (0.17's per-record files) and, before that, `.deciduous/sync/events/` with `checkpoint.json` into `.deciduous/graph.json` once, then removes them (only if everything parsed). `git rm -r` them afterwards.
 
 ## Parallel Agents: The Message Board
 
@@ -314,7 +308,7 @@ One board serves every git worktree of the repository, or the server when the pr
 LOG BEFORE YOU CODE, NOT AFTER.
 CONNECT EVERY NODE TO ITS PARENT.
 AUDIT FOR ORPHANS REGULARLY.
-SYNC AFTER PULL, SYNC BEFORE PUSH, COMMIT .deciduous/graph.json.
+THE SERVER IS THE TRUTH: `deciduous remote pull` TO REFRESH, `deciduous remote status` TO CHECK.
 COORDINATE PARALLEL AGENTS ON THE BOARD, NEVER IN A SCRATCH FILE.
 ```
 

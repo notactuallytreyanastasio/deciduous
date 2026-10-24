@@ -11,6 +11,10 @@ argument-hint: [focus-area]
 ## Step 1: Query the Graph
 
 ```bash
+# The graph lives on the server; refresh this machine's cache first
+deciduous remote pull
+deciduous remote status
+
 # See all decisions (look for recent ones and pending status)
 deciduous nodes
 
@@ -52,6 +56,17 @@ done
 ```bash
 deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
 ```
+
+## Step 1.6: Import Sessions the Graph Does Not Have
+
+A session that logged little still left a transcript. Import what is missing before reading the graph, so the graph is complete when you read it.
+
+```bash
+deciduous transcript list                 # "new" = not yet imported
+deciduous transcript import <session-id>  # goals, actions, outcomes, each with its evidence
+```
+
+Derived nodes say in `metadata.evidence.kind` whether they are `proven` (a tool call and its result) or `inferred` (the assistant's own words). Trust the proven ones.
 
 ## Step 1.7: Check the Message Board
 
@@ -108,7 +123,7 @@ After recovering context, you MUST follow the logging workflow:
 EVERY USER REQUEST -> Log goal/decision first
 BEFORE CODE CHANGES -> Log action
 AFTER CHANGES -> Log outcome, link nodes
-BEFORE GIT PUSH -> deciduous sync
+BEFORE ENDING -> deciduous remote status
 ```
 
 **The user is watching the graph live.** Log as you go, not after.
@@ -126,7 +141,7 @@ deciduous link FROM TO -r "Connection reason"
 # Capture prompt when user redirects mid-stream
 deciduous add action "Switching approach" -c 85 -p "User said: use X instead"
 
-deciduous sync  # Do this frequently!
+deciduous remote status  # anything the server has not got?
 ```
 
 **When to use `--prompt`:** On root goals (always) and when user gives new direction mid-stream. Downstream nodes inherit context via edges.
@@ -161,7 +176,7 @@ AFTER CHANGES -> Log outcomes, observations
     |
 AUDIT AGAIN -> Any new orphans?
     |
-BEFORE PUSH -> deciduous sync
+BEFORE ENDING -> deciduous remote status
     |
 PUSH -> Live graph updates
     |
@@ -174,16 +189,9 @@ SESSION END -> Final audit
 
 ---
 
-## Multi-User Sync
+## The Graph Server
 
-Teammates' decisions arrive in `.deciduous/graph.json`. After `git pull`, pull them into your database:
-
-```bash
-deciduous sync            # import their records, export yours
-deciduous sync --check    # just report what is pending
-```
-
-Every `add`, `link`, `status`, `delete` writes the file at once, so the only discipline needed is: `deciduous sync` after pull, commit `.deciduous/graph.json` before push. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id.
+This project has a `[remote]` in `.deciduous/config.toml`: teammates' and agents' decisions are on the server, not in a file git carries. `deciduous remote pull` brings them into your local cache; `deciduous remote status` lists what differs, each with the command that fixes it. There is no `.deciduous/graph.json` to commit and no `deciduous sync` step. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id.
 
 ## Why This Matters
 
@@ -191,4 +199,4 @@ Every `add`, `link`, `status`, `delete` writes the file at once, so the only dis
 - The graph survives - query it early, query it often
 - Retroactive logging misses details - log in the moment
 - The user sees the graph live - show your work
-- `.deciduous/graph.json` shares reasoning with teammates through ordinary git
+- The graph server shares reasoning with every teammate and agent as it is written
