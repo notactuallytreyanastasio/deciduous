@@ -1,6 +1,6 @@
 # Deciduous
 
-**Decision graph tooling for AI-assisted development.** Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
+**A decision graph for AI-assisted development.** One graph per repository: what was asked, which approaches were considered, which one was chosen and why, what was changed, what happened. It survives the end of the session, the compaction of the context window and the departure of the person who knew.
 
 [![Crates.io](https://img.shields.io/crates/v/deciduous.svg)](https://crates.io/crates/deciduous)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -9,58 +9,134 @@
 
 ## See It In Action
 
-**[Browse the Live Decision Graph](https://deciduous.dev/demo/)** — 1,100+ decisions from building deciduous itself
+**[Browse the Live Decision Graph](https://deciduous.dev/demo/)** — the graph of building deciduous itself: 1,465 nodes and 1,313 edges in `docs/graph-data.json`, from the export of 2026-09-04
 
-**[Interactive Tutorial](https://deciduous.dev/tutorial/)** — Learn the workflow in 15 minutes
+**[Interactive Tutorial](https://deciduous.dev/tutorial/)** — the workflow in 15 minutes
 
-**[Watch the Demo](https://asciinema.org/a/761574)** — Full session walkthrough
-
----
-
-## The Problem
-
-You're building software with AI assistance. The LLM generates complex code fast. But then:
-
-- **Sessions end.** Context compacts. The LLM loses memory of what was tried.
-- **Decisions evaporate.** Six months later, no one remembers *why* you chose approach A over B.
-- **PRs become incomprehensible.** A 50-file diff tells you *what* changed, not *why*.
-- **Onboarding is archaeology.** New teammates reverse-engineer decisions from code.
-
-The code tells you *what*. But decisions tell you *why*.
-
-## The Solution
-
-Deciduous creates a persistent, queryable graph of every decision made during development. Log decisions in real-time—as they happen—and they survive session boundaries, context compaction, and human memory.
-
-```
-1,174 nodes • 1,024 edges • Real development history from building this tool
-```
-
-Both you and your AI assistant can:
-- **Query past reasoning** before making new decisions
-- **See what was tried** and what was rejected
-- **Trace any outcome** back to the goal that spawned it
-- **Recover context** after sessions end or memory compacts
-
-This isn't documentation written after the fact. It's a real-time record of *how* software gets built.
+**[Watch the Demo](https://asciinema.org/a/761574)** — a full session
 
 ---
 
-## Several Agents, One Graph
+## What the graph is
 
-Ten Claude Code sessions, started at the same second in ten git worktrees of one repository, each building a Tetris from nothing, all logging to one shared deciduous workspace and told to read each other's code and reasoning. Twenty-six minutes later: ten playable games, 386 graph nodes, 170 borrowed ideas with provenance. One finding (some SRS kicks lift a piece two rows, so two hidden rows refuse a legal rotation at the ceiling) reached eight of the nine other branches in eighteen minutes (agent-1 started with a forty-row board and never needed it), and two of the agents that took it used it to find the same silent bug in their own `merge()`.
+Seven node types, one flow:
+
+```
+goal → options → decision → actions → outcomes
+```
+
+Goals lead to options; options lead to a decision (which names what it beat); the decision leads to actions; actions lead to outcomes. Observations attach anywhere. A revisit connects an approach that turned out wrong to the one that replaced it. This is what a small one looks like from the CLI:
+
+```
+$ deciduous nodes
+6 nodes:
+ID    CHANGE    TYPE         STATUS     TITLE
+------------------------------------------------------------------------------
+1     c2c70542  goal         pending    Add rate limiting to the API
+2     fa8118b2  option       pending    Redis sliding window
+3     c4e588ed  option       pending    In-process token bucket
+4     5bcfb238  decision     pending    Redis sliding window over in-process bucket
+5     81b03384  action       pending    Add RateLimiter middleware
+6     d556d253  outcome      pending    cargo test: 48 passed, 0 failed
+
+$ deciduous show 4
+Node #4 decision
+Title: Redis sliding window over in-process bucket
+Status: pending
+Change ID: 5bcfb238-a946-4281-8354-5484b2ec5589
+
+Metadata
+  Confidence: 85%
+  Branch: main
+
+Connections
+  Incoming (2):
+    #2 ─[chosen]→ here: survives several API instances
+    #3 ─[rejected]→ here: per-process counts diverge behind a load balancer
+  Outgoing (1):
+    here ─[leads_to]→ #5: implementation
+```
+
+Every node has a local integer id and a `change_id` (UUID) that is the same on every machine; edges carry a type (`leads_to`, `requires`, `chosen`, `rejected`, `blocks`, `enables`, `took_from`) and a rationale. Nodes record the branch they were made on, a confidence, the files they touch, the commit they belong to, and for goals the user's prompt verbatim.
+
+## Three ways the graph gets written
+
+1. **The agent, through MCP, as it works.** Claude Code connects to the shared graph server and receives the logging instructions with the connection: a goal when you ask for something (your message verbatim), options when there is more than one way, a decision, an action per change, an outcome with the number or the error. `capture_conversation_turn` writes one step's goal, decision, action and outcome in one call; `add_node` with `parent_id` creates and links one node. See [MCP](#mcp-servers).
+2. **The CLI.** `deciduous add`, `link`, `status`, `doc attach`, `archaeology pivot`. The example above was six `add` and six `link` commands. See [The Workflow](#the-workflow).
+3. **The transcript, after the fact.** `deciduous transcript import` reads the JSONL transcript Claude Code wrote for a session and derives the graph from it, with evidence on every node. Nothing has to be logged for a session to be in the graph. Next section.
+
+---
+
+## The transcript is the log
+
+An agent that logs its own decisions is an agent that can forget to. The
+transcript cannot. Claude Code writes every session to a JSONL file under
+`~/.claude/projects/<slug>/`; since 1.1.0, `deciduous transcript import`
+derives the graph from it: every prompt a goal (verbatim), every edit run and
+`git commit` an action naming the files, every build, test or lint run an
+outcome with its exit and summary, the assistant's closing report an outcome
+too.
+
+```bash
+deciduous transcript list              # this project's sessions, and which are imported
+deciduous transcript import 328f8485   # by session id prefix, or a path to the .jsonl
+```
+
+```
+Imported Remote postgres code upstream (328f8485, 68 prompts)
+  goals 68 · actions 119 · outcomes 67 proven, 41 inferred · observations 7 · edges 301
+  50 files hashed · 52 deciduous MCP writes skipped (already in the graph)
+```
+
+That session was three weeks of work. The agent had logged nine nodes through
+MCP while it ran.
+
+Every derived node says what it is backed by. `metadata.evidence.kind` is
+`proven` (a tool call and its result, or your own words, with the transcript
+uuids) or `inferred` (the assistant said so). The assistant's "all tests pass"
+and the `cargo test` result that says `12 passed, 1 failed` sit side by side,
+labelled, and `deciduous show` prints which is which:
+
+```
+$ deciduous show 42
+Node #42 outcome
+Title: cargo test passed
+Description: 212 passed, 0 failed
+  Evidence: proven transcript, session 328f8485, 1 tool call(s), exit ok
+
+$ deciduous show 67
+Node #67 outcome
+Title: Both built, tested against the live server, and shipped.
+  Evidence: inferred transcript, session 328f8485
+```
+
+Each action lists the files the agent `Read` before it (`metadata.consulted`)
+and carries git blob hashes of the files it touched (`metadata.file_hashes`,
+the id `git log --find-object` takes). Importing the same transcript twice
+adds nothing, on any machine: change ids are derived from the session and
+entry uuids, so two people importing one transcript get the same nodes.
+
+What is not derived: decisions and options (a choice between approaches is a
+judgement about prose; that pass belongs to an agent reading the imported
+graph), subagent transcripts (counted and skipped), and anything but Claude
+Code's format. The web viewer does not yet show evidence or hashes; `show`
+does. [docs/transcripts.md](docs/transcripts.md) has the full derivation table
+and a `SessionEnd` hook that imports at the end of every session.
+
+---
+
+## Several agents, one graph
+
+Ten Claude Code sessions, started at the same second in ten git worktrees of one repository, each building a Tetris from nothing, all logging to one shared deciduous workspace and told to read each other's code and reasoning. Twenty-six minutes later: ten playable games, 386 graph nodes, 170 borrowed ideas with provenance. One finding (some SRS kicks lift a piece two rows, so two hidden rows refuse a legal rotation at the ceiling) reached eight of the nine other branches in eighteen minutes.
 
 **[The arena write-up](https://notactuallytreyanastasio.github.io/tetris-arena/)** · **[the repository](https://github.com/notactuallytreyanastasio/tetris-arena)** · **[how it works](https://deciduous.dev/remote.html#alongside)**
 
 What made it work is one server, reachable over MCP from every directory, with the branch as the unit of coordination:
 
-- **Activity.** Every write, MCP or CLI, records who wrote which branch; none is refused because someone else is writing. `check_activity` lists who wrote in the last five minutes and the last node on each of the twenty most recent branches.
-- **Events.** Postgres triggers push every write over a WebSocket the moment it lands. `deciduous remote watch` prints one quoted line per write; Claude Code's `Monitor` tool can sit on the same URL.
-- **Provenance.** A `took_from` edge records a borrow across branches, and `log_observation` writes the observation and the edge in one call. In the arena the borrows lived in observation titles and had to be recovered with a regular expression; that is the wrong place for them.
-- **The message board.** Agents working at the same time post interface changes, questions and answers with `post_message` (or `deciduous board post`), address each other with `@label`, and answer with `reply_to`. `read_messages` with `unanswered_for` your own label (`deciduous board read --unanswered <label>`) is what is waiting for you. It replaces the scratch `board.md` agents otherwise invent: a file has no ids to answer and no way to ask what is addressed to you. Messages are coordination, not graph: never in `graph.json`, never exported or synced. See [The Message Board](#the-message-board).
-
-`deciduous init` sets the server up, or points at one you already run; see
-[First-time setup](#first-time-setup).
+- **Activity.** Every write records who wrote which branch; none is refused because someone else is writing. `check_activity` lists who wrote in the last five minutes and the last node on each recent branch.
+- **Events.** Postgres triggers push every write over a WebSocket as it lands. `deciduous remote watch` prints one quoted line per write; Claude Code's `Monitor` tool can sit on the same URL.
+- **Provenance.** A `took_from` edge records a borrow across branches; `log_observation` writes the observation and the edge in one call. In the arena the borrows lived in observation titles and had to be recovered with a regular expression, which is why the edge type exists.
+- **The message board.** Agents post interface changes, questions and answers with `post_message`, address each other with `@label`, answer with `reply_to`, and read what is waiting for them with `read_messages` `unanswered_for`. See [The Message Board](#the-message-board).
 
 ---
 
@@ -69,7 +145,7 @@ What made it work is one server, reachable over MCP from every directory, with t
 Every project writes to a shared graph server, and `deciduous init` does not
 finish until the project points at one that answers.
 
-**1. Install the binary** (1.0.11 or newer), and PostgreSQL if the graph will live on this machine:
+**1. Install the binary**, and PostgreSQL if the graph will live on this machine:
 
 ```bash
 brew install notactuallytreyanastasio/tap/deciduous   # Homebrew, macOS or Linux
@@ -93,8 +169,8 @@ cd your-project
 deciduous init            # Claude Code; --opencode, --windsurf or --both for others
 ```
 
-`init` writes the slash commands, skills and a `CLAUDE.md` section. Then, if
-the project has no server yet, it asks where its graph should live:
+`init` writes the slash commands, skills, hooks and a `CLAUDE.md` section. Then,
+if the project has no server yet, it asks where its graph should live:
 
 ```
    This project has no server yet ([remote] in .deciduous/config.toml).
@@ -151,14 +227,15 @@ deciduous remote setup --url <url>              # 4
 
 `DATABASE_URL` in your environment is never used unless you pass it with
 `--database-url`. Commit the project files (by path, not `git add -A`) so
-every clone gets them.
+every clone gets them. `DECIDUOUS_NO_SERVER=1` skips the server step, for
+tests and CI.
 
 **3. Restart Claude Code.** When it connects, the server sends the logging
-instructions (when to write, and how to write one step in one call). There is
-no hook to install. Agents write through the MCP tools. `deciduous add` from
-the CLI writes to the local database and queues the change in
-`.deciduous/remote-log.jsonl`, which is sent to the server before the command
-exits (or, if the server is down, on the next write or `deciduous remote push`).
+instructions. There is no hook to install. Agents write through the MCP
+tools. `deciduous add` from the CLI writes to the local database and queues
+the change in `.deciduous/remote-log.jsonl`, which is sent to the server
+before the command exits (or, if the server is down, on the next write or
+`deciduous remote push`).
 
 If anything is missing (no PostgreSQL, a server that does not answer, no token),
 `init` and `update` stop with exit 1 and say how to fix it. Upgrading later is
@@ -173,8 +250,8 @@ deciduous demo-swarm --dry-run   # builds the arena and the window, starts no ag
 deciduous demo-swarm             # one Opus lead and four Sonnet workers on one graph
 ```
 
-`--ask` keeps Claude Code's permission prompts in every pane. After
-`deciduous update`, Claude Code also has it as `/demo-swarm`.
+`demo-swarm` is hidden from `--help`. After `deciduous update`, Claude Code
+also has it as `/demo-swarm`.
 
 Written for the agent doing the setup rather than for you:
 [deciduous.dev/agents/](https://deciduous.dev/agents/index.md) and
@@ -184,16 +261,16 @@ Written for the agent doing the setup rather than for you:
 
 ## Installation
 
-### Homebrew (Recommended)
+### Homebrew
 
 ```bash
 brew tap notactuallytreyanastasio/tap
 brew install deciduous
 ```
 
-### Pre-built Binaries
+### Pre-built binaries
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/notactuallytreyanastasio/deciduous/releases):
+From [GitHub Releases](https://github.com/notactuallytreyanastasio/deciduous/releases):
 
 | Platform | Binary |
 |----------|--------|
@@ -204,10 +281,18 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | Windows | `deciduous-windows-amd64.exe` |
 
 ```bash
-# Example: Linux/macOS
 curl -LO https://github.com/notactuallytreyanastasio/deciduous/releases/latest/download/deciduous-darwin-arm64
 chmod +x deciduous-darwin-arm64
 sudo mv deciduous-darwin-arm64 /usr/local/bin/deciduous
+```
+
+### Cargo, or from source
+
+```bash
+cargo install deciduous --locked
+
+git clone https://github.com/notactuallytreyanastasio/deciduous.git
+cd deciduous && cargo build --release     # target/release/deciduous; toolchain pinned by rust-toolchain.toml
 ```
 
 ### Self-host the shared graph server
@@ -217,8 +302,7 @@ hand: `deciduous init` (or `deciduous remote setup`) downloads the release's
 `deciduous-mcp-*` executable, one file with Erlang/OTP and Elixir inside, and
 runs it as a user service against the PostgreSQL on localhost:5432. The server
 creates its database if it is missing and migrates at every start, so a
-machine with PostgreSQL needs nothing else. See [First-time
-setup](#first-time-setup).
+machine with PostgreSQL needs nothing else.
 
 For a server a team shares, run the same executable on the host, against the
 PostgreSQL there or any other by URL. The [deployment
@@ -236,113 +320,134 @@ cd deciduous-mcp-docker
 Setup creates private credentials, starts PostgreSQL 17 with persistent
 storage, applies migrations, and waits until the server can query the
 database. It picks a free port in 20000-32767 unless `DECIDUOUS_PORT` says
-otherwise, and prints the resulting MCP endpoint; the port and bearer token
-are in `.env`. Running setup again keeps the same credentials, port and
-database. `deciduous remote setup --docker-postgres` does all of this for you.
-
-### Via Cargo
-
-```bash
-cargo install deciduous --locked
-```
-
-### From Source
-
-```bash
-git clone https://github.com/notactuallytreyanastasio/deciduous.git
-cd deciduous
-cargo build --release
-# Binary at target/release/deciduous
-```
+otherwise (4000 is the port inside the container only), and prints the
+resulting MCP endpoint; the port and bearer token are in `.env`. Running setup
+again keeps the same credentials, port and database. `deciduous remote setup
+--docker-postgres` does all of this for you.
 
 ---
 
-## Quick Start
+## Where the graph lives
+
+| File | Role |
+|------|------|
+| `.deciduous/config.toml` | `[remote]` names the server URL and workspace; `[branch]` controls branch tagging |
+| `.deciduous/deciduous.db` | SQLite, ignored by git. With a `[remote]`, this machine's cache of the server's graph; without one, the graph itself |
+| `.deciduous/remote-log.jsonl` | CLI writes waiting for the server, one op each; `deciduous remote push` replays them, each applied at most once |
+| `.deciduous/graph.json` | The git-tracked graph for a project with no server: `deciduous sync` reconciles it with the database both ways, `init` registers a merge driver that merges it record by record. A project with a `[remote]` has no graph.json to commit, and `sync` is not its step |
+| `.deciduous/documents/` | Attached files, content-hash named |
+| `~/.config/deciduous/credentials` | The server token, mode 0600, never in a repository |
+
+The server holds one workspace per repository; a git worktree uses its main checkout's. `deciduous remote status` lists what differs between this copy and the server, field by field, and exits 1 if anything does; `deciduous remote pull` sends what is waiting and refreshes the cache.
+
+---
+
+## The Workflow
+
+```
+BEFORE you do something → Log what you're ABOUT to do
+AFTER it succeeds/fails → Log the outcome
+CONNECT immediately    → Link every node to its parent
+```
+
+### Example session, from the CLI
 
 ```bash
-# Initialize in your project
-cd your-project
-deciduous init
+deciduous add goal "Add rate limiting to the API" -c 90 --prompt-stdin < prompt.txt   # the user's words, verbatim
+deciduous add option "Redis sliding window" -c 80
+deciduous add option "In-process token bucket" -c 70
+deciduous link 1 2 -r "possible approach"
+deciduous link 1 3 -r "possible approach"
 
-# Start logging decisions
-deciduous add goal "Add user authentication" -c 90
-deciduous add option "JWT tokens" -c 80
-deciduous add option "Session cookies" -c 75
-deciduous link 1 2 -r "Possible approach"
-deciduous link 1 3 -r "Possible approach"
-deciduous add decision "Use JWT for API, sessions for web" -c 85
-deciduous link 2 4 -r "Chosen approach"
-deciduous link 3 4 -r "Also incorporated"
+deciduous add decision "Redis sliding window over in-process bucket" -c 85
+deciduous link 2 4 -t chosen -r "survives several API instances"
+deciduous link 3 4 -t rejected -r "per-process counts diverge behind a load balancer"
 
-# View the graph
-deciduous serve    # Web viewer at localhost:3000
+deciduous add action "Add RateLimiter middleware" -c 85 -f src/middleware/rate_limit.rs
+deciduous link 4 5 -r implementation
+deciduous doc attach 5 docs/rate-limit.png -d "request path with the limiter"
+
+deciduous add outcome "cargo test: 48 passed, 0 failed" -c 95 --commit HEAD
+deciduous link 5 6
 ```
 
-That's it. Your first decision graph is live.
+`add` warns when a prompt looks like a summary rather than the user's message; `--prompt-stdin` takes a long one. `--commit` stores the full hash and refuses a rev git cannot resolve.
 
-### The Canonical Flow
+### When an approach turns out wrong
 
-Every decision follows this path through the graph:
+`archaeology pivot` writes the observation, the revisit and the new decision, links them, and marks the old approach superseded, in one transaction:
 
 ```
-goal → options → decision → actions → outcomes
+$ deciduous archaeology pivot 4 "Redis adds a network hop on every request; p99 rose 8 ms" \
+    "Local token bucket with Redis for the shared quota" -c 80 --dry-run
+=== PIVOT (dry run) ===
+
+  ?? [observation] "Redis adds a network hop on every request; p99 rose 8 ms"
+    └── linked from #4 "Redis sliding window over in-process bucket"
+  ?? [revisit] "Reconsidering: Redis sliding window over in-process bucket"
+    └── linked from ?? [observation]
+  ?? [decision] "Local token bucket with Redis for the shared quota"
+    └── linked from ?? [revisit]
+
+  Superseded: #4 "Redis sliding window over in-process bucket" -> status: superseded
 ```
 
-- **Goals** lead to **options** (possible approaches to explore)
-- **Options** lead to a **decision** (choosing which option to pursue)
-- **Decisions** lead to **actions** (implementing the chosen approach)
-- **Actions** lead to **outcomes** (results of the implementation)
-- **Observations** attach anywhere relevant
-- **Revisits** connect old approaches to new ones when you pivot
+### Types, statuses, edges
 
-### Multi-Assistant Support
+| Node type | Example |
+|-----------|---------|
+| `goal` | "Add rate limiting to the API" |
+| `option` | "Redis sliding window" |
+| `decision` | "Redis sliding window over in-process bucket" |
+| `action` | "Add RateLimiter middleware" |
+| `outcome` | "cargo test: 48 passed, 0 failed" |
+| `observation` | "p99 rose 8 ms" |
+| `revisit` | "Reconsidering: Redis sliding window" |
 
-Deciduous integrates with multiple AI coding assistants:
+Statuses: `pending`, `active`, `completed`, `rejected`, `superseded`, `abandoned` (`deciduous status <id> <status>`). `active` is current truth; `superseded` and `abandoned` are history that stays queryable.
+
+Edge types: `leads_to` (the default), `requires`, `chosen`, `rejected`, `blocks`, `enables`, `took_from` (this node borrowed from that one, usually across branches).
+
+### Documents
 
 ```bash
-# Claude Code (default)
-deciduous init
-
-# OpenCode
-deciduous init --opencode
-
-# Windsurf (Codeium)
-deciduous init --windsurf
-
-# Multiple assistants
-deciduous init --both              # Claude Code + OpenCode
-deciduous init --windsurf          # + Windsurf (auto-creates .windsurf/)
-deciduous init --both --windsurf   # All three
+deciduous doc attach 1 docs/architecture.png -d "System architecture"
+deciduous doc attach 1 screenshot.png --ai-describe    # description from the claude CLI
+deciduous doc list 1
+deciduous doc open 3
+deciduous doc detach 3          # soft-delete
+deciduous doc gc --dry-run      # orphaned files that gc would remove
 ```
 
-| Assistant | Flag | Integration Files |
-|-----------|------|-------------------|
-| **Claude Code** | `--claude` (default) | `.claude/`, `CLAUDE.md` |
-| **OpenCode** | `--opencode` | `.opencode/`, `AGENTS.md` |
-| **Windsurf** | `--windsurf` | `.windsurf/hooks/`, `.windsurf/rules/` |
+Files go in `.deciduous/documents/` under their content hash, so the same file attached twice is stored once. The web viewer shows them in the node's detail panel.
 
-**Auto-detection:** `deciduous update` auto-detects which assistants are installed (`.claude/`, `.opencode/`, `.windsurf/`) and updates them all. Windsurf is also auto-detected during `init` if `.windsurf/` already exists.
-
-### MCP Server
-
-Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 34 tools for managing and querying the decision graph and for the agents' message board. The [shared graph server](https://deciduous.dev/remote.html) is a second endpoint, over HTTP, with 20 tools of its own (the board's two need server 1.0.9) and the multi-agent ones (`check_activity`, `branch` on every write, `took_from`) live there.
-
-> **Claude Cowork:** Coming soon. Cowork agents can't yet load custom MCP servers — track progress on [anthropics/claude-code#48909](https://github.com/anthropics/claude-code/issues/48909).
-
-**Claude Code** (this project's local database, over stdio):
+### Recovering context
 
 ```bash
-claude mcp add deciduous -- deciduous mcp
+deciduous pulse            # active state, gaps, recent nodes
+deciduous nodes -b <branch>
+deciduous show <id>
+deciduous commands         # what the CLI did recently
 ```
 
-Claude Code reads MCP servers from `claude mcp add` (or a project `.mcp.json`),
-not from `.claude/settings.local.json`. The shared server needs no line here:
-`deciduous init` registers it at user scope, see step 2 of
-[First-time setup](#first-time-setup).
+Or ask the graph in plain English from the web viewer's Q&A panel, or through the shared server's `ask_graph` tool.
 
-**Claude Desktop**:
+---
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+## MCP servers
+
+There are two.
+
+**The shared server** (Elixir, PostgreSQL, over HTTP) is what `deciduous init` sets up and registers with Claude Code. Its 21 tools are where the multi-agent features live: `capture_conversation_turn`, `add_node` (with `parent_id`), `add_edge`, `update_node`, `delete_node`, `delete_edge`, `log_decision`, `log_observation` (with `took_from`), `close_thread`, `show_node`, `query_nodes`, `get_graph`, `get_ancestors`, `get_descendants`, `find_orphans`, `ask_graph`, `consolidation_report`, `check_activity`, `list_workspaces`, `post_message`, `read_messages`. It sends the logging instructions in the `initialize` result, so every client gets them with no project configuration. Reads accept `workspace: "*"` for the view across every project; writes refuse it. [docs/remote-graph.md](docs/remote-graph.md) and [deciduous.dev/remote.html](https://deciduous.dev/remote.html).
+
+**The local server** (`deciduous mcp`, stdio) exposes this project's database with 34 tools, for a client that has no shared server, or for Claude Desktop:
+
+```bash
+claude mcp add deciduous -- deciduous mcp              # Claude Code, this project
+claude mcp add deciduous --scope user -- deciduous mcp  # every project
+```
+
+Claude Code reads MCP servers from `claude mcp add` or a project `.mcp.json`, not from `.claude/settings.local.json`. For Claude Desktop, in `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
@@ -350,34 +455,25 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
     "deciduous": {
       "command": "/Users/you/.cargo/bin/deciduous",
       "args": ["mcp"],
-      "env": {
-        "DECIDUOUS_DB_PATH": "/path/to/your/project/.deciduous/deciduous.db"
-      }
+      "env": { "DECIDUOUS_DB_PATH": "/path/to/your/project/.deciduous/deciduous.db" }
     }
   }
 }
 ```
 
-Use the **absolute path** to the `deciduous` binary (run `which deciduous` to find it) — Claude Desktop doesn't inherit your shell `PATH`. Point `DECIDUOUS_DB_PATH` at the SQLite database in your project's `.deciduous/` directory, then restart Claude Desktop.
+Use the absolute path to the binary (`which deciduous`); Claude Desktop does not inherit your shell `PATH`.
 
-**Claude Code (user-level)**:
+| Category | Tools |
+|----------|-------|
+| Graph | `add_node`, `link_nodes`, `unlink_nodes`, `delete_node`, `update_status`, `update_prompt` |
+| Query | `list_nodes`, `search_nodes`, `show_node`, `list_edges`, `get_graph` |
+| Analysis | `trace_chain`, `get_node_context`, `get_pulse`, `find_orphans`, `get_timeline`, `get_branch_summary` |
+| Sessions | `start_session`, `end_session`, `resume_session`, `get_session`, `list_sessions` (kept in a file next to the database, so a session survives a server restart) |
+| Documents, themes | `attach_document`, `list_documents`, `create_theme`, `list_themes`, `tag_node`, `untag_node` |
+| Export, sync | `export_dot`, `generate_writeup`, `sync`, `sync_status` |
+| Message board | `post_message`, `read_messages` |
 
-Add `--scope user` to the `claude mcp add` line to make the server available in every project.
-
-Once configured, the AI gets tools for:
-
-| Category | Tools | What they do |
-|----------|-------|-------------|
-| **Graph CRUD** | `add_node`, `link_nodes`, `delete_node`, ... | Create and manage decision nodes and edges |
-| **Querying** | `list_nodes`, `search_nodes`, `show_node`, ... | Find and filter nodes across the graph |
-| **Analysis** | `trace_chain`, `get_node_context`, `get_pulse`, ... | Traverse chains, get neighborhood context, find orphans |
-| **Sessions** | `start_session`, `end_session`, `resume_session`, ... | Each conversation gets its own decision tree |
-| **Export** | `export_dot`, `generate_writeup` | DOT visualization and PR writeups |
-| **Message board** | `post_message`, `read_messages` | Parallel agents coordinate: questions, answers, interface changes, with ids and `reply_to` |
-
-Sessions persist to disk and auto-resume across server restarts, so long-running conversations keep their decision trees intact.
-
-**[Full MCP documentation and tutorial](https://deciduous.dev/mcp)**
+Writes made through `deciduous mcp` in a project with a `[remote]` are queued for the server like CLI writes. [deciduous.dev/mcp.html](https://deciduous.dev/mcp.html) has the tool reference.
 
 ---
 
@@ -398,380 +494,51 @@ $ deciduous board read --unanswered w1
 Nothing addressed to w1 is waiting for an answer.
 ```
 
-- **Post** with `post_message` or `deciduous board post --as LABEL -s SUBJECT [-m BODY | stdin] [--reply-to ID]`. `@label` anywhere in the subject or body addresses it (an email address is not a mention).
-- **Read** with `read_messages` or `deciduous board read [--since ID] [--from LABEL] [--to LABEL] [--unanswered LABEL] [-q TEXT] [--limit N] [--json]`, oldest first; `deciduous board show ID` prints one in full.
-- **Unanswered** means: mentions the label, and no message by that label has `reply_to` its id. A reply takes a question off the list; a new post does not. Read it at start, before touching a file another agent may be changing, and before finishing.
+`@label` anywhere in the subject or body addresses a message (an email address is not a mention). **Unanswered** means: mentions the label, and no message by that label has `reply_to` its id. Read it at start, before touching a file another agent may be changing, and before finishing.
 
-Where it lives: in a local project, the `agent_messages` table of the **main worktree's** `.deciduous/deciduous.db`, so every git worktree of the repository shares one board (the graph database stays per worktree, because `graph.json` belongs to a branch). In a project with a `[remote]`, on the server (`POST`/`GET /messages`, server 1.0.9 or later; an older server is an error that says so, never a quiet fall back to the local table). Never in `graph.json`, never exported, never synced.
+Where it lives: on the server when the project has a `[remote]` (server 1.0.9 or later; an older one is an error that says so, never a quiet fall back); otherwise in the `agent_messages` table of the **main worktree's** `.deciduous/deciduous.db`, so every worktree of a repository shares one board. Never in `graph.json`, never exported, never synced.
 
-Set `DECIDUOUS_AGENT_LABEL` in a session's environment and `board post` uses it for `--as`, and the `board-mentions.sh` hook `init` installs shows that label's unanswered messages at session start and as new ones arrive. Without the variable the hook does nothing.
+Set `DECIDUOUS_AGENT_LABEL` in a session's environment and `board post` uses it for `--as`, and the `board-mentions.sh` hook `init` installs shows that label's unanswered messages at session start and as new ones arrive. Without the variable the hook prints nothing.
 
 ---
 
-## The Workflow
-
-```
-BEFORE you do something → Log what you're ABOUT to do
-AFTER it succeeds/fails → Log the outcome
-CONNECT immediately → Link every node to its parent
-```
-
-### Example Session
+## Viewing the graph
 
 ```bash
-# Starting a new feature
-deciduous add goal "Add rate limiting" -c 90 -p "User asked: add rate limiting to the API"
-
-# Considering options
-deciduous add option "Redis-based distributed" -c 80
-deciduous add option "In-memory sliding window" -c 70
-deciduous link 1 2 -r "Possible approach"
-deciduous link 1 3 -r "Possible approach"
-
-# Attach the design spec to the goal
-deciduous doc attach 1 docs/rate-limiting-spec.pdf -d "Rate limiting design spec"
-
-# Making a choice
-deciduous add decision "Use Redis rate limiter" -c 85
-deciduous link 2 4 --edge-type chosen -r "Scales across instances"
-deciduous link 3 4 --edge-type rejected -r "Doesn't scale horizontally"
-
-# Implementing the chosen approach
-deciduous add action "Implementing Redis rate limiter" -c 85
-deciduous link 4 5 -r "Implementation"
-
-# Attach the architecture diagram to the action
-deciduous doc attach 5 docs/redis-arch.png --ai-describe
-
-# Recording the outcome
-deciduous add outcome "Rate limiting working in prod" -c 95
-deciduous link 5 6 -r "Implementation complete"
-
-# Share it: .deciduous/graph.json is written as you go;
-# sync imports teammates' records into the local database
-deciduous sync
+deciduous serve --port 3000      # web viewer
+deciduous dot --auto --png       # docs/decision-graph-<branch>.png (needs graphviz)
+deciduous writeup --auto -t "My PR" --nodes 1-11   # PR body with the graph embedded
 ```
 
-### Document Attachments
+The viewer has six views (DAG, Chains, Timeline, Graph, Roadmap, Story), branch filtering, search, and a Q&A panel: `POST /api/ask` sends your question with the relevant nodes and edges to the `claude` CLI, and every answer is kept and searchable (`GET /api/qa/search?q=auth`). It does not yet show the evidence kind or file hashes a transcript import writes; `deciduous show` does.
 
-Attach files to any decision node — architecture diagrams, specs, screenshots, PDFs.
-
-```bash
-# Attach a diagram to a goal
-deciduous doc attach 1 docs/architecture.png -d "System architecture diagram"
-
-# AI-generate a description
-deciduous doc attach 1 screenshot.png --ai-describe
-
-# List what's attached
-deciduous doc list 1
-
-# Open a document
-deciduous doc open 3
-
-# Soft-delete (recoverable)
-deciduous doc detach 3
-
-# Clean up orphaned files
-deciduous doc gc
-```
-
-Documents are stored in `.deciduous/documents/` with content-hash naming for deduplication. The web viewer displays attached documents in the node detail panel. Soft-delete with `doc detach`; garbage-collect orphaned files with `doc gc --dry-run` to preview.
-
-### Session Recovery
-
-When context compacts or you start a new session:
-
-```bash
-deciduous nodes           # What decisions exist?
-deciduous edges           # How are they connected?
-deciduous commands        # What happened recently?
-```
-
-Or open the web viewer and ask a question in plain English:
-
-> *"What was I working on before the session ended?"*
-> *"What approach did we take for rate limiting and why?"*
-
-The graph remembers what you don't. The Q&A interface lets you ask it.
+`dot --auto` and `writeup --auto` name the file after the branch, so two open PRs do not fight over one PNG. The `cleanup-decision-graphs.yml` workflow `init` writes removes the PNGs after a PR merges.
 
 ---
 
-## Skills: Archaeology, Decision-Graph, and Narratives
+## Skills: pulse, narratives, archaeology, decision-graph
 
-Deciduous ships with skills that give your AI assistant structured ways to understand and work with a codebase's decision history.
+`init` installs three skills and a command for working on history:
 
-### /decision-graph — Visiting and documenting the past
-
-The `/decision-graph` skill builds a full decision graph from your repository's commit history — perfect for bootstrapping a graph on an existing project that wasn't using deciduous from the start. It works in four layers:
-
-1. **Commit analysis** — Groups commits into logical narratives
-2. **Code structure** — Identifies architectural decisions from the codebase
-3. **Narrative construction** — Builds evolution stories with pivots and connections
-4. **PR context** — Uses `gh` CLI to mine PR descriptions and review threads for decision rationale, alternatives considered, and trade-offs discussed
-
-### /archaeology — Revisit, correct, execute
-
-Archaeology is for revisiting past decisions in the graph—finding what went wrong, correcting the record, and executing on a new direction. When you discover a past decision was flawed, archaeology gives you the workflow to trace it back, mark it superseded, and connect the new approach.
-
-```bash
-# Find the old decision and mark it
-deciduous nodes --status active --type decision
-deciduous add observation "Mobile Safari 4KB cookie limit breaking JWT auth"
-deciduous link 1 2 -r "Discovered in production"
-
-# Revisit: pivot from old approach to new
-deciduous add revisit "Reconsidering auth token strategy"
-deciduous link 2 3 -r "Cookie limits forced rethink"
-deciduous status 1 superseded
-
-# Execute the new direction
-deciduous add decision "Hybrid: JWT for API, sessions for web"
-deciduous link 3 4 -r "New approach"
-deciduous add action "Implementing hybrid auth" -c 85
-deciduous link 4 5 -r "Implementation"
-```
-
-After archaeology, you can query: "What did we try before?" (`--status superseded`), "What led to this decision?" (`edges --to <id>`), "What are the pivot points?" (`--type revisit`).
-
-### /narratives — Understand how the system evolved
-
-Narratives are the conceptual stories—how a subsystem evolved over time, what pivots happened, and how different parts of the system connect.
-
-```markdown
-## Authentication
-> How users prove identity.
-
-**Current state:** JWT for API, sessions for web.
-
-**Evolution:**
-1. Started with JWT everywhere
-2. **PIVOT:** Mobile hit 4KB cookie limits
-3. Added sessions for web, kept JWT for API
-
-**Connects to:** "Rate Limiting"
-```
-
-Output: `.deciduous/narratives.md` with evolution stories that archaeology can transform into graph structure.
-
-### /pulse — Map the current design
-
-Pulse maps the current architecture as a decision tree — the design choices that make the system work today. Your agent reads the code, identifies the design questions that had to be answered, and logs them as nodes. Useful for understanding what decisions you might affect before making changes.
+- **/pulse** maps the current design as decisions: the agent reads the code, names the design questions it answers, and logs them as goals and options. `deciduous pulse` is the CLI view of the graph's active state.
+- **/narratives** writes `.deciduous/narratives.md`: how a subsystem evolved, where it pivoted, what it connects to. `deciduous narratives init` seeds it from the active goals; `narratives pivots` lists every revisit with its chain.
+- **/archaeology** turns narratives into graph structure: observation → revisit → new decision, old decision superseded. `deciduous archaeology pivot` is the one-command form shown above; `archaeology supersede --cascade` and `archaeology timeline` go with it.
+- **/decision-graph** builds a graph for a repository that was not using deciduous from the start, from commit history, code structure and (with `gh`) PR descriptions and review threads.
 
 ---
 
-## Deep Q&A Interface
-
-The web viewer includes a built-in Q&A interface where you can ask questions about your decision graph and get answers grounded in your actual development history.
-
-```
-POST /api/ask
-{
-  "question": "Why did we switch from JWT to sessions for web auth?",
-  "context": {
-    "selected_node_id": 42,
-    "branch": "main"
-  }
-}
-```
-
-The Q&A system:
-
-- **Sends your question + graph context to Claude** — it sees the relevant nodes, edges, and narrative context
-- **Archaeology-aware** — when asking from the archaeology view, the agent gets full narrative context including pivots, superseded approaches, and GitHub links
-- **Stores every interaction** — questions and answers are saved with full-text search (FTS5), so you can search past Q&A sessions
-- **Searchable history** — `GET /api/qa/search?q=auth` finds past conversations about authentication decisions
-
-This turns the graph into a conversational interface. Instead of manually traversing nodes, ask: *"What was tried before the current approach?"* or *"What connects the auth system to rate limiting?"*
+## Keeping the integration updated
 
 ```bash
-# Browse Q&A history
-GET /api/qa?offset=0&limit=20
-
-# Search past questions
-GET /api/qa/search?q=rate+limiting&limit=10
-
-# Get a specific interaction
-GET /api/qa/42
+deciduous check-update     # exit 1 if .deciduous/.version is behind the binary
+deciduous update           # this project; --all <dir> for every project under it
 ```
 
----
+`update` auto-detects which assistants are installed (`.claude/`, `.opencode/`, `.windsurf/`) and rewrites what deciduous wrote: the slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/decision-graph`, `/sync`, `/demo-swarm`), the skills, `version-check.sh` and `board-mentions.sh`, `.claude/agents.toml`, and the deciduous section of `CLAUDE.md` or `AGENTS.md`; for Windsurf, `.windsurf/hooks.json`, `.windsurf/hooks/version-check.sh` and `.windsurf/rules/deciduous.md`; for OpenCode, `.opencode/plugins/`, `commands/`, `agents/`, `tools/` and `opencode.json`.
 
-## Viewing the Graph
+**Kept:** anything you wrote. A section or command file you edited is left alone on every project, and the template it would have written goes to `.deciduous/update-templates/<path>` for you to `diff`. Everything `update` changes is first copied to `.deciduous/update-backups/<time>/`. In `.claude/settings.json` it only removes the logging hooks earlier versions installed and adds the board-mentions entries if missing. It does not touch `.deciduous/config.toml` or `docs/`; with a `[remote]` it also leaves `.gitignore`, `.gitattributes`, `.git/config` and `graph.json` alone. A project with a `[remote]` gets templates that say `remote pull` and `remote status` instead of `sync`.
 
-### Web Viewer
-
-```bash
-deciduous serve --port 3000
-```
-
-Five views:
-
-| View | Purpose |
-|------|---------|
-| **Chains** | Decision chains by session—see the story of a feature |
-| **Timeline** | Chronological view merged with git commits |
-| **Graph** | Force-directed interactive visualization |
-| **DAG** | Hierarchical goal→decision→outcome flow |
-| **Archaeology** | Narrative-driven exploration with Q&A |
-
-Features: branch filtering, full-text search with type filters, resizable panels, deep linking, click-to-expand details, keyboard navigation (j/k/g/G/Space), Q&A panel, and auto-refresh.
-
----
-
-## Node Types
-
-| Type | Purpose | Example |
-|------|---------|---------|
-| `goal` | High-level objective | "Add user authentication" |
-| `option` | Approach considered | "Use JWT tokens" |
-| `decision` | Choice point | "Choose auth method" |
-| `action` | Implementation step | "Added JWT middleware" |
-| `outcome` | Result | "Auth working in prod" |
-| `observation` | Discovery or insight | "JWT tokens too large for mobile" |
-| `revisit` | Pivot point—connects old approach to new | "Reconsidering token strategy" |
-
-## Node Status
-
-| Status | Meaning |
-|--------|---------|
-| `active` | Current truth—how things work today |
-| `superseded` | Replaced by a newer approach |
-| `abandoned` | Tried and rejected—dead end |
-
-```bash
-deciduous status <node_id> superseded
-deciduous nodes --status active    # Now mode
-deciduous nodes --status superseded # What was tried
-```
-
-## Edge Types
-
-| Type | Meaning |
-|------|---------|
-| `leads_to` | Natural progression |
-| `chosen` | Selected this option |
-| `rejected` | Did not select (with reason) |
-| `requires` | Dependency |
-| `blocks` | Preventing progress |
-| `enables` | Makes possible |
-| `supersedes` | New approach replaces old (via revisit) |
-
----
-
-## Graph Maintenance
-
-Made a mistake? Fix it:
-
-```bash
-# Remove an edge
-deciduous unlink 5 12
-
-# Delete a node (cascades to connected edges)
-deciduous delete 42
-
-# Preview before deleting
-deciduous delete 42 --dry-run
-```
-
----
-
-## Keeping AI Integration Updated
-
-When deciduous releases new features, your existing projects can get the latest integration files:
-
-```bash
-# Check if an update is needed
-deciduous check-update
-
-# Update integration files (auto-detects installed assistants)
-deciduous update
-```
-
-The `update` command auto-detects which assistants are installed and updates them:
-
-### Claude Code (`.claude/`)
-
-| Files | What's Updated |
-|-------|----------------|
-| `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/decision-graph`, `/sync`) |
-| `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
-| `.claude/hooks/version-check.sh` | Once-a-day update check (the logging hooks earlier versions installed are removed) |
-| `.claude/hooks/board-mentions.sh` | Shows a session with `DECIDUOUS_AGENT_LABEL` its unanswered board messages; silent otherwise |
-| `.claude/settings.json` | Gains the board-mentions hook entries if they are missing; everything else in it is kept |
-| `.claude/agents.toml` | Subagent configurations |
-| `CLAUDE.md` | Decision Graph Workflow section (preserves custom content) |
-
-### OpenCode (`.opencode/`)
-
-| Files | What's Updated |
-|-------|----------------|
-| `.opencode/plugins/version-check.ts` | Once-a-day update check |
-| `.opencode/commands/*.md` | Command templates |
-| `.opencode/skills/*/SKILL.md` | Skill definitions |
-| `.opencode/agents/*.md` | Custom deciduous agent |
-| `.opencode/tools/*.ts` | Custom deciduous tool |
-| `.opencode/opencode.json` | Plugin configuration |
-| `AGENTS.md` | Decision Graph Workflow section |
-
-### Windsurf (`.windsurf/`)
-
-| Files | What's Updated |
-|-------|----------------|
-| `.windsurf/hooks.json`, `.windsurf/hooks/version-check.sh` | Once-a-day update check |
-| `.windsurf/rules/deciduous.md` | Always-on rules for Cascade |
-
-**Kept:** anything deciduous did not write. A file you changed is left alone (Markdown gets the new text appended in a marked block), everything `update` changes is backed up to `.deciduous/update-backups/<time>/` first, and `.claude/settings.json` only loses the `deciduous log-loop` entries. `.deciduous/config.toml` and `docs/` are not touched.
-
-### Automatic Version Checking
-
-Deciduous always checks [crates.io](https://crates.io/crates/deciduous) for new versions once per 24 hours via a lightweight hook. The notification varies by severity:
-
-- **Patch updates** (e.g., 0.13.10 → 0.13.11): quiet one-line notification
-- **Minor/major updates** (e.g., 0.13.x → 0.14.0): prominent banner encouraging upgrade
-
-You can also check manually at any time:
-
-```bash
-$ deciduous check-update
-Update available: Integration files are v0.9.4, binary is v0.9.5. Run 'deciduous update'.
-```
-
-The check is rate-limited (once per 24h), has a 3-second timeout, and never blocks your workflow. Results are cached in `.deciduous/.latest_version`.
-
----
-
-## The transcript is the log
-
-An agent that logs its own decisions is an agent that can forget to. The
-transcript cannot. Claude Code writes every session to a JSONL file; `deciduous
-transcript import` derives the graph from it: every prompt a goal (verbatim),
-every edit run and commit an action, every test run an outcome with its exit
-and summary, the assistant's closing report an outcome too.
-
-```bash
-deciduous transcript list              # this project's sessions, and which are imported
-deciduous transcript import 328f8485   # by session id prefix, or a path to the .jsonl
-```
-
-```
-Imported Remote postgres code upstream (328f8485, 68 prompts)
-  goals 68 · actions 119 · outcomes 67 proven, 41 inferred · observations 7 · edges 301
-  50 files hashed · 52 deciduous MCP writes skipped (already in the graph)
-```
-
-Every derived node says what it is backed by. `metadata.evidence.kind` is
-`proven` (a tool call and its result, or your own words, with the transcript
-uuids) or `inferred` (the assistant said so). The assistant's "all tests pass"
-and the `cargo test` result that says `12 passed, 1 failed` sit side by side,
-labelled. Actions list the files the agent read before them (`consulted`) and
-carry git blob hashes of the files they touched (`file_hashes`). Importing the
-same transcript twice adds nothing, on any machine.
-
-Decisions and options are not derived; a choice between approaches is a
-judgement about prose, and that pass belongs to an agent reading the imported
-graph. See [docs/transcripts.md](docs/transcripts.md), including a `SessionEnd`
-hook that imports at the end of every session.
+`version-check.sh` asks crates.io for the latest version once per 24 hours with a 3-second timeout, caches it in `.deciduous/.latest_version`, and never blocks. `deciduous auto-update off` turns it off.
 
 ## Why there are no logging hooks
 
@@ -779,13 +546,28 @@ Up to 1.0.2, deciduous installed a hook that denied an agent's next tool call
 until it wrote to the graph. It could leave a session unable to do anything:
 a graph write sent beside the next action did not count, a session whose
 settings changed underneath it could not reset the count, and an environment
-variable typed into the session never reached the hook. 1.0.3 removes it, and
+variable typed into the session never reached the hook. 1.0.3 removed it, and
 `deciduous update` takes it out of projects that have it. The hooks left are
 the once-a-day version check and, since 1.0.9, the board-mentions hook, which
 prints a labelled session's unanswered messages. Neither ever blocks.
 
-Logging is encouraged by what the agent reads anyway: the `CLAUDE.md` section,
-and the MCP tools' own descriptions and replies.
+Logging is encouraged by what the agent reads anyway: the `CLAUDE.md` section
+and the instructions the server sends on every connection. And since 1.1.0 the
+transcript import means a session that logged nothing is still in the graph.
+
+---
+
+## Environment variables
+
+| Variable | Effect |
+|----------|--------|
+| `DECIDUOUS_DB_PATH` | Use this SQLite file instead of walking up to `.deciduous/deciduous.db` (worktrees, Claude Desktop) |
+| `DECIDUOUS_MCP_TOKEN` | The shared server's bearer token, for scripts; `remote login` stores it in `~/.config/deciduous/credentials` instead |
+| `DECIDUOUS_AGENT_LABEL` | This session's label on the message board; `board post --as` default, and what `board-mentions.sh` reads for |
+| `DECIDUOUS_PORT` | Port for this machine's server when it is first set up (otherwise asked, a free one suggested) |
+| `DECIDUOUS_NO_SERVER` | `init` and `update` skip the server step (tests, CI) |
+| `DECIDUOUS_QUIET_LOCAL_ONLY` | Silence the one-line stderr note a write prints when no server is configured |
+| `DECIDUOUS_OPS_TIMEOUT` | Per-request timeout when replaying queued writes to the server |
 
 ---
 
@@ -795,7 +577,7 @@ and the MCP tools' own descriptions and replies.
 
 2. **Structured thinking produces better outcomes.** The act of logging a decision—naming it, assigning confidence, connecting it to goals—forces you to think it through.
 
-3. **Real-time logging beats retroactive documentation.** Capture reasoning in the moment. By the time you write post-hoc docs, you've forgotten the options you rejected.
+3. **Real-time capture beats retroactive documentation.** By the time you write post-hoc docs, you've forgotten the options you rejected. The transcript is captured in the moment too, which is why deriving the graph from it works.
 
 4. **Graphs beat documents.** Goals spawn decisions, decisions spawn actions, actions produce outcomes. A graph captures these relationships. You can trace any outcome to its origin.
 
@@ -809,88 +591,98 @@ and the MCP tools' own descriptions and replies.
 
 ## Commands Reference
 
+Every command and flag below is in `deciduous --help` for 1.1.0.
+
 ```bash
-# Initialize
-deciduous init               # Initialize with Claude Code (default)
-deciduous init --opencode    # Initialize with OpenCode
-deciduous init --windsurf    # Initialize with Windsurf
-deciduous init --both        # Initialize with Claude Code + OpenCode
-deciduous init --both --windsurf  # All three assistants
-deciduous update             # Update tooling (auto-detects installed assistants)
-deciduous check-update       # Check if update is needed
+# Set up
+deciduous init [--claude] [--opencode] [--windsurf] [--both] [--no-auto-update]
+deciduous update [--all <dir>]            # update integration files; keeps what you wrote
+deciduous check-update                    # exit 1 if integration files are behind the binary
+deciduous auto-update on|off              # the once-a-day crates.io check
+deciduous integration                     # Claude Code hooks, commands and skills present?
+deciduous completion bash|zsh|fish|powershell|elvish
 
-# Add nodes
-deciduous add goal "Title" -c 90
-deciduous add decision "Title" -c 75
-deciduous add action "Title" -c 85 --commit HEAD  # Link to git commit
+# Write
+deciduous add <goal|option|decision|action|outcome|observation|revisit> "Title"
+    -d "description" -c <0-100> -p "prompt" | --prompt-stdin
+    -f "a.rs,b.rs" --commit <HEAD|branch|tag|hash> -b <branch> | --no-branch
+    --date "YYYY-MM-DD"                   # backdate (archaeology)
+deciduous link <from> <to> -r "rationale" -t leads_to|requires|chosen|rejected|blocks|enables|took_from
+deciduous unlink <from> <to> [-t <type>]  # -t required when two edges join the nodes
+deciduous delete <id> [--dry-run]
+deciduous status <id> pending|active|completed|rejected|superseded|abandoned
+deciduous prompt <id> ["prompt"]          # stdin when omitted
+# <id> anywhere is a local id, a change_id prefix, or a server id
 
-# Node options
--c, --confidence <0-100>     # Confidence level
--p, --prompt "..."           # User prompt that triggered this
---prompt-stdin               # Read prompt from stdin (multi-line)
--f, --files "a.rs,b.rs"      # Associated files
---commit <hash|HEAD>         # Link to git commit
---date "YYYY-MM-DD"          # Backdate node (for archaeology)
+# Read
+deciduous nodes [-b <branch>] [-t <type>] [--theme <name>]
+deciduous edges
+deciduous show <id> [--json]              # prints evidence for transcript-derived nodes
+deciduous graph                           # full graph as JSON
+deciduous pulse [-b <branch>] [-r <n>] [--summary] [--json]
+deciduous commands [-l <n>]               # recent command log
 
-# Connect and disconnect
-deciduous link <from> <to> -r "reason"
-deciduous unlink <from> <to>
+# From a Claude Code transcript (docs/transcripts.md)
+deciduous transcript list [--dir <dir>] [--json]
+deciduous transcript import <path|session-id>... [--dry-run] [--no-hash] [--json]
 
-# Delete nodes
-deciduous delete <id>
-deciduous delete <id> --dry-run
+# History
+deciduous archaeology pivot <from_id> "observation" "new approach" [-c <n>] [-r "reason"] [--dry-run]
+deciduous archaeology supersede <id> [--cascade] [--dry-run]
+deciduous archaeology timeline [-l <n>] [-t <type>] [-b <branch>] [--json]
+deciduous narratives init [-o <path>] [--force]
+deciduous narratives show [-p <path>]
+deciduous narratives pivots [-b <branch>] [--json]
+deciduous audit [--associate-commits] [--min-score <0-100>] [--dry-run] [--yes]
 
-# Query
-deciduous nodes              # List all nodes
-deciduous nodes -b main      # Filter by branch
-deciduous nodes --status active
-deciduous nodes --type goal
-deciduous edges              # List connections
-deciduous edges --to <id>    # Edges pointing to a node
-deciduous edges --from <id>  # Edges from a node
-deciduous graph              # Full graph as JSON
-deciduous commands           # Recent command log
+# Documents
+deciduous doc attach <node_id> <file> [-d "..."] [--ai-describe]
+deciduous doc list [<node_id>] [--include-detached] [--json]
+deciduous doc show <doc_id> [--json]
+deciduous doc describe <doc_id> ["text"] [--ai]
+deciduous doc open <doc_id>
+deciduous doc detach <doc_id>
+deciduous doc gc [--dry-run]
 
-# Visualize
-deciduous serve              # Web viewer
-deciduous dot --png          # Generate PNG (requires graphviz)
+# Themes
+deciduous themes create <name> [-c "#hex"] [-d "..."]
+deciduous themes list
+deciduous themes delete <name>
+deciduous tag add|remove <node_id> <theme>
+deciduous tag list <node_id>
+deciduous tag suggest [<node_id>] [--apply]
+deciduous tag confirm <node_id> <theme>
 
-# Sync + export
-deciduous sync               # Reconcile .deciduous/graph.json with the DB, export to docs/
-deciduous sync --check       # Anything pending? (exit 1 if so)
-deciduous writeup -t "Title" # Generate PR writeup
-deciduous backup             # Create database backup
+# Message board (coordination, not graph)
+deciduous board post --as <label> -s "subject" [-m "body"] [--reply-to <id>] [--branch <b>] [--json]
+deciduous board read [--since <id>] [--from <label>] [--to <label>] [--unanswered <label>] [-q text] [--limit <n>] [--json]
+deciduous board show <id> [--json]
 
-# Message board (parallel agents; not part of the graph)
-deciduous board post --as <label> -s "subject" -m "@other body"  # Post
-deciduous board post --as <label> -s "re" -m "..." --reply-to <id>  # Answer
-deciduous board read --unanswered <label>      # What is waiting for you
-deciduous board read --since <id> --json       # Everything newer than <id>
-deciduous board show <id>                      # One message in full
+# Shared graph server
+deciduous remote setup [--local | --url <url> | --database-url <url> | --docker-postgres | --docker] [--port <n>]
+deciduous remote login [--url <url>]      # token on stdin, stored mode 0600
+deciduous remote logout
+deciduous remote init <url> [--workspace <name>]
+deciduous remote status                   # what differs, field by field; exit 1 if anything
+deciduous remote push [--seed] [--repair] [--overwrite-server] [--overwrite] [--drop-rejected] [--retry-rejected] [--drop <op_id>]
+deciduous remote pull
+deciduous remote adopt --url <url> [<root>] [-n]
+deciduous remote watch [--types a,b] [--branch <b>]... [--edges] [--json] [--url | --claude-code]
 
-# Document attachments
-deciduous doc attach <node_id> <file>          # Attach file to node
-deciduous doc attach <node_id> <file> -d "..." # With description
-deciduous doc attach <node_id> <file> --ai-describe  # AI description
-deciduous doc list                             # List all documents
-deciduous doc list <node_id>                   # Documents for a node
-deciduous doc show <id>                        # Document details
-deciduous doc describe <id> "text"             # Set description
-deciduous doc describe <id> --ai               # AI-generate description
-deciduous doc open <id>                        # Open in default app
-deciduous doc detach <id>                      # Soft-delete
-deciduous doc gc                               # Clean orphaned files
-deciduous doc gc --dry-run                     # Preview cleanup
+# Local graph file and viewer
+deciduous sync [--check]                  # reconcile .deciduous/graph.json with the database; --check exits 1 if pending
+deciduous backup [-o <path>]
+deciduous migrate                         # add change_id columns to a pre-sync database
+deciduous serve [-p <port>]
+deciduous serve --api --data-dir <dir> --token <t> [--bind <addr>]   # multi-graph JSON API daemon
+deciduous dot [-o <file> | --auto] [-r <ids>] [-n <spec>] [--png] [-t "title"] [--rankdir TB|LR|BT|RL]
+deciduous writeup [-t "title"] [-r <ids>] [-n <spec>] [-o <file>] [--png <file> | --auto] [--no-dot] [--no-test-plan]
+deciduous mcp                             # the local stdio MCP server
 
-# Build the graph from a Claude Code transcript (see docs/transcripts.md)
-deciduous transcript list                      # This project's sessions; imported or new
-deciduous transcript import <path|session-id>  # Goals, actions, outcomes with evidence
-deciduous transcript import 328f8485 --dry-run # Counts only, writes nothing
-
-# Shell completion
-deciduous completion zsh     # Add: source <(deciduous completion zsh)
-deciduous completion bash
-deciduous completion fish
+# Integrations
+deciduous hooks install|status|uninstall  # hooks defined under [hooks] in .deciduous/config.toml
+deciduous opencode install|status|uninstall
+deciduous roadmap init|refresh|sync|list|link|unlink|conflicts|status|check   # ROADMAP.md <-> GitHub Issues
 ```
 
 ---
@@ -898,27 +690,21 @@ deciduous completion fish
 ## Who Uses Deciduous
 
 **You, the developer:**
-- Think through decisions by structuring them
-- Remember why you made choices months later
-- Review PRs by understanding the decision flow
-- Onboard to codebases by reading decision history
-- Ask questions about your own project's history and get grounded answers
+- Think a decision through by having to name what it beat
+- Remember why you made a choice months later
+- Review a PR by its goal, decisions and rejected options, not only its diff
+- Import the transcript of a session you did not watch and see what the agent did, with what evidence
 
 **Your AI assistant:**
-- Recover context after compaction or session boundaries
+- Recover context after compaction or a session boundary (`/recover`, `query_nodes`, `ask_graph`)
 - Build on previous reasoning instead of starting fresh
-- Leave a queryable trail for future sessions
-- Use `/archaeology` to revisit and correct past decisions
-- Use `/decision-graph` to build decision graphs from commit history
-- Use `/document` to generate comprehensive docs with test examples
-- Ask deep questions via the Q&A interface grounded in actual graph data
-- Attach relevant documents (diagrams, screenshots, specs) to decision nodes
+- Coordinate with the other agents on the same repository through the board, and borrow with `took_from`
+- Use `/pulse`, `/narratives`, `/archaeology` and `/decision-graph` to map and correct history
 
 **Your team:**
-- Share decision context through `.deciduous/graph.json`, one git-tracked file; concurrent edits merge record by record
-- Review PRs with full visibility into reasoning
-- Build institutional knowledge that survives turnover
-- Search past Q&A interactions to find answers that were already given
+- One graph per repository on a shared server, written from every clone, worktree and agent
+- A git-tracked `.deciduous/graph.json` for a project with no server, merged record by record
+- Decision context that survives turnover
 
 ---
 
