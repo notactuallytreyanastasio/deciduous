@@ -427,6 +427,14 @@ enum Command {
         action: ArchaeologyAction,
     },
 
+    /// Build the graph from a Claude Code transcript: goals from prompts,
+    /// actions from edits and commits, outcomes from test runs, each node
+    /// saying what it is backed by
+    Transcript {
+        #[command(subcommand)]
+        action: TranscriptAction,
+    },
+
     /// Manage ROADMAP.md sync with GitHub Issues
     Roadmap {
         #[command(subcommand)]
@@ -945,6 +953,42 @@ enum NarrativesAction {
         branch: Option<String>,
 
         /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TranscriptAction {
+    /// Derive nodes from one or more transcripts. Takes a path to a .jsonl
+    /// or a session id (looked up under ~/.claude/projects/<this project>).
+    /// Importing the same transcript again changes nothing.
+    Import {
+        /// Transcript files or session ids
+        #[arg(required = true)]
+        transcripts: Vec<String>,
+
+        /// Show what would be created without writing anything
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Do not hash the files the actions touched
+        #[arg(long)]
+        no_hash: bool,
+
+        /// Print the report as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List this project's transcripts and whether each is already imported
+    List {
+        /// Directory holding the transcripts (default: this project's
+        /// ~/.claude/projects/<slug>/)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+
+        /// Print as JSON
         #[arg(long)]
         json: bool,
     },
@@ -2347,11 +2391,69 @@ fn main() {
                                 }
 
                                 if let Some(files) = meta.get("files").and_then(|v| v.as_array()) {
-                                    let file_list: Vec<&str> =
-                                        files.iter().filter_map(|f| f.as_str()).collect();
+                                    let hashes = meta.get("file_hashes");
+                                    let file_list: Vec<String> = files
+                                        .iter()
+                                        .filter_map(|f| f.as_str())
+                                        .map(|f| {
+                                            match hashes
+                                                .and_then(|h| h.get(f))
+                                                .and_then(|h| h.as_str())
+                                            {
+                                                Some(h) => format!("{f} ({h})"),
+                                                None => f.to_string(),
+                                            }
+                                        })
+                                        .collect();
                                     if !file_list.is_empty() {
                                         println!("  {}: {}", "Files".bold(), file_list.join(", "));
                                     }
+                                }
+
+                                if let Some(consulted) =
+                                    meta.get("consulted").and_then(|v| v.as_array())
+                                {
+                                    let list: Vec<&str> =
+                                        consulted.iter().filter_map(|f| f.as_str()).collect();
+                                    if !list.is_empty() {
+                                        println!("  {}: {}", "Consulted".bold(), list.join(", "));
+                                    }
+                                }
+
+                                if let Some(ev) = meta.get("evidence") {
+                                    let kind =
+                                        ev.get("kind").and_then(|v| v.as_str()).unwrap_or("?");
+                                    let kind_colored = match kind {
+                                        "proven" => kind.green(),
+                                        "inferred" => kind.yellow(),
+                                        _ => kind.white(),
+                                    };
+                                    let mut from = Vec::new();
+                                    if let Some(src) = ev.get("source").and_then(|v| v.as_str()) {
+                                        from.push(src.to_string());
+                                    }
+                                    if let Some(sess) = ev.get("session").and_then(|v| v.as_str()) {
+                                        from.push(format!(
+                                            "session {}",
+                                            &sess[..sess.len().min(8)]
+                                        ));
+                                    }
+                                    if let Some(ids) =
+                                        ev.get("tool_use_ids").and_then(|v| v.as_array())
+                                    {
+                                        if !ids.is_empty() {
+                                            from.push(format!("{} tool call(s)", ids.len()));
+                                        }
+                                    }
+                                    if let Some(exit) = meta.get("exit").and_then(|v| v.as_str()) {
+                                        from.push(format!("exit {exit}"));
+                                    }
+                                    println!(
+                                        "  {}: {} {}",
+                                        "Evidence".bold(),
+                                        kind_colored,
+                                        from.join(", ").dimmed()
+                                    );
                                 }
 
                                 if let Some(prompt) = meta.get("prompt").and_then(|v| v.as_str()) {
@@ -5250,6 +5352,107 @@ fn main() {
             }
         },
 
+        Command::Transcript { action } => match action {
+            TranscriptAction::Import {
+                transcripts,
+                dry_run,
+                no_hash,
+                json,
+            } => {
+                let opts = deciduous::transcript::ImportOptions {
+                    dry_run,
+                    hash_files: !no_hash,
+                };
+                let mut failed = false;
+                let mut reports = Vec::new();
+                for arg in &transcripts {
+                    let path = match deciduous::transcript::locate(&db, arg) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            failed = true;
+                            continue;
+                        }
+                    };
+                    match deciduous::transcript::import(&db, &path, &opts) {
+                        Ok(report) => {
+                            if !json {
+                                print_transcript_report(&report);
+                            }
+                            reports.push(report);
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            failed = true;
+                        }
+                    }
+                }
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&reports).unwrap_or_default()
+                    );
+                }
+                if failed {
+                    exit(1);
+                }
+            }
+            TranscriptAction::List { dir, json } => {
+                let dir = match dir {
+                    Some(d) => d,
+                    None => {
+                        let Some(root) = db.project_root() else {
+                            eprintln!(
+                                "{} no project around this database; pass --dir",
+                                "Error:".red()
+                            );
+                            exit(1);
+                        };
+                        match deciduous::transcript::claude_project_dir(root) {
+                            Some(d) => d,
+                            None => {
+                                eprintln!("{} HOME is not set; pass --dir", "Error:".red());
+                                exit(1);
+                            }
+                        }
+                    }
+                };
+                match deciduous::transcript::list(&db, &dir) {
+                    Ok(listed) => {
+                        if json {
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&listed).unwrap_or_default()
+                            );
+                        } else if listed.is_empty() {
+                            println!("No transcripts with a prompt in {}", dir.display());
+                        } else {
+                            println!("{}", dir.display().to_string().dimmed());
+                            for l in &listed {
+                                let mark = if l.imported {
+                                    "imported".green()
+                                } else {
+                                    "new".yellow()
+                                };
+                                println!(
+                                    "{:<8} {}  {:>3} prompts  {}  {}",
+                                    mark,
+                                    &l.session_id[..l.session_id.len().min(8)],
+                                    l.prompts,
+                                    &l.first_prompt_at[..l.first_prompt_at.len().min(10)],
+                                    l.title
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        exit(1);
+                    }
+                }
+            }
+        },
+
         Command::Archaeology { action } => match action {
             ArchaeologyAction::Pivot {
                 from_id,
@@ -6691,6 +6894,54 @@ fn print_sync_report_body(report: &SyncReport) {
         for e in &report.read_errors {
             println!("    {}", e);
         }
+    }
+}
+
+fn print_transcript_report(r: &deciduous::transcript::ImportReport) {
+    let verb = if r.dry_run {
+        "Would import"
+    } else {
+        "Imported"
+    };
+    println!(
+        "{} {} ({}, {} prompts)",
+        verb.bold(),
+        r.title,
+        &r.session_id[..r.session_id.len().min(8)],
+        r.turns
+    );
+    let c = &r.created;
+    println!(
+        "  goals {} · actions {} · outcomes {} proven, {} inferred · observations {} · edges {}",
+        c.goals, c.actions, c.outcomes_proven, c.outcomes_inferred, c.observations, r.edges_created
+    );
+    let mut notes = Vec::new();
+    if r.already_present > 0 {
+        notes.push(format!("{} already present", r.already_present));
+    }
+    if r.files_hashed > 0 {
+        notes.push(format!("{} files hashed", r.files_hashed));
+    }
+    if r.skipped.subagents > 0 {
+        notes.push(format!(
+            "{} subagent runs skipped (their transcripts are separate files)",
+            r.skipped.subagents
+        ));
+    }
+    if r.skipped.deciduous_writes > 0 {
+        notes.push(format!(
+            "{} deciduous MCP writes skipped (already in the graph)",
+            r.skipped.deciduous_writes
+        ));
+    }
+    if r.unreadable_lines > 0 {
+        notes.push(format!("{} unreadable lines", r.unreadable_lines));
+    }
+    if !notes.is_empty() {
+        println!("  {}", notes.join(" · ").dimmed());
+    }
+    if let Some(id) = r.root_id {
+        println!("  root goal #{id}: deciduous show {id}");
     }
 }
 

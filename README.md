@@ -741,6 +741,38 @@ The check is rate-limited (once per 24h), has a 3-second timeout, and never bloc
 
 ---
 
+## The transcript is the log
+
+An agent that logs its own decisions is an agent that can forget to. The
+transcript cannot. Claude Code writes every session to a JSONL file; `deciduous
+transcript import` derives the graph from it: every prompt a goal (verbatim),
+every edit run and commit an action, every test run an outcome with its exit
+and summary, the assistant's closing report an outcome too.
+
+```bash
+deciduous transcript list              # this project's sessions, and which are imported
+deciduous transcript import 328f8485   # by session id prefix, or a path to the .jsonl
+```
+
+```
+Imported Remote postgres code upstream (328f8485, 68 prompts)
+  goals 68 · actions 119 · outcomes 67 proven, 41 inferred · observations 7 · edges 301
+  50 files hashed · 52 deciduous MCP writes skipped (already in the graph)
+```
+
+Every derived node says what it is backed by. `metadata.evidence.kind` is
+`proven` (a tool call and its result, or your own words, with the transcript
+uuids) or `inferred` (the assistant said so). The assistant's "all tests pass"
+and the `cargo test` result that says `12 passed, 1 failed` sit side by side,
+labelled. Actions list the files the agent read before them (`consulted`) and
+carry git blob hashes of the files they touched (`file_hashes`). Importing the
+same transcript twice adds nothing, on any machine.
+
+Decisions and options are not derived; a choice between approaches is a
+judgement about prose, and that pass belongs to an agent reading the imported
+graph. See [docs/transcripts.md](docs/transcripts.md), including a `SessionEnd`
+hook that imports at the end of every session.
+
 ## Why there are no logging hooks
 
 Up to 1.0.2, deciduous installed a hook that denied an agent's next tool call
@@ -849,6 +881,11 @@ deciduous doc open <id>                        # Open in default app
 deciduous doc detach <id>                      # Soft-delete
 deciduous doc gc                               # Clean orphaned files
 deciduous doc gc --dry-run                     # Preview cleanup
+
+# Build the graph from a Claude Code transcript (see docs/transcripts.md)
+deciduous transcript list                      # This project's sessions; imported or new
+deciduous transcript import <path|session-id>  # Goals, actions, outcomes with evidence
+deciduous transcript import 328f8485 --dry-run # Counts only, writes nothing
 
 # Shell completion
 deciduous completion zsh     # Add: source <(deciduous completion zsh)
