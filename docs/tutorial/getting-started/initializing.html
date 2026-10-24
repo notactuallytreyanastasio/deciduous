@@ -52,11 +52,12 @@
                     <li><a href="../real-work/starting-work.html">Starting Work</a></li>
                     <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
                     <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
                     <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
                 <ul>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                     <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
@@ -80,117 +81,182 @@
         <article>
             <h1>Initializing on a Project</h1>
 
-            <p class="lead">One command gives your AI assistant a decision graph workflow.</p>
+            <p class="lead"><code>deciduous init</code> writes the files your assistant reads, then asks one question it will not guess the answer to: where should this project's graph live?</p>
 
-            <p>Deciduous is initialized per-project. Navigate to any git repository and run <code>deciduous init</code>. Here we will use a project called <em>snowflex</em> as an example:</p>
+            <h2>Running init</h2>
 
             <div class="terminal-session">
-                <div class="terminal-header">deciduous init</div>
+                <div class="terminal-header">deciduous init (output trimmed)</div>
                 <div class="terminal-body"><span class="command">cd snowflex</span>
 <span class="command">deciduous init</span>
-<span class="output">Created .deciduous/deciduous.db (SQLite database)</span>
-<span class="output">Created .deciduous/config.toml (configuration)</span>
-<span class="output">Created .claude/commands/ (9 slash commands)</span>
-<span class="output">Created .claude/skills/ (3 skills: pulse, narratives, archaeology)</span>
-<span class="output">Created CLAUDE.md (project instructions)</span>
-<span class="output">Created docs/ (GitHub Pages viewer)</span>
-<span class="output">Ready! Run /decision-graph to graph existing history, or just start working.</span>
-<span class="output">   This project has no server yet ([remote] in .deciduous/config.toml).</span>
-<span class="output"></span>
-<span class="output">Where should this project's graph live?</span>
-<span class="output"></span>
-<span class="output">  1) This machine: the deciduous server as a background service, using PostgreSQL on</span>
-<span class="output">     localhost:5432 as you (answering now)</span>
-<span class="output">  2) This machine: the server as a background service, using a PostgreSQL you name</span>
-<span class="output">     (any host, port, user, password)</span>
-<span class="output">  3) This machine, in Docker: a new PostgreSQL and the server in containers</span>
-<span class="output">  4) A server someone else runs: you need its URL and token</span>
-<span class="output"></span>
-<span class="output">Choose 1-4 [1]:</span></div>
+<span class="output">Initializing Deciduous for Claude Code...
+   Directory: /Users/alice/code/snowflex
+
+   Creating .deciduous/config.toml
+   Creating .deciduous/.version (1.1.0)
+   Creating .deciduous/deciduous.db
+   Creating .claude/commands/decision.md
+   Creating .claude/commands/recover.md
+   Creating .claude/commands/work.md
+   Creating .claude/commands/document.md
+   Creating .claude/commands/build-test.md
+   Creating .claude/commands/serve-ui.md
+   Creating .claude/commands/decision-graph.md
+   Creating .claude/commands/sync.md
+   Creating .claude/commands/demo-swarm.md
+   Creating .claude/agents.toml
+   Creating .claude/hooks/version-check.sh (executable)
+   Creating .claude/hooks/board-mentions.sh (executable)
+   Creating .claude/settings.json
+   Creating .claude/skills/pulse.md
+   Creating .claude/skills/narratives.md
+   Creating .claude/skills/archaeology.md
+   Creating CLAUDE.md
+   Creating .gitignore (track .deciduous/graph.json, ignore the database)
+   Creating .gitattributes (merge the graph file record by record, fold it in PR diffs)
+   Configured git merge driver for graph records
+   Creating .deciduous/graph.json (run `deciduous sync` to fill it, then commit it)
+   Creating .github/workflows/cleanup-decision-graphs.yml
+
+Deciduous initialized for Claude Code!
+
+Next steps:
+  1. Restart your assistant so it connects to the server; it sends the logging instructions
+  2. Use slash commands: /decision, /recover, /work, /document, etc.
+  3. Run deciduous serve to browse the graph locally
+
+Shared graph server
+   This project has no server yet ([remote] in .deciduous/config.toml).
+
+Where should this project's graph live?
+
+  1) This machine: the deciduous server as a background service, using PostgreSQL on
+     localhost:5432 as alice (answering now)
+  2) This machine: the server as a background service, using a PostgreSQL you name
+     (any host, port, user, password)
+  3) This machine, in Docker: a new PostgreSQL and the server in containers
+  4) A server someone else runs: you need its URL and token
+
+  1 and 2 install the release's server executable in /Users/alice/.config/deciduous/server
+  and start it at login. --docker runs that server in Docker instead.
+
+Choose 1-4 [1]:</span></div>
             </div>
 
-            <p>That single command scaffolds everything deciduous needs, then asks where the project's graph should live. The default, choice 1, installs the graph server on this machine as a background service against the PostgreSQL on localhost:5432, asks for a port (a free one is suggested), stores the token in <code>~/.config/deciduous/credentials</code>, writes <code>[remote]</code> to <code>.deciduous/config.toml</code>, and registers the server with Claude Code. Every later project on the machine finds the same server. In a script there is no terminal to ask, so <code>deciduous remote setup --local</code>, <code>--database-url</code>, <code>--docker-postgres</code> or <code>--url</code> gives the answer. Let's walk through what each piece does.</p>
+            <p>Everything above the menu was run for this tutorial; the menu is the text <code>init</code> prints when the project has no <code>[remote]</code> yet (the scratch run set <code>DECIDUOUS_NO_SERVER=1</code>, and printed <code>Skipped shared graph server</code> there instead). If nothing answers on 5432, the first line reads <code>nothing answers there now</code> and a hint under the menu names the <code>brew</code> and <code>apt</code> commands.</p>
 
-            <h2>What Gets Created</h2>
+            <h2>The Four Answers</h2>
 
-            <h3><code>.deciduous/deciduous.db</code> &mdash; The Graph Database</h3>
+            <ol>
+                <li><strong>This machine, PostgreSQL on 5432</strong> (default). The first time on a machine, <code>init</code> downloads the server executable for its own version, checks it against the release's <code>checksums.txt</code>, runs it once to create the database <code>deciduous</code> and migrate, then installs it under <code>~/.config/deciduous/server/</code> as a user service that starts at login (a LaunchAgent on macOS, a systemd user unit on Linux), listening on 127.0.0.1 only. It asks for a port and suggests a free one from 20000-32767; 4000 is not assumed because it is Phoenix's default and would break the dev server of the very project being logged. If PostgreSQL refuses (no such role, no CREATEDB), you see its reason and the menu again.</li>
+                <li><strong>This machine, a PostgreSQL you name.</strong> Same server, a URL of the form <code>postgres://USER@HOST:PORT/DATABASE</code>; the password is asked separately and never shown.</li>
+                <li><strong>Docker.</strong> A new PostgreSQL 17 and the server in containers. This is what 1.0.10 and earlier always did.</li>
+                <li><strong>Someone else's server.</strong> URL and token, both checked before anything is stored.</li>
+            </ol>
 
-            <p>This is the SQLite database that stores your decision graph: every node, edge, status, confidence score, prompt, and commit link. It lives locally and is gitignored by default. It is a cache: every write also goes to the shared graph server chosen above, which is where teammates and agents in other directories read it.</p>
+            <p>Whichever you pick, <code>init</code> stores the token in <code>~/.config/deciduous/credentials</code> (mode 0600, outside every repository), writes <code>[remote]</code> with the URL and this repository's workspace name to <code>.deciduous/config.toml</code>, and registers the server with Claude Code (<code>claude mcp add --scope user --transport http deciduous &lt;url&gt;/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</code>, run for you). The second project on the machine finds the running server in about a second and skips all of this.</p>
 
-            <h3><code>.deciduous/config.toml</code> &mdash; Configuration</h3>
+            <div class="terminal-session">
+                <div class="terminal-header">In a script there is no terminal to ask, so answer on the command line</div>
+                <div class="terminal-body"><span class="command">deciduous remote setup --local                  <span class="comment"># 1</span></span>
+<span class="command">deciduous remote setup --database-url &lt;url&gt;     <span class="comment"># 2</span></span>
+<span class="command">deciduous remote setup --docker-postgres        <span class="comment"># 3</span></span>
+<span class="command">deciduous remote setup --url &lt;url&gt;              <span class="comment"># 4</span></span>
+<span class="command">DECIDUOUS_NO_SERVER=1 deciduous init            <span class="comment"># tests and CI: skip the step</span></span></div>
+            </div>
 
-            <p>Controls branch detection, hook behavior, automatic version checking, and other project-level settings. The defaults work for most projects. Automatic version checking is enabled by default &mdash; a hook checks crates.io once per 24 hours and your AI assistant will let you know when an update is available. You can opt out during init with <code>--no-auto-update</code> or toggle later with <code>deciduous auto-update off</code>.</p>
+            <p>Then restart Claude Code. When it connects to the server, the server sends the logging instructions. There is no hook to install.</p>
 
-            <h3><code>.claude/commands/</code> &mdash; Slash Commands</h3>
+            <h2>What Was Written</h2>
 
-            <p>Nine slash commands that integrate directly into Claude Code's command system. These give your AI assistant specific workflows it can invoke: <code>/recover</code> to restore context from the graph, <code>/work</code> to start a logged work session, <code>/decision-graph</code> to reconstruct history from git, and more. You will see these in action throughout the rest of this tutorial.</p>
+            <table>
+                <thead><tr><th>Path</th><th>What it is</th><th>Commit it?</th></tr></thead>
+                <tbody>
+                    <tr><td><code>.deciduous/config.toml</code></td><td><code>[branch]</code> (which branches count as main), <code>[updates]</code>, and after the server step <code>[remote]</code> with <code>url</code> and <code>workspace</code>. No credential ever goes here.</td><td>yes</td></tr>
+                    <tr><td><code>.deciduous/deciduous.db</code></td><td>SQLite. With a server configured, this machine's cache of the graph; without one, the graph itself. The file appears on first use.</td><td>no (ignored)</td></tr>
+                    <tr><td><code>.deciduous/graph.json</code></td><td>The git-tracked copy of the graph for projects without a server; <code>deciduous sync</code> reconciles it with the database and the merge driver merges it record by record. With a <code>[remote]</code> it is not the sharing path and <code>update</code> leaves it alone.</td><td>yes</td></tr>
+                    <tr><td><code>.deciduous/.version</code></td><td>The deciduous version these files came from; <code>check-update</code> compares it with the binary.</td><td>yes</td></tr>
+                    <tr><td><code>CLAUDE.md</code></td><td>The behavioural section between <code>&lt;!-- deciduous:start --&gt;</code> and <code>&lt;!-- deciduous:end --&gt;</code>: when to log, what to log, how to connect. Appended if the file exists.</td><td>yes</td></tr>
+                    <tr><td><code>.claude/commands/</code></td><td>Nine slash commands: <code>/decision</code>, <code>/recover</code>, <code>/work</code>, <code>/document</code>, <code>/build-test</code>, <code>/serve-ui</code>, <code>/decision-graph</code>, <code>/sync</code>, <code>/demo-swarm</code>.</td><td>yes</td></tr>
+                    <tr><td><code>.claude/skills/</code></td><td><code>pulse</code>, <code>narratives</code>, <code>archaeology</code>.</td><td>yes</td></tr>
+                    <tr><td><code>.claude/hooks/</code>, <code>.claude/settings.json</code></td><td>Two hooks, neither blocks: a once-a-day version check and <code>board-mentions.sh</code>, which shows a labelled session its unanswered board messages. See <a href="../advanced/hooks.html">Hooks</a>.</td><td>yes</td></tr>
+                    <tr><td><code>.claude/agents.toml</code></td><td>Subagent definitions.</td><td>yes</td></tr>
+                    <tr><td><code>.github/workflows/cleanup-decision-graphs.yml</code></td><td>Deletes the PR graph images (<code>dot --auto</code>) after the PR merges. Written only when the directory is a git repository.</td><td>yes</td></tr>
+                </tbody>
+            </table>
 
-            <h3><code>.claude/skills/</code> &mdash; Contextual Skills</h3>
+            <pre><span class="cmd">$ cat .gitignore</span>
+<span class="output"># Deciduous: local database stays private, the shared graph is tracked
+.deciduous/*
+!.deciduous/config.toml
+!.deciduous/graph.json</span></pre>
 
-            <p>Three skill definitions that teach your AI assistant higher-level strategies:</p>
-
-            <ul>
-                <li><strong>pulse</strong> &mdash; map the current design of a system as decisions</li>
-                <li><strong>narratives</strong> &mdash; understand how a system evolved over time</li>
-                <li><strong>archaeology</strong> &mdash; transform evolution stories into a queryable graph</li>
-            </ul>
-
-            <h3><code>CLAUDE.md</code> &mdash; Behavioral Instructions</h3>
-
-            <p>This is the most important file. CLAUDE.md contains the behavioral contract that teaches your AI assistant the decision graph workflow: when to log, what to log, how to connect nodes, and when to capture verbatim prompts. It is the file that makes the entire system work automatically. Without it, deciduous is just a CLI tool. With it, deciduous becomes an integrated part of how your AI assistant thinks and works.</p>
-
-            <h3><code>docs/</code> &mdash; Web Viewer for GitHub Pages</h3>
-
-            <p>A static HTML viewer that can be deployed to GitHub Pages. After running <code>deciduous sync</code> to export your graph data, push to GitHub and enable Pages on the <code>/docs</code> folder. Your decision graph becomes a live, browsable website.</p>
+            <p>Note what that rule covers: the database, <code>.deciduous/documents/</code>, <code>.deciduous/remote-log.jsonl</code> (unsent writes to the server), <code>narratives.md</code> and backups all stay out of git. <code>init</code> no longer writes a <code>docs/</code> viewer or a GitHub Pages workflow; that stopped in 1.0.5, when the graph moved to the server and <code>deciduous serve</code> became the way to look at it.</p>
 
             <h2>Keeping Up to Date</h2>
 
-            <p>As deciduous evolves, the integration files (slash commands, skills, CLAUDE.md instructions) get updated with new capabilities. Two commands manage this:</p>
-
             <div class="terminal-session">
-                <div class="terminal-header">Checking for Updates</div>
+                <div class="terminal-header">deciduous check-update, with 1.0.12 files and a 1.1.0 binary</div>
                 <div class="terminal-body"><span class="command">deciduous check-update</span>
-<span class="output">Update available! Integration files are out of date.</span>
-<span class="output">Run 'deciduous update' to update.</span></div>
+<span class="output">╔════════════════════════════════════════════════════════════════╗
+║  DECIDUOUS UPDATE AVAILABLE                                    ║
+╚════════════════════════════════════════════════════════════════╝
+
+  Integration files: 1.0.12  →  Binary: 1.1.0
+
+  What's new:
+
+  v1.1.0
+    • `deciduous transcript import &lt;path|session-id&gt;` builds the graph from a Claude Code transcript: ...
+    • Every derived node carries metadata.evidence: `proven` ... or `inferred` ...; `show` prints it
+    ...
+
+  Run deciduous update to update integration files.</span></div>
             </div>
 
-            <p>When an update is available:</p>
+            <p>It exits 1 when an update is needed, 0 otherwise, so it works in a script. Then:</p>
 
             <div class="terminal-session">
-                <div class="terminal-header">Applying Updates</div>
+                <div class="terminal-header">deciduous update, after someone edited a heading inside the CLAUDE.md section</div>
                 <div class="terminal-body"><span class="command">deciduous update</span>
-<span class="output">Updated .claude/commands/ (9 slash commands)</span>
-<span class="output">Updated .claude/skills/ (3 skills)</span>
-<span class="output">Updated CLAUDE.md (deciduous section)</span>
-<span class="output">Done! Integration files are now at v0.13.2.</span></div>
+<span class="output">Updating Deciduous tooling for Claude Code...
+   Directory: /Users/alice/code/snowflex
+
+   Unchanged .claude/commands/decision.md
+   Unchanged .claude/commands/recover.md
+   ...
+   Unchanged .claude/skills/archaeology.md
+   Kept yours CLAUDE.md (its deciduous section was edited by someone and is left as it is; the section it would have got: .deciduous/update-templates/CLAUDE.md)
+   Updated .deciduous/.version (1.1.0)
+
+Tooling updated for Claude Code!</span></div>
             </div>
 
             <div class="info-box tip">
-                <strong>Your custom content is preserved</strong>
-                <p><code>deciduous update</code> only modifies the deciduous-managed section of CLAUDE.md, which lives between <code>&lt;!-- deciduous:start --&gt;</code> and <code>&lt;!-- deciduous:end --&gt;</code> markers. Any content you have added above or below those markers is left untouched. Your project-specific instructions, architecture notes, and custom rules are safe.</p>
+                <strong>Since 1.0.12, update keeps what you wrote</strong>
+                <p>A file deciduous wrote is replaced; a file or section someone else edited is kept, and the text it would have written goes to <code>.deciduous/update-templates/&lt;path&gt;</code> so you can <code>diff</code> it. Everything <code>update</code> does change is copied first to <code>.deciduous/update-backups/&lt;unix-time&gt;/</code>. A second <code>update</code> is a no-op. In 1.0.3 through 1.0.11 an edited section on a project with a <code>[remote]</code> was rewritten back to the git model and could end up with a doubled start marker; that is the bug 1.0.12 fixed.</p>
             </div>
 
-            <h2>What About .gitignore?</h2>
+            <p><code>update</code> also removes the logging hooks that versions before 1.0.3 installed, asks the server question if the project still has no <code>[remote]</code>, and upgrades this machine's server executable when it is older than the CLI. It never touches <code>.deciduous/config.toml</code>.</p>
 
-            <p>Deciduous automatically adds the database file to your <code>.gitignore</code> during init:</p>
-
-            <pre><span class="comment"># Added by deciduous init</span>
-<span class="output">.deciduous/deciduous.db</span>
-<span class="output">.deciduous/documents/</span></pre>
-
-            <p>The database and attached documents stay local. Everything else&mdash;config, slash commands, skills, CLAUDE.md, and the docs viewer&mdash;is meant to be committed and shared with your team.</p>
+            <div class="info-box warning">
+                <strong>auto-update is a no-op</strong>
+                <p><code>init --no-auto-update</code> is still accepted and silently ignored. <code>deciduous auto-update on|off</code> still exists and prints a note that version checking is always on: once per 24 hours, non-blocking, through the <code>version-check.sh</code> hook. There is no setting behind either.</p>
+            </div>
 
             <div class="page-nav">
-                <a href="installing.html" class="prev">
+                <a href="../getting-started/installing.html" class="prev">
                     <span class="label">Previous</span>
                     <span class="title">Installing</span>
                 </a>
-                <a href="ai-integration.html" class="next">
+                <a href="../getting-started/ai-integration.html" class="next">
                     <span class="label">Next</span>
                     <span class="title">What Your AI Gets</span>
                 </a>
             </div>
         </article>
     </main>
+
+    <script src="../terminal-demo.js"></script>
 </body>
 </html>

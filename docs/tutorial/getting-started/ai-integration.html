@@ -52,11 +52,12 @@
                     <li><a href="../real-work/starting-work.html">Starting Work</a></li>
                     <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
                     <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
                     <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
                 <ul>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                     <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
@@ -80,155 +81,76 @@
         <article>
             <h1>What Your AI Assistant Gets</h1>
 
-            <p class="lead">When you run <code>deciduous init</code>, your AI assistant gains a complete decision-tracking workflow. Here is what it learns.</p>
+            <p class="lead">Three layers: a <code>CLAUDE.md</code> section it reads at the start of every session, nine slash commands and three skills it can invoke, and two MCP servers whose tool descriptions carry the same rules. None of it blocks the agent; since 1.0.3 nothing deciduous installs can refuse a tool call.</p>
 
-            <p>The files created during initialization are not just configuration. They form a layered instruction set that teaches your AI assistant <em>when</em> to log decisions, <em>what</em> to log, and <em>how</em> to connect everything into a coherent graph. Let's look at each layer.</p>
+            <h2>CLAUDE.md: the Behavioural Contract</h2>
 
-            <h2>CLAUDE.md &mdash; The Behavioral Contract</h2>
-
-            <p>CLAUDE.md is read by Claude Code at the start of every session. The deciduous section teaches it a specific set of behavioral rules for decision tracking. The two most important rules are:</p>
+            <p>The section between <code>&lt;!-- deciduous:start --&gt;</code> and <code>&lt;!-- deciduous:end --&gt;</code> opens with the rule everything else serves:</p>
 
             <div class="hero-box">
-                <p><strong>"Log BEFORE you code, not after."</strong></p>
-                <p>Before implementing anything, the assistant creates a goal node capturing what it is about to do and why. This ensures decisions are recorded while the reasoning is fresh, not reconstructed after the fact when details have been lost.</p>
+                <p><strong>"THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively."</strong></p>
+                <p>BEFORE you do something, log what you are about to do. AFTER it succeeds or fails, log the outcome. CONNECT immediately: link every node to its parent. AUDIT regularly for missing connections.</p>
             </div>
 
-            <div class="hero-box">
-                <p><strong>"Connect immediately &mdash; link every node to its parent."</strong></p>
-                <p>Every node in the graph must be connected to its parent as soon as it is created. Orphaned nodes without connections lose their context. The graph's value is in its edges, not just its nodes.</p>
-            </div>
-
-            <p>Beyond these core rules, CLAUDE.md defines a set of behavioral triggers. When the assistant encounters one of these situations, it knows to create the corresponding node type:</p>
+            <p>Then the node flow rule, with its two prohibitions stated outright: goals do not lead directly to decisions (there must be options first), and options do not come after decisions. The MCP form of "connect immediately" is spelled out too: <code>add_node</code> with <code>parent_id</code> creates and links in one call, and an <code>add_edge</code> sent in the same batch as the <code>add_node</code> whose id it needs is refused, because that id does not exist yet.</p>
 
             <table>
-                <thead>
-                    <tr>
-                        <th>Trigger</th>
-                        <th>Node Type</th>
-                        <th>Example</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Trigger</th><th>Node</th><th>Example</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td>User asks for a new feature</td>
-                        <td><span class="node-goal"><strong>goal</strong></span></td>
-                        <td>"Add dark mode support"</td>
-                    </tr>
-                    <tr>
-                        <td>Exploring possible approaches</td>
-                        <td><span class="node-option"><strong>option</strong></span></td>
-                        <td>"Use CSS variables for theming"</td>
-                    </tr>
-                    <tr>
-                        <td>Choosing between approaches</td>
-                        <td><span class="node-decision"><strong>decision</strong></span></td>
-                        <td>"Choose theming strategy"</td>
-                    </tr>
-                    <tr>
-                        <td>About to write or edit code</td>
-                        <td><span class="node-action"><strong>action</strong></span></td>
-                        <td>"Implementing CSS variable system"</td>
-                    </tr>
-                    <tr>
-                        <td>Something worked or failed</td>
-                        <td><span class="node-outcome"><strong>outcome</strong></span></td>
-                        <td>"Dark mode renders correctly"</td>
-                    </tr>
-                    <tr>
-                        <td>Noticed something interesting</td>
-                        <td><span class="node-observation"><strong>observation</strong></span></td>
-                        <td>"Existing styles use hardcoded colors"</td>
-                    </tr>
-                    <tr>
-                        <td>Reconsidering a past approach</td>
-                        <td><span class="node-revisit"><strong>revisit</strong></span></td>
-                        <td>"Reconsider CSS-in-JS &mdash; switch to CSS variables"</td>
-                    </tr>
+                    <tr><td>User asks for a new feature</td><td><span class="node-goal"><strong>goal</strong></span>, with the request verbatim in <code>prompt</code></td><td>"Add CI pipelines for snowflex"</td></tr>
+                    <tr><td>Exploring possible approaches</td><td><span class="node-option"><strong>option</strong></span></td><td>"Separate workflow files"</td></tr>
+                    <tr><td>Choosing between approaches</td><td><span class="node-decision"><strong>decision</strong></span></td><td>"Use separate workflow files"</td></tr>
+                    <tr><td>About to write or edit code</td><td><span class="node-action"><strong>action</strong></span></td><td>"Implement unit test CI workflow"</td></tr>
+                    <tr><td>Something worked or failed</td><td><span class="node-outcome"><strong>outcome</strong></span></td><td>"mix test passed"</td></tr>
+                    <tr><td>Noticed something that changes the plan</td><td><span class="node-observation"><strong>observation</strong></span></td><td>"ODBC sessions expire after 4 hours idle"</td></tr>
+                    <tr><td>An earlier choice turns out wrong</td><td><span class="node-revisit"><strong>revisit</strong></span></td><td>"Reconsidering: Working single-connection ODBC wrapper"</td></tr>
                 </tbody>
             </table>
 
-            <p>The assistant also learns the canonical flow through the graph: goals lead to options, options lead to decisions, decisions lead to actions, and actions lead to outcomes. Observations attach anywhere relevant, and revisit nodes mark when the team reconsiders a past decision, connecting old approaches to new ones. This structure ensures the graph is consistent and navigable regardless of which session created it.</p>
+            <p>The section is as specific about what <em>not</em> to log: reading the codebase, planning, running tests to check status, checking git. "If a node describes something the user would put on a project timeline or in a PR description, log it. If it describes your internal process of reading and thinking, don't." It also carries the git staging rule (name files, never <code>git add -A</code>), the verbatim-prompt rule, the message board for parallel agents, and a paragraph on the transcript import.</p>
+
+            <p>There are two versions of the section. A project with a <code>[remote]</code> gets the server-aware one: it says the graph lives on the server, <code>.deciduous/deciduous.db</code> is a cache, there is no <code>graph.json</code> to commit, and the session-start checklist is <code>deciduous remote status</code> rather than <code>deciduous sync</code>. A project without one gets the git-model text. <code>update</code> picks the right one for the project.</p>
 
             <h2>Slash Commands</h2>
 
-            <p>The slash commands give your AI assistant specific entry points for common workflows. You invoke them by typing the command name in your Claude Code session, and the assistant follows the instructions defined in each command file.</p>
-
             <table>
-                <thead>
-                    <tr>
-                        <th>Command</th>
-                        <th>Purpose</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Command</th><th>What it does</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td><code>/recover</code></td>
-                        <td>Recover context from the decision graph at session start. Reads existing nodes, edges, and recent commands to rebuild understanding of the project state.</td>
-                    </tr>
-                    <tr>
-                        <td><code>/work</code></td>
-                        <td>Start a work transaction. Creates a goal node before any implementation begins, ensuring the "log before you code" rule is followed.</td>
-                    </tr>
-                    <tr>
-                        <td><code>/decision</code></td>
-                        <td>Full decision graph management. Add nodes, create links, update statuses, and query the graph.</td>
-                    </tr>
-                    <tr>
-                        <td><code>/decision-graph</code></td>
-                        <td>Build a decision graph from existing git history. Analyzes commits, PRs, and patterns to reconstruct past decisions.</td>
-                    </tr>
-                    <tr>
-                        <td><code>/build-test</code></td>
-                        <td>Build the project and run the test suite. Used to verify changes before committing.</td>
-                    </tr>
-                    <tr>
-                        <td><code>/serve-ui</code></td>
-                        <td>Start the decision graph web viewer on a local port for interactive exploration.</td>
-                    </tr>
-                    <tr>
-                        <td><code>/sync-graph</code></td>
-                        <td>Export the decision graph to JSON and update the GitHub Pages viewer.</td>
-                    </tr>
-                    <tr>
-                        <td><code>/sync</code></td>
-                        <td>Multi-user sync. Pull teammate events, rebuild the local database, and push your own events.</td>
-                    </tr>
-                    <tr>
-                        <td><code>/document</code></td>
-                        <td>Generate comprehensive documentation for a file or directory in the project.</td>
-                    </tr>
+                    <tr><td><code>/recover</code></td><td>Session start. Queries the graph for this branch, audits connections, imports any transcript the graph does not have yet (<code>deciduous transcript list</code>, then <code>import</code> for each one marked <code>new</code>), reads unanswered board messages, checks git state, and reports.</td></tr>
+                    <tr><td><code>/work</code></td><td>Creates the goal with your request verbatim before any implementation, announces the id, logs an action before each major edit and an outcome after each commit.</td></tr>
+                    <tr><td><code>/decision</code></td><td>Direct graph management: add, link, status, show.</td></tr>
+                    <tr><td><code>/decision-graph</code></td><td>Archaeology from commit history. The whole next section is this command.</td></tr>
+                    <tr><td><code>/document</code></td><td>Documents a file or directory thoroughly, logging what it learns.</td></tr>
+                    <tr><td><code>/build-test</code></td><td>Build and run the test suite.</td></tr>
+                    <tr><td><code>/serve-ui</code></td><td>Start <code>deciduous serve</code>.</td></tr>
+                    <tr><td><code>/sync</code></td><td>With a server: <code>remote status</code> and <code>remote pull</code>. Without one: reconcile <code>.deciduous/graph.json</code> with the database.</td></tr>
+                    <tr><td><code>/demo-swarm</code></td><td>Starts one lead and four worker sessions on one graph in iTerm2 or Ghostty (macOS). A demonstration, not a workflow.</td></tr>
                 </tbody>
             </table>
 
             <h2>Skills</h2>
 
-            <p>Skills are higher-level than slash commands. Where a slash command is a specific action ("create a node", "start the viewer"), a skill is a strategy for approaching a category of work.</p>
+            <p><strong>/pulse</strong> maps the current design as decisions: what is true now, as goals with their options. <strong>/narratives</strong> asks how the system got that way and writes the evolution stories to <code>.deciduous/narratives.md</code>. <strong>/archaeology</strong> turns those stories into nodes, with each pivot a <code>revisit</code>. Now mode and History mode; most projects use both.</p>
 
-            <h3><code>/pulse</code> &mdash; Map Current Design</h3>
+            <h2>The MCP Tools</h2>
 
-            <p>Take the pulse of a system as it exists today. The assistant examines the codebase and maps the current design as a set of decisions: what patterns are in use, what libraries were chosen, what architectural boundaries exist. This is "Now mode" &mdash; understanding the present without worrying about how it got this way.</p>
+            <p>In a project connected to the server, the agent does not run <code>deciduous add</code>. It calls tools on the shared server over HTTP, which Claude Code was registered with during <code>init</code>. There are 21: <code>add_node</code>, <code>add_edge</code>, <code>update_node</code>, <code>delete_node</code>, <code>delete_edge</code>, <code>show_node</code>, <code>query_nodes</code>, <code>ask_graph</code>, <code>get_graph</code>, <code>get_ancestors</code>, <code>get_descendants</code>, <code>find_orphans</code>, <code>log_decision</code>, <code>log_observation</code>, <code>capture_conversation_turn</code>, <code>close_thread</code>, <code>consolidation_report</code>, <code>check_activity</code>, <code>list_workspaces</code>, <code>post_message</code> and <code>read_messages</code>. Their descriptions and their replies carry the logging rules, which is what replaced the blocking hook: <code>capture_conversation_turn</code> writes a step's goal, observations, decision, action and outcome together, all or nothing; a tool refuses an unknown argument and names the one it has; <code>check_activity</code> says who else has been writing where.</p>
 
-            <h3><code>/narratives</code> &mdash; Understand Evolution</h3>
+            <p><code>deciduous mcp</code> is the other server: local, over stdin/stdout, against the local database, for any MCP client (<code>{"command": "deciduous", "args": ["mcp"]}</code>). It has 34 tools, among them <code>add_node</code>, <code>link_nodes</code>, <code>search_nodes</code>, <code>trace_chain</code>, <code>get_pulse</code>, <code>attach_document</code>, <code>tag_node</code>, <code>generate_writeup</code>, <code>export_dot</code>, and the board's <code>post_message</code> and <code>read_messages</code>.</p>
 
-            <p>Look at the current system and ask "how did this get this way?" The assistant identifies evolution stories: the database was originally MongoDB but migrated to PostgreSQL, the auth system started with sessions and switched to JWTs, the frontend was rewritten from jQuery to React. These narratives are tracked in <code>.deciduous/narratives.md</code>.</p>
+            <h2>Hooks</h2>
 
-            <h3><code>/archaeology</code> &mdash; Transform into Queryable Graph</h3>
-
-            <p>Take the narratives identified by <code>/narratives</code> and structure them as decision graph nodes with proper connections. Each narrative becomes a chain of goals, options, decisions, and outcomes. Pivots &mdash; where the team changed direction &mdash; become <strong>revisit</strong> nodes that connect old approaches to new ones.</p>
-
-            <h2>The Key Point</h2>
+            <p>Two, and neither blocks. <code>version-check.sh</code> runs before <code>Bash</code> calls and checks crates.io at most once a day. <code>board-mentions.sh</code> runs at session start and on each prompt and prints the messages addressed to this session's label (<code>DECIDUOUS_AGENT_LABEL</code>) that it has not answered; without a label it exits at once. Up to 1.0.2 there was a hook that denied the agent's next tool call until it wrote to the graph. It could leave a session unable to do anything, and 1.0.3 removed it; <a href="../advanced/hooks.html">Hooks</a> has the reasons.</p>
 
             <div class="info-box tip">
-                <strong>You do not need to memorize any deciduous CLI commands.</strong>
-                <p>Your AI assistant reads CLAUDE.md, understands the workflow, and runs the right commands at the right time. You say "add rate limiting to the API" and the assistant handles the goal creation, option exploration, decision logging, and commit linking automatically. The rest of this tutorial shows you what happens during those sessions so you understand the system &mdash; but in practice, the assistant drives it.</p>
+                <strong>You do not have to memorise any of this</strong>
+                <p>The assistant reads the section, has the tools, and logs. You say "add rate limiting to the API" and get a goal with your words on it, options, a decision, actions linked to commits, outcomes. The rest of the tutorial shows what that looks like so you can read the graph it leaves behind.</p>
             </div>
 
-            <p>Now that you understand what deciduous installs and how your AI assistant uses it, let's see the system in action. The next section walks through reconstructing a decision graph from an existing project's git history.</p>
-
             <div class="page-nav">
-                <a href="initializing.html" class="prev">
+                <a href="../getting-started/initializing.html" class="prev">
                     <span class="label">Previous</span>
-                    <span class="title">Initializing on a Project</span>
+                    <span class="title">Initializing</span>
                 </a>
                 <a href="../archaeology/the-decision-graph-skill.html" class="next">
                     <span class="label">Next</span>
@@ -237,5 +159,7 @@
             </div>
         </article>
     </main>
+
+    <script src="../terminal-demo.js"></script>
 </body>
 </html>

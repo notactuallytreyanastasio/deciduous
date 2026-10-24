@@ -15,7 +15,7 @@
     <meta property="og:image:height" content="630" />
     <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
 </head>
-<body style="padding-top: 0;">
+<body>
     <nav class="sidebar">
         <div class="sidebar-header">
             <a href="../../" class="logo">DECIDUOUS</a>
@@ -52,11 +52,12 @@
                     <li><a href="../real-work/starting-work.html" class="active">Starting Work</a></li>
                     <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
                     <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
                     <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
                 <ul>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                     <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
@@ -80,15 +81,11 @@
         <article>
             <h1>Starting Work on an Issue</h1>
 
-            <p class="lead">Everything before this was retroactive. Now you log decisions as they happen, and Claude drives the commands.</p>
+            <p class="lead">Archaeology looked backward. Now Claude logs before it codes, and the first thing it logs is your request, word for word.</p>
 
-            <p>In the Reconstructing History section, Claude looked backward&mdash;reading commit logs and inferring decisions that had already been made. Live development is the opposite. You give Claude a task, and it logs the decisions <em>before</em> writing any code. The graph grows forward in real time.</p>
+            <h2>The /work Command</h2>
 
-            <p>The key dynamic: you provide the direction, Claude operates the tooling. You never need to remember a <code>deciduous</code> command. Claude reads the instructions in your CLAUDE.md and knows exactly when and how to log each step.</p>
-
-            <h2>The /work Skill</h2>
-
-            <p>The <code>/work</code> skill is how you tell Claude to start a tracked work session. It creates a <span class="node-goal">goal</span> node with your verbatim request before doing anything else. Let's watch it work on GitHub issue #93: adding CI pipelines for snowflex.</p>
+            <p><code>/work</code> creates the goal with the verbatim prompt before anything else happens. Issue #93 asks for CI pipelines for snowflex:</p>
 
             <div class="session-demo" id="work-demo">
                 <div class="session-header">
@@ -110,150 +107,103 @@
 
                     <div class="session-step" style="--delay: 0s">
                         <div class="step-label user">You</div>
-                        <div class="step-content">Add support for running tests in CI/CD. We need GitHub Actions workflows for both unit tests and integration tests. See issue #93.</div>
+                        <div class="step-content">/work Add support for running tests in CI/CD. We need GitHub Actions workflows for both unit tests and integration tests. See issue #93.</div>
                     </div>
 
                     <div class="session-step" style="--delay: 1.5s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content">I'll start by logging this as a goal in the decision graph, capturing your full request.</div>
-                    </div>
-
-                    <div class="session-step" style="--delay: 3s">
                         <div class="step-label claude">Claude</div>
                         <div class="step-content code">deciduous add goal "Add CI pipelines for snowflex" -c 90 --prompt-stdin &lt;&lt; 'EOF'
 Add support for running tests in CI/CD. We need GitHub Actions workflows
 for both unit tests and integration tests. See issue #93.
 EOF</div>
-                        <div class="step-output">Created node 57 (type: goal) [confidence: 90%] [prompt: 167 chars] [branch: deciduous]</div>
+                        <div class="step-output">Warning: Prompt is only 130 chars. This looks like a summary, not a full prompt.<br>         Capture the verbatim user message for better context recovery.<br>Created node 16 (type: goal, title: Add CI pipelines for snowflex) [confidence: 90%] [prompt: 130 chars] [branch: ci-pipelines]</div>
                     </div>
 
-                    <div class="session-step" style="--delay: 5s">
+                    <div class="session-step" style="--delay: 4s">
                         <div class="step-label claude">Claude</div>
-                        <div class="step-content">Now let me explore the options. There are two main approaches for structuring CI workflows&mdash;I'll log both before choosing.</div>
+                        <div class="step-content">Goal #16. Two ways to lay the workflows out; I'll log both before choosing.</div>
                     </div>
 
-                    <div class="session-step" style="--delay: 6.5s">
+                    <div class="session-step" style="--delay: 5.5s">
                         <div class="step-label claude">Claude</div>
-                        <div class="step-content code">deciduous add option "Separate CI workflow files for unit and integration tests" -c 80</div>
-                        <div class="step-output">Created node 58 (type: option) [confidence: 80%]</div>
-                        <div class="cmd-inline">deciduous link 57 58 -r "possible approach"</div>
-                        <div class="step-output">Created edge 67 (57 &rarr; 58 via leads_to)</div>
+                        <div class="step-content code">deciduous add option "Separate workflow files for unit and integration tests" -c 80</div>
+                        <div class="step-output">Created node 17 (type: option, title: Separate workflow files for unit and integration tests) [confidence: 80%] [branch: ci-pipelines]</div>
+                        <div class="cmd-inline">deciduous link 16 17 -r "possible approach"</div>
+                        <div class="step-output">Created edge 16 (16 -&gt; 17 via leads_to)</div>
                     </div>
 
-                    <div class="session-step" style="--delay: 8.5s">
+                    <div class="session-step" style="--delay: 7.5s">
                         <div class="step-label claude">Claude</div>
-                        <div class="step-content code">deciduous add option "Single CI workflow with test tagging and conditional execution" -c 75</div>
-                        <div class="step-output">Created node 59 (type: option) [confidence: 75%]</div>
-                        <div class="cmd-inline">deciduous link 57 59 -r "possible approach"</div>
-                        <div class="step-output">Created edge 68 (57 &rarr; 59 via leads_to)</div>
+                        <div class="step-content code">deciduous add option "One workflow with test tagging and conditional jobs" -c 75</div>
+                        <div class="step-output">Created node 18 (type: option, title: One workflow with test tagging and conditional jobs) [confidence: 75%] [branch: ci-pipelines]</div>
+                        <div class="cmd-inline">deciduous link 16 18 -r "possible approach"</div>
+                        <div class="step-output">Created edge 17 (16 -&gt; 18 via leads_to)</div>
                     </div>
 
-                    <div class="session-step" style="--delay: 10.5s">
+                    <div class="session-step" style="--delay: 9.5s">
                         <div class="step-label claude">Claude</div>
-                        <div class="step-content">Separate files give clearer separation of concerns and easier contributor onboarding. New contributors can see at a glance which workflow does what. I'll go with that approach.</div>
+                        <div class="step-content">Separate files: a contributor sees which workflow does what from the file names. Going with that.</div>
                     </div>
 
-                    <div class="session-step" style="--delay: 12s">
+                    <div class="session-step" style="--delay: 11s">
                         <div class="step-label claude">Claude</div>
-                        <div class="step-content code">deciduous add decision "Use separate workflow files - clearer separation, easier contributor onboarding" -c 85</div>
-                        <div class="step-output">Created node 60 (type: decision) [confidence: 85%]</div>
-                        <div class="cmd-inline">deciduous link 58 60 -r "chosen"</div>
-                        <div class="step-output">Created edge 69 (58 &rarr; 60 via leads_to)</div>
+                        <div class="step-content code">deciduous add decision "Use separate workflow files: clearer separation, easier for contributors" -c 85</div>
+                        <div class="step-output">Created node 19 (type: decision, title: Use separate workflow files: clearer separation, easier for contributors) [confidence: 85%] [branch: ci-pipelines]</div>
+                        <div class="cmd-inline">deciduous link 17 19 -t chosen -r "clearer separation, easier for contributors"</div>
+                        <div class="step-output">Created edge 18 (17 -&gt; 19 via chosen)</div>
+                        <div class="cmd-inline">deciduous link 19 18 -t rejected -r "one file hides which job does what"</div>
+                        <div class="step-output">Created edge 19 (19 -&gt; 18 via rejected)</div>
                     </div>
 
-                    <div class="session-step" style="--delay: 14s">
+                    <div class="session-step" style="--delay: 13.5s">
                         <div class="step-label claude">Claude</div>
-                        <div class="step-content">Goal, options, and decision are recorded. The graph now shows: goal #57 leads to two options (#58, #59), and option #58 leads to decision #60. I'll start implementing.</div>
+                        <div class="step-content">Goal #16 leads to options #17 and #18; #17 was chosen into decision #19, which rejected #18. Implementing.</div>
                     </div>
                 </div>
             </div>
 
-            <h2>What Just Happened</h2>
+            <h2>That Warning</h2>
 
-            <p>In under a minute, Claude built the first layer of the decision graph for this work session. The node flow follows the canonical pattern:</p>
-
-            <p style="text-align: center; line-height: 2;">
-                <span class="node-goal">goal #57</span> &rarr;
-                <span class="node-option">option #58</span> / <span class="node-option">option #59</span> &rarr;
-                <span class="node-decision">decision #60</span>
-            </p>
-
-            <p>Notice the order: goal first, then options, then decision. Options come <em>before</em> the decision, not after. The decision records which option was chosen and why.</p>
-
-            <h2>Capturing the Verbatim Prompt</h2>
-
-            <p>The <code>--prompt-stdin</code> flag on the goal node is critical. It stores your exact request word-for-word, not a summary. This matters because when a future session needs to recover context, the verbatim prompt tells Claude exactly what the user originally asked for.</p>
+            <p>The binary warned that a 130-character prompt "looks like a summary". It was right to check: a goal's prompt is the one place the user's own words are kept, and <code>/recover</code> reads it to find out what was actually asked. Here the issue request really was two sentences, so the warning is noise; when Claude paraphrases a long request into one line, it is the point. The node is created either way.</p>
 
             <div class="terminal-session">
-                <div class="terminal-header">Two ways to capture prompts</div>
-                <div class="terminal-body"><span class="comment"># Short prompts: use -p flag</span>
+                <div class="terminal-header">Two ways to attach a prompt</div>
+                <div class="terminal-body"><span class="comment"># one line</span>
 <span class="command">deciduous add goal "Fix login bug" -c 90 -p "The login page crashes on Safari"</span>
 
-<span class="comment"># Multi-line prompts: use --prompt-stdin</span>
+<span class="comment"># several lines: a heredoc on stdin</span>
 <span class="command">deciduous add goal "Add CI pipelines" -c 90 --prompt-stdin &lt;&lt; 'EOF'
-Add support for running tests in CI/CD. We need GitHub Actions workflows
-for both unit tests and integration tests. See issue #93.
-EOF</span></div>
+...the user's message, unchanged...
+EOF</span>
+
+<span class="comment"># add or replace later</span>
+<span class="command">deciduous prompt 16 "..."</span></div>
             </div>
 
-            <p>Claude chooses between <code>-p</code> and <code>--prompt-stdin</code> automatically based on prompt length. Short one-liners get <code>-p</code>. Anything multi-line or longer than a sentence gets <code>--prompt-stdin</code> with a heredoc.</p>
+            <p>Only root goals and real changes of direction get prompts. Options, decisions and actions inherit their context through the edges back to the goal.</p>
 
-            <div class="info-box tip">
-                <strong>Prompts are for root goals and redirections</strong>
-                <p>Not every node needs a stored prompt. Downstream nodes (options, decisions, actions) inherit context through their edges back to the goal. Only capture prompts on root goal nodes and when the user significantly changes direction mid-session.</p>
-            </div>
+            <h2>What the Agent Actually Calls</h2>
+
+            <p>In a project connected to the server, the session above is MCP calls, not shell: <code>add_node</code> with <code>node_type: "goal"</code> and the <code>prompt</code>, then <code>add_node</code> for each option with <code>parent_id</code> set to the goal, then the decision with <code>parent_id</code> the chosen option and <code>edge_type: "chosen"</code>. Or one <code>capture_conversation_turn</code> carrying the whole step. Every write passes <code>workspace</code> and <code>branch</code>. The graph that results is the one <code>deciduous nodes</code> prints.</p>
 
             <h2>The Node Flow Rule</h2>
 
-            <p>Deciduous enforces a canonical flow through the graph:</p>
-
             <table>
-                <thead>
-                    <tr>
-                        <th>Step</th>
-                        <th>Node Type</th>
-                        <th>Issue #93 Example</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Step</th><th>Node</th><th>Issue #93</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td>1. What are we trying to do?</td>
-                        <td><span class="node-goal">goal</span></td>
-                        <td>#57: "Add CI pipelines for snowflex"</td>
-                    </tr>
-                    <tr>
-                        <td>2. What approaches exist?</td>
-                        <td><span class="node-option">option</span></td>
-                        <td>#58: Separate workflows / #59: Single workflow</td>
-                    </tr>
-                    <tr>
-                        <td>3. Which approach do we take?</td>
-                        <td><span class="node-decision">decision</span></td>
-                        <td>#60: "Use separate workflow files"</td>
-                    </tr>
-                    <tr>
-                        <td>4. Build it</td>
-                        <td><span class="node-action">action</span></td>
-                        <td>(next page)</td>
-                    </tr>
-                    <tr>
-                        <td>5. What resulted?</td>
-                        <td><span class="node-outcome">outcome</span></td>
-                        <td>(next page)</td>
-                    </tr>
-                    <tr>
-                        <td>6. Need to reconsider?</td>
-                        <td><span class="node-revisit">revisit</span></td>
-                        <td>"Reconsider ODBC transport strategy"</td>
-                    </tr>
+                    <tr><td>What are we trying to do?</td><td><span class="node-goal">goal</span></td><td>#16 Add CI pipelines for snowflex</td></tr>
+                    <tr><td>What approaches exist?</td><td><span class="node-option">option</span></td><td>#17 separate files / #18 one workflow</td></tr>
+                    <tr><td>Which do we take?</td><td><span class="node-decision">decision</span></td><td>#19 Use separate workflow files</td></tr>
+                    <tr><td>Build it</td><td><span class="node-action">action</span></td><td>next page</td></tr>
+                    <tr><td>What resulted?</td><td><span class="node-outcome">outcome</span></td><td>next page</td></tr>
                 </tbody>
             </table>
 
-            <p>Goals lead to options. Options lead to decisions. Decisions lead to actions. Actions lead to outcomes. Observations attach anywhere relevant. Revisit nodes connect old approaches to new ones when the team changes direction &mdash; they are the pivots in your project's story. Claude follows this flow automatically because the CLAUDE.md instructions spell it out. You don't need to direct the graph construction&mdash;just describe what you want done.</p>
+            <p>Options come before the decision, never after it, and a goal does not lead straight to a decision. The edge from the chosen option into the decision is the one <code>link</code> would refuse to reverse, as the archaeology section showed.</p>
 
             <div class="info-box">
-                <strong>Forward logging vs. archaeology</strong>
-                <p>Archaeology reconstructs decisions from evidence. Forward logging captures decisions as they happen. The graph structure is identical&mdash;same node types, same edges, same flow. The difference is timing: archaeology backdates nodes with <code>--date</code> and <code>--commit</code>; forward logging captures the present moment automatically.</p>
+                <strong>Forward logging and archaeology make the same graph</strong>
+                <p>Same types, same edges, same flow. The difference is <code>--date</code> and <code>--commit &lt;old hash&gt;</code> on the archaeology side; forward logging takes the current time and <code>--commit HEAD</code>.</p>
             </div>
 
             <div class="page-nav">
@@ -261,7 +211,7 @@ EOF</span></div>
                     <span class="label">Previous</span>
                     <span class="title">Telling the Story</span>
                 </a>
-                <a href="attaching-evidence.html" class="next">
+                <a href="../real-work/attaching-evidence.html" class="next">
                     <span class="label">Next</span>
                     <span class="title">Attaching Documents</span>
                 </a>

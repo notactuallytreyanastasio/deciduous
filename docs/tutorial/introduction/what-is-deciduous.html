@@ -52,11 +52,12 @@
                     <li><a href="../real-work/starting-work.html">Starting Work</a></li>
                     <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
                     <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
                     <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
                 <ul>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                     <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
@@ -79,199 +80,101 @@
     <main class="content">
         <article>
             <div class="info-box">
-                <strong>Disclaimer:</strong> This tutorial was written by deciduous using itself, with no human guidance during the process. It was given one starting prompt and left to go for the entire thing.
+                <strong>Disclaimer:</strong> This tutorial was written by deciduous using itself. It was rewritten for 1.1.0 on 2026-10-24 by running every command shown against the release binary.
             </div>
 
             <h1>What is Deciduous and Why Should I Care?</h1>
 
-            <p>Here's a scenario you've probably experienced:</p>
+            <p>Three months into a project someone asks why you chose PostgreSQL over MongoDB. There was a reason, something about transactions and the data model, but the Claude session where you worked it through has long been compacted and the Slack thread is buried. You say "it made sense at the time."</p>
 
-            <p>You're three months into a project. Someone asks why you chose PostgreSQL over MongoDB. You vaguely remember there was a good reason, something about transactions and the data model, but the specifics? Gone. The Claude session where you worked through the tradeoffs? Long compacted. The Slack thread? Buried. You shrug and say "it made sense at the time."</p>
+            <p>That is the problem deciduous is built against, and it has got worse with AI-assisted development: an assistant considers three approaches, rejects two, implements one, and the reasoning is gone when the context window compacts or the session ends.</p>
 
-            <p>This is the <em>decision evaporation problem</em>, and it's gotten dramatically worse with AI-assisted development.</p>
+            <h2>What a Decision Graph Is</h2>
+
+            <p>One graph per repository. Its nodes are of seven types: <span class="node-goal">goal</span>, <span class="node-option">option</span>, <span class="node-decision">decision</span>, <span class="node-action">action</span>, <span class="node-outcome">outcome</span>, <span class="node-observation">observation</span> and <span class="node-revisit">revisit</span>. Its edges are <code>leads_to</code>, <code>requires</code>, <code>chosen</code>, <code>rejected</code>, <code>blocks</code>, <code>enables</code> and <code>took_from</code>. The canonical flow is:</p>
+
+            <pre>goal &rarr; options &rarr; decision &rarr; actions &rarr; outcomes</pre>
+
+            <p>A goal leads to the options considered; the options lead to the decision that picked one; the decision leads to the actions that implemented it; the actions lead to what happened. Observations attach wherever they were made. A revisit marks the moment an earlier approach was reconsidered. Every node has a status, and nodes created by the CLI start as <code>pending</code>.</p>
+
+            <h2>Three Ways the Graph Gets Written</h2>
+
+            <ol>
+                <li><strong>The CLI.</strong> <code>deciduous add goal "..."</code>, <code>deciduous link 1 2</code>, and the rest. This is what the tutorial shows, because its output is easy to read.</li>
+                <li><strong>MCP tools, while the agent works.</strong> There are two servers. <code>deciduous mcp</code> is a local stdio server with 34 tools (<code>add_node</code>, <code>link_nodes</code>, <code>search_nodes</code>, <code>trace_chain</code>, ...). The shared graph server, which <code>deciduous init</code> sets up and registers with Claude Code, speaks MCP over HTTP with 21 tools (<code>add_node</code>, <code>capture_conversation_turn</code>, <code>ask_graph</code>, <code>query_nodes</code>, <code>post_message</code>, ...). When Claude Code connects to it, the server sends the logging instructions; no hook is involved.</li>
+                <li><strong>The transcript, after the fact.</strong> New in 1.1.0: <code>deciduous transcript import</code> reads the JSONL file Claude Code writes for every session and derives goals from your prompts, actions from edits and commits, and outcomes from test runs. Every derived node says whether it is <code>proven</code> (a tool call and its result) or <code>inferred</code> (the assistant said so). <a href="../real-work/importing-a-transcript.html">Importing a Transcript</a> shows it on a real session.</li>
+            </ol>
+
+            <p>The third one changes the premise. An agent that logs its own decisions can forget to; the transcript cannot. On a three-week session that had logged nine nodes through MCP, the import found 119 actions, 67 command outcomes and 68 verbatim prompts.</p>
+
+            <h2>Where the Graph Lives</h2>
+
+            <p>Since 1.0.11, <code>deciduous init</code> asks. The default is a server on this machine, installed as a user service (launchd on macOS, systemd on Linux) against the PostgreSQL already on <code>localhost:5432</code>. The alternatives are a PostgreSQL you name, a new PostgreSQL and server in Docker, or a server someone else runs. The server is the truth; <code>.deciduous/deciduous.db</code>, the SQLite file in your checkout, is this machine's cache of it. Every project on the machine shares the one server, one workspace per repository, and the shared server's <code>ask_graph</code> can search across all of them.</p>
+
+            <p>A project that never answered that question (tests and CI set <code>DECIDUOUS_NO_SERVER=1</code>) keeps the older model: the SQLite file is the graph and <code>.deciduous/graph.json</code>, committed to git and merged record by record by a merge driver, is how it travels between clones.</p>
 
             <h2>The Story We'll Follow</h2>
 
-            <p>Let me tell you about <a href="https://github.com/pepsico-ecommerce/snowflex">snowflex</a>, an Elixir library for connecting to Snowflake databases. It started as a simple ODBC wrapper&mdash;one module, one connection. Over 130 commits and two years, it evolved through five major architectural shifts: single connections to pools, pools to module-based APIs, ODBC to HTTP REST, single-auth to flexible key management. Each pivot was driven by real production pain. In this tutorial, you'll reconstruct that entire story using deciduous&mdash;then add a new chapter by working on a real open issue.</p>
+            <p><a href="https://github.com/pepsico-ecommerce/snowflex">snowflex</a> connects Elixir to Snowflake. It started as one module around Erlang's ODBC driver. Over about 130 commits it grew a connection pool, then a module-based API modelled on <code>Ecto.Repo</code>, then threw the ODBC transport away for Snowflake's HTTP REST API with JWT authentication, then made key management flexible. Each pivot was driven by production pain. You will reconstruct that history as a graph, then work a real open issue (#93, CI pipelines) with Claude logging as it goes.</p>
 
-            <p>snowflex is the perfect subject because it's small enough to understand completely, but rich enough to have real decision history. Every project has this story buried in its git log. Most never get it told.</p>
-
-            <h2>The AI Context Problem</h2>
-
-            <p>When you work with Claude (or any LLM), you make dozens of decisions per session. Claude might explore three authentication approaches, reject two, and implement one. It considers error handling strategies, weighs library choices, evaluates architectural patterns. All of this reasoning happens, informs your code, and then... disappears when the context window compacts or the session ends.</p>
-
-            <p>You're left with:</p>
-            <ul>
-                <li>Code that works (hopefully)</li>
-                <li>No record of what was considered</li>
-                <li>No memory of why alternatives were rejected</li>
-                <li>No way to recover context in a new session</li>
-            </ul>
-
-            <p><strong>Deciduous solves this.</strong></p>
-
-            <h2>What Deciduous Does</h2>
-
-            <p>Deciduous is a decision graph tool that captures every goal, decision, option, action, outcome, and revisit as you work. It stores them in a queryable SQLite database that survives session boundaries. When Claude's context compacts, the graph remains. When you start a new session six months later, you can query "what did we decide about connection pooling?" and get the full reasoning back.</p>
-
-            <p>But here's what makes it genuinely useful: <strong>Deciduous is designed to be operated BY your AI assistant.</strong> You tell Claude to <code>/decision-graph</code> on your repo, or <code>/work</code> on an issue, and Claude handles the logging. You get to focus on the work.</p>
-
-            <p>This means:</p>
-
-            <ul>
-                <li><strong>Context survives compaction.</strong> When Claude runs <code>/recover</code> at session start, it queries the graph and recovers reasoning it never saw.</li>
-                <li><strong>PRs explain themselves.</strong> Generate decision visualizations and writeups directly from the graph.</li>
-                <li><strong>Institutional knowledge persists.</strong> Six months later, anyone can trace why things were built the way they were.</li>
-                <li><strong>LLM output becomes reviewable.</strong> Instead of just seeing code, you see the decision flow that produced it.</li>
-            </ul>
-
-            <h2>Two Ways to Use Deciduous</h2>
-
-            <p>There are two main workflows, and most projects use both:</p>
-
-            <h3>1. Archaeology (Existing Projects)</h3>
-
-            <p>Got an existing project with months or years of history? Point Claude at the repo and let it reconstruct the story:</p>
+            <h2>Two Ways to Use It</h2>
 
             <div class="terminal-session">
-                <div class="terminal-header">Claude Code Session &mdash; Archaeology</div>
-                <div class="terminal-body">
-<span class="user-input">&gt; /decision-graph</span>
+                <div class="terminal-header">Archaeology: an existing project</div>
+                <div class="terminal-body"><span class="user-input">&gt; /decision-graph</span>
 
-I'll analyze snowflex's git history to reconstruct its decision graph. Let me start by understanding the commit history.
+I'll read the full commit history first, then map the eras.
 
-<span class="command">git log --oneline --reverse | head -20</span>
-<span class="output">a1b2c3d Initial commit - basic ODBC connection
-d4e5f6g Add query/2 function
-7h8i9j0 Add connection pooling with DBConnection
-k1l2m3n Refactor: module-based API pattern
-...</span>
+<span class="command">git log --oneline --reverse | wc -l</span>
+<span class="output">130</span>
 
-I can see several major architectural shifts here. Let me map them out.
-
-<span class="command">deciduous add goal "snowflex architecture evolution" -c 95</span>
-<span class="output">Created node #1: goal "snowflex architecture evolution"</span>
-
-<span class="command">deciduous add option "Direct ODBC connections" -c 90</span>
-<span class="command">deciduous add option "DBConnection pooling" -c 90</span>
-<span class="command">deciduous link 1 2 -r "initial approach"</span>
-<span class="command">deciduous link 1 3 -r "scaling response"</span>
-                </div>
+<span class="command">deciduous add goal "Create an Elixir library for querying Snowflake" -c 100 --date 2019-06-15 --commit da7ef84</span>
+<span class="output">Created node 1 (type: goal, title: Create an Elixir library for querying Snowflake) [confidence: 100%] [commit: da7ef84427ca8625acc0dccfd88cda1c86566d3d] [branch: main] [date: 2019-06-15T00:00:00-04:00]</span></div>
             </div>
 
-            <p>Claude reads the git log, identifies pivots, and builds the decision graph. You get months of architectural history mapped in minutes.</p>
-
-            <h3>2. Forward Logging (New Work)</h3>
-
-            <p>When you start new work, Claude logs decisions in real-time as it goes:</p>
-
             <div class="terminal-session">
-                <div class="terminal-header">Claude Code Session &mdash; Forward Logging</div>
-                <div class="terminal-body">
-<span class="user-input">&gt; /work Fix issue #93 - connection timeout handling</span>
+                <div class="terminal-header">Forward logging: new work</div>
+                <div class="terminal-body"><span class="user-input">&gt; /work Add CI pipelines for snowflex (issue #93)</span>
 
-I'll start by logging this as a goal and exploring the issue.
+Logging the goal with your request verbatim before touching anything.
 
-<span class="command">deciduous add goal "Fix connection timeout handling" -c 90 --prompt-stdin &lt;&lt; 'EOF'
-Fix issue #93 - connection timeout handling
+<span class="command">deciduous add goal "Add CI pipelines for snowflex" -c 90 --prompt-stdin &lt;&lt; 'EOF'
+Add support for running tests in CI/CD. We need GitHub Actions workflows
+for both unit tests and integration tests. See issue #93.
 EOF</span>
-<span class="output">Created node #42: goal "Fix connection timeout handling"</span>
-
-<span class="command">deciduous add option "Add retry with exponential backoff" -c 80</span>
-<span class="command">deciduous add option "Implement circuit breaker pattern" -c 70</span>
-<span class="command">deciduous link 42 43 -r "simpler approach"</span>
-<span class="command">deciduous link 42 44 -r "more resilient but complex"</span>
-
-<em>[Claude evaluates options, implements chosen approach, commits...]</em>
-
-<span class="command">deciduous add action "Implemented retry with backoff" --commit HEAD</span>
-<span class="command">deciduous add outcome "Timeout errors reduced 95% in test suite" -c 95</span>
-                </div>
+<span class="output">Created node 16 (type: goal, title: Add CI pipelines for snowflex) [confidence: 90%] [prompt: 130 chars] [branch: ci-pipelines]</span></div>
             </div>
 
-            <p>Each decision is captured as it happens. The reasoning is fresh, the context is complete. You didn't have to type a single deciduous command.</p>
+            <p>In a Claude Code session connected to the server, the agent makes the same writes through MCP (<code>add_node</code> with <code>parent_id</code>, one call per node and edge) rather than the shell. The graph is identical either way.</p>
 
-            <h2>A Quick Example</h2>
-
-            <p>Here's what a decision flow looks like in deciduous:</p>
-
-            <pre style="line-height: 1.8;">
-                ┌────────────────────┐
-                │ goal: Fix timeout  │
-                │ handling (#93)     │
-                └─────────┬──────────┘
-                          │
-            ┌─────────────┼─────────────┐
-            ▼                           ▼
-     ┌──────────────┐          ┌──────────────┐
-     │ option:      │          │ option:      │
-     │ Retry with   │          │ Circuit      │
-     │ backoff      │          │ breaker      │
-     └──────┬───────┘          └──────────────┘
-            │
-            ▼
-     ┌──────────────┐
-     │ decision:    │
-     │ Use retry    │──── "simpler, sufficient
-     │ approach     │      for this case"
-     └──────┬───────┘
-            │
-            ▼
-     ┌──────────────┐
-     │ action:      │
-     │ Implement    │──── commit: abc123
-     │ retry logic  │
-     └──────┬───────┘
-            │
-            ▼
-     ┌──────────────┐
-     │ outcome:     │
-     │ Timeouts     │
-     │ reduced 95%  │
-     └──────────────┘</pre>
-
-            <p>Now this decision chain is permanently recorded. Anyone can query the graph to understand not just <em>what</em> was built, but <em>why</em>.</p>
-
-            <h2>The Core Insight</h2>
-
-            <p>The insight behind deciduous is simple:</p>
-
-            <div class="info-box tip">
-                <strong>Decisions are more valuable than documentation.</strong>
-                <p>Documentation describes what exists. A decision graph captures <em>why</em> it exists, what alternatives were considered, and what tradeoffs were made. This is the knowledge that actually helps future developers (and future AI sessions).</p>
-            </div>
-
-            <p>When an AI assistant logs decisions in real-time, you get documentation as a side effect of the development process&mdash;not as an afterthought.</p>
-
-            <h2>What You'll Get</h2>
-
-            <p>After setting up deciduous, you'll have:</p>
+            <h2>What You Get</h2>
 
             <ul>
-                <li><strong>A queryable history</strong> of every major decision</li>
-                <li><strong>A conversational Q&amp;A interface</strong> &mdash; ask your AI assistant questions about past decisions and get answers grounded in the graph</li>
-                <li><strong>Informed AI decisions</strong> &mdash; once the graph has history, your AI uses it to make better choices, avoiding approaches that were already tried and rejected</li>
-                <li><strong>Automatic context recovery</strong> when Claude starts new sessions</li>
-                <li><strong>Visual decision graphs</strong> for PRs and documentation</li>
-                <li><strong>Git commit integration</strong> linking decisions to code</li>
-                <li><strong>A web viewer</strong> for browsing the graph interactively</li>
+                <li><strong>Context that survives.</strong> <code>/recover</code> at session start reads the graph, imports any transcript the graph does not have yet, and checks the message board.</li>
+                <li><strong>Questions answered from evidence.</strong> Ask "why did we drop ODBC?" and the assistant answers from the revisit node and the observations behind it.</li>
+                <li><strong>PRs that explain themselves.</strong> <code>deciduous writeup</code> and <code>deciduous dot --png</code> produce the PR body and the picture.</li>
+                <li><strong>Several agents, one graph.</strong> Parallel sessions write to the same workspace and coordinate on the message board (<code>deciduous board</code>).</li>
             </ul>
+
+            <p>Deciduous tracks its own development this way. The graph exported with this repository held 1,465 nodes and 1,313 edges on 2026-10-24.</p>
 
             <h2>Why "Deciduous"?</h2>
 
-            <p>Deciduous trees shed their leaves seasonally but their structure persists. Like Claude's context, the leaves (working memory) fall away&mdash;but the decision graph (trunk and branches) remains, ready to support new growth.</p>
+            <p>Deciduous trees shed their leaves; the structure stays. The working memory of a session falls away, and the graph remains for the next one.</p>
 
             <div class="page-nav">
                 <a href="../index.html" class="prev">
                     <span class="label">Previous</span>
                     <span class="title">Introduction</span>
                 </a>
-                <a href="how-to-read.html" class="next">
+                <a href="../introduction/how-to-read.html" class="next">
                     <span class="label">Next</span>
-                    <span class="title">How to Read This Tutorial</span>
+                    <span class="title">How to Read This</span>
                 </a>
             </div>
         </article>
     </main>
+
+    <script src="../terminal-demo.js"></script>
 </body>
 </html>

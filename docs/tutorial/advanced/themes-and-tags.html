@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Themes &amp; Tags - The Deciduous Tutorial</title>
+    <title>Themes and Tags - The Deciduous Tutorial</title>
     <link rel="stylesheet" href="../style.css">
 
     <!-- Open Graph / Social -->
@@ -15,7 +15,7 @@
     <meta property="og:image:height" content="630" />
     <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
 </head>
-<body style="padding-top: 0;">
+<body>
     <nav class="sidebar">
         <div class="sidebar-header">
             <a href="../../" class="logo">DECIDUOUS</a>
@@ -52,11 +52,12 @@
                     <li><a href="../real-work/starting-work.html">Starting Work</a></li>
                     <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
                     <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
                     <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
                 <ul>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                     <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
@@ -80,119 +81,68 @@
         <article>
             <h1>Themes and Tags</h1>
 
-            <p class="lead">As your decision graph grows, themes let you organize nodes into cross-cutting concerns that span multiple branches and time periods.</p>
-
-            <p>Branches group nodes by <em>when</em> they were created. Themes group nodes by <em>what</em> they are about. A "transport-layer" theme might span nodes from the original ODBC implementation, the revisit that reconsidered it, and the HTTP replacement&mdash;all created at different times on different branches, but all part of the same architectural concern.</p>
+            <p class="lead">Branches group nodes by when. Themes group them by what: the transport layer is a concern that runs from the 2019 ODBC option through the 2021 pivot to the HTTP rewrite.</p>
 
             <h2>Creating Themes</h2>
 
-            <p>Create a theme with a name, optional color, and optional description:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Creating themes</div>
-                <div class="terminal-body"><span class="command">deciduous themes create transport-layer --color "#3b82f6" -d "Transport abstraction and protocol decisions"</span>
-<span class="output">Created theme 'transport-layer' (id: 2, color: #3b82f6)</span>
-
-<span class="command">deciduous themes create ci-infrastructure --color "#22c55e" -d "CI/CD and testing infrastructure decisions"</span>
-<span class="output">Created theme 'ci-infrastructure' (id: 1, color: #22c55e)</span></div>
-            </div>
-
-            <p>The color is used in the web viewer to visually distinguish themed nodes. If you omit the color, deciduous assigns one automatically.</p>
-
-            <h2>Listing Themes</h2>
-
-            <div class="terminal-session">
-                <div class="terminal-header">deciduous themes list</div>
-                <div class="terminal-body"><span class="command">deciduous themes list</span>
+            <pre><span class="cmd">$ deciduous themes create transport-layer --color "#3b82f6" -d "Transport abstraction and protocol decisions"</span>
+<span class="output">Created theme 'transport-layer' (id: 1, color: #3b82f6)</span>
+<span class="cmd">$ deciduous themes create ci-infrastructure -d "CI/CD and testing infrastructure"</span>
+<span class="output">Created theme 'ci-infrastructure' (id: 2, color: #6b7280)</span>
+<span class="cmd">$ deciduous themes list</span>
 <span class="output">2 themes:
 NAME                 COLOR      DESCRIPTION
-ci-infrastructure    #22c55e    CI/CD and testing infrastructure decisions
-transport-layer      #3b82f6    Transport abstraction and protocol decisions</span></div>
-            </div>
+------------------------------------------------------------
+ci-infrastructure    #6b7280    CI/CD and testing infrastructure
+transport-layer      #3b82f6    Transport abstraction and protocol decisions</span></pre>
+
+            <p>Names are lower-cased and dash-separated. Without <code>--color</code> every theme gets the same grey, <code>#6b7280</code>; pick colours if the viewer is where you will use them.</p>
 
             <h2>Tagging Nodes</h2>
 
-            <p>Apply a theme to a node with <code>tag add</code>:</p>
+            <pre><span class="cmd">$ deciduous tag add 10 transport-layer</span>
+<span class="output">Tagged theme 'transport-layer' to node 10</span>
+<span class="cmd">$ deciduous tag add 11 transport-layer</span>
+<span class="output">Tagged theme 'transport-layer' to node 11</span>
+<span class="cmd">$ deciduous tag add 16 ci-infrastructure</span>
+<span class="output">Tagged theme 'ci-infrastructure' to node 16</span>
+<span class="cmd">$ deciduous tag list 10</span>
+<span class="output">Themes for node 10:
+  transport-layer (#3b82f6)</span>
+<span class="cmd">$ deciduous nodes --theme transport-layer</span>
+<span class="output">2 nodes:
+ID    CHANGE    TYPE         STATUS     TITLE
+------------------------------------------------------------------------------
+10    47546c20  revisit      pending    Reconsidering: Working single-connection ODBC wrapper
+11    945c0ef6  decision     pending    Switch to Snowflake's HTTP REST API with JWT auth</span></pre>
 
-            <div class="terminal-session">
-                <div class="terminal-header">Tagging nodes</div>
-                <div class="terminal-body"><span class="command">deciduous tag add 34 transport-layer</span>
-<span class="output">Tagged theme 'transport-layer' to node 34</span>
+            <p>A node can carry several themes. <code>nodes --theme</code> is the query that makes a theme useful from the terminal.</p>
 
-<span class="command">deciduous tag add 36 transport-layer</span>
-<span class="output">Tagged theme 'transport-layer' to node 36</span>
+            <h2>Suggestions</h2>
 
-<span class="command">deciduous tag add 37 transport-layer</span>
-<span class="output">Tagged theme 'transport-layer' to node 37</span>
+            <pre><span class="cmd">$ deciduous tag suggest 12</span>
+<span class="output">No theme suggestions found.</span></pre>
 
-<span class="command">deciduous tag add 57 ci-infrastructure</span>
-<span class="output">Tagged theme 'ci-infrastructure' to node 57</span></div>
-            </div>
+            <p><code>tag suggest [node]</code> (all untagged nodes when the id is omitted) matches node titles against theme names and descriptions by keyword; the help text also mentions AI, but in the scratch project it found nothing for an option whose title shares no word with a theme, and made no external call. <code>--apply</code> writes the matches it does find as <code>suggested</code> tags; <code>tag confirm &lt;node&gt; &lt;theme&gt;</code> turns a suggested tag into a manual one. Expect to tag by hand, or have Claude do it, which is what the graph's agent is good at.</p>
 
-            <p>A single node can have multiple themes. The revisit node #34 might belong to both "transport-layer" and a broader "architecture-pivots" theme.</p>
+            <h2>Removing</h2>
 
-            <h2>Viewing Tags on a Node</h2>
+            <pre><span class="cmd">$ deciduous tag remove 11 transport-layer</span>
+<span class="output">Removed theme 'transport-layer' from node 11</span>
+<span class="cmd">$ deciduous themes delete ci-infrastructure</span>
+<span class="output">Deleted theme 'ci-infrastructure'</span></pre>
 
-            <div class="terminal-session">
-                <div class="terminal-header">Listing tags for a node</div>
-                <div class="terminal-body"><span class="command">deciduous tag list 34</span>
-<span class="output">Node #34 themes:
-  transport-layer (#3b82f6)</span></div>
-            </div>
+            <p><code>themes delete</code> removes the theme and every tag that used it.</p>
 
-            <h2>AI-Suggested Tagging</h2>
+            <h2>Where Themes Go, and Where They Do Not</h2>
 
-            <p>For large graphs, manually tagging every node is tedious. The <code>tag suggest</code> command asks your AI assistant to analyze node titles and descriptions, then propose theme assignments:</p>
+            <p><code>deciduous sync</code> carries themes and tags in <code>.deciduous/graph.json</code> (the <code>sync</code> output on the previous page counts "2 themes, 3 tags on disk"), so in the git model they travel. They do not go to the graph server: the SQLite <code>themes</code>/<code>node_themes</code> tables and the matching PostgreSQL columns both exist, but nothing in 1.1.0 carries the assignments across, and <code>deciduous graph</code> does not include them. On a project with a server, a theme is local to the machine that made it.</p>
 
-            <div class="terminal-session">
-                <div class="terminal-header">AI-suggested tags</div>
-                <div class="terminal-body"><span class="command">deciduous tag suggest</span>
-<span class="output">Suggestions:
-  Node #33 "ODBC memory issues observed in production"
-    -> transport-layer (confidence: 92%)
-  Node #35 "Transport behavior with pluggable backends"
-    -> transport-layer (confidence: 88%)
-  Node #38 "Direct HTTP client without transport abstraction"
-    -> transport-layer (confidence: 85%)
-  Node #58 "Use separate workflow files"
-    -> ci-infrastructure (confidence: 90%)
-
-Accept suggestions? [y/n/select]</span></div>
-            </div>
-
-            <p>Review the suggestions and confirm them:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Confirming suggestions</div>
-                <div class="terminal-body"><span class="command">deciduous tag confirm</span>
-<span class="output">Applied 4 theme tags</span></div>
-            </div>
-
-            <h2>Removing Tags and Deleting Themes</h2>
-
-            <p>Remove a tag from a specific node:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Removing a tag</div>
-                <div class="terminal-body"><span class="command">deciduous tag remove 38 transport-layer</span>
-<span class="output">Removed theme 'transport-layer' from node 38</span></div>
-            </div>
-
-            <p>Delete a theme entirely (this removes the theme and all its tag associations):</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Deleting a theme</div>
-                <div class="terminal-body"><span class="command">deciduous themes delete ci-infrastructure</span>
-<span class="output">Deleted theme 'ci-infrastructure' and removed 2 tag associations</span></div>
-            </div>
-
-            <h2>Themes in the Web Viewer</h2>
-
-            <p>When you run <code>deciduous serve</code> or deploy to GitHub Pages, themed nodes are color-coded with their theme color. The viewer's filter panel lets you show only nodes belonging to a specific theme, making it easy to trace a single concern across the entire project history.</p>
+            <p>In the web viewer (<code>deciduous serve</code>) themed nodes take the theme's colour and the filter panel can show one theme at a time.</p>
 
             <div class="info-box tip">
-                <strong>Themes complement branches</strong>
-                <p>Use branches to filter by <em>when</em> work happened (which feature or sprint). Use themes to filter by <em>what</em> the work was about (which architectural concern). Together, they give you two orthogonal ways to slice the graph.</p>
+                <strong>Two orthogonal slices</strong>
+                <p><code>nodes -b ci-pipelines</code> is when. <code>nodes --theme transport-layer</code> is what. Both are cheap to apply; themes are the one you have to put there yourself.</p>
             </div>
 
             <div class="page-nav">
@@ -200,7 +150,7 @@ Accept suggestions? [y/n/select]</span></div>
                     <span class="label">Previous</span>
                     <span class="title">Exporting Your Work</span>
                 </a>
-                <a href="hooks.html" class="next">
+                <a href="../advanced/hooks.html" class="next">
                     <span class="label">Next</span>
                     <span class="title">Hooks</span>
                 </a>
