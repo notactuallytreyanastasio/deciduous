@@ -91,7 +91,7 @@ enum Command {
 
     /// Add a new node to the decision graph
     Add {
-        /// Node type: goal, decision, option, action, outcome, observation
+        /// Node type: goal, decision, option, action, outcome, observation, revisit
         node_type: String,
 
         /// Title of the node
@@ -184,7 +184,7 @@ enum Command {
         /// Node: local id, change_id prefix, or server id
         id: String,
 
-        /// New status: pending, active, completed, rejected
+        /// New status: pending, active, completed, rejected, superseded, abandoned
         status: String,
     },
 
@@ -441,7 +441,7 @@ enum Command {
         action: RoadmapAction,
     },
 
-    /// Manage Claude Code hooks (pre-edit blocks, post-commit reminders)
+    /// Manage Claude Code hooks (the daily version check and board mentions; nothing that blocks)
     Hooks {
         #[command(subcommand)]
         action: HooksAction,
