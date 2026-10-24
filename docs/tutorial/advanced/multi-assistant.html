@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Assistant - The Deciduous Tutorial</title>
+    <title>Working with Multiple AI Assistants - The Deciduous Tutorial</title>
     <link rel="stylesheet" href="../style.css">
 
     <!-- Open Graph / Social -->
@@ -15,7 +15,7 @@
     <meta property="og:image:height" content="630" />
     <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
 </head>
-<body style="padding-top: 0;">
+<body>
     <nav class="sidebar">
         <div class="sidebar-header">
             <a href="../../" class="logo">DECIDUOUS</a>
@@ -52,11 +52,12 @@
                     <li><a href="../real-work/starting-work.html">Starting Work</a></li>
                     <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
                     <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
                     <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
                 <ul>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                     <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
@@ -80,163 +81,130 @@
         <article>
             <h1>Working with Multiple AI Assistants</h1>
 
-            <p class="lead">Deciduous is not limited to Claude Code. The same decision graph works with OpenCode, Windsurf, and other AI assistants.</p>
+            <p class="lead">Claude Code is the default; <code>--opencode</code> and <code>--windsurf</code> add the others. The graph is the same; what differs is which files carry the instructions and which assistant gets the MCP server registered for it.</p>
 
-            <p>The decision graph is stored in a SQLite database and operated through the <code>deciduous</code> CLI. Any AI assistant that can run shell commands can use it. What differs is the integration layer&mdash;the instruction files that teach the assistant when and how to log decisions.</p>
+            <h2>One init for All Three</h2>
 
-            <h2>Supported Assistants</h2>
+            <pre><span class="cmd">$ deciduous init --both --windsurf</span>
+<span class="output">Initializing Deciduous for Claude Code + OpenCode...
+   Directory: .
+
+   Creating .deciduous/config.toml
+   Creating .deciduous/.version (1.1.0)
+   Creating .deciduous/deciduous.db
+   Creating .claude/commands/decision.md
+   ...
+   Creating .claude/skills/archaeology.md
+   Creating CLAUDE.md
+
+Installing OpenCode integration...
+   Installed .opencode/plugins/version-check.ts
+   Installed .opencode/commands/work.md
+   Installed .opencode/commands/recover.md
+   Installed .opencode/commands/decision.md
+   Installed .opencode/commands/build-test.md
+   Installed .opencode/commands/serve-ui.md
+   Installed .opencode/commands/document.md
+   Installed .opencode/commands/sync.md
+   Installed .opencode/commands/decision-graph.md
+   Installed .opencode/skills/pulse/SKILL.md
+   Installed .opencode/skills/narratives/SKILL.md
+   Installed .opencode/skills/archaeology/SKILL.md
+   Installed .opencode/agents/deciduous.md
+   Installed .opencode/tools/deciduous.ts
+   Created opencode.json
+   Created AGENTS.md (converted from CLAUDE.md)
+
+Setting up Windsurf integration...
+   Creating .windsurf/hooks.json
+   Creating .windsurf/hooks/version-check.sh (executable)
+   Creating .windsurf/rules/deciduous.md
+   Configured Windsurf integration
+   ...
+
+Deciduous initialized for Claude Code + OpenCode + Windsurf!
+
+Windsurf integration:
+  - Always-on rules in .windsurf/rules/deciduous.md
+  - Version check in .windsurf/hooks.json</span></pre>
+
+            <p><code>--both</code> is Claude Code and OpenCode; <code>--opencode</code> alone is OpenCode only; <code>--windsurf</code> adds Windsurf to either, and a project that already has a <code>.windsurf/</code> directory gets it without the flag. Then the same server question as any other <code>init</code>.</p>
 
             <table>
-                <thead>
-                    <tr>
-                        <th>Assistant</th>
-                        <th>Init Flag</th>
-                        <th>Integration Files</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Assistant</th><th>Instructions</th><th>Commands and skills</th><th>Hooks</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td><strong>Claude Code</strong></td>
-                        <td>(default)</td>
-                        <td><code>CLAUDE.md</code>, <code>.claude/commands/</code>, <code>.claude/skills/</code></td>
-                    </tr>
-                    <tr>
-                        <td><strong>OpenCode</strong></td>
-                        <td><code>--opencode</code></td>
-                        <td><code>AGENTS.md</code>, OpenCode-compatible instructions</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Windsurf</strong></td>
-                        <td><code>--windsurf</code></td>
-                        <td><code>.windsurfrules</code>, Windsurf-compatible instructions</td>
-                    </tr>
+                    <tr><td>Claude Code</td><td><code>CLAUDE.md</code> section</td><td><code>.claude/commands/*.md</code> (9), <code>.claude/skills/*.md</code> (3), <code>.claude/agents.toml</code></td><td><code>.claude/hooks/version-check.sh</code>, <code>board-mentions.sh</code>, <code>.claude/settings.json</code></td></tr>
+                    <tr><td>OpenCode</td><td><code>AGENTS.md</code>, referenced from <code>opencode.json</code></td><td><code>.opencode/commands/*.md</code> (8, no <code>demo-swarm</code>), <code>.opencode/skills/&lt;name&gt;/SKILL.md</code> (3), <code>.opencode/agents/deciduous.md</code>, <code>.opencode/tools/deciduous.ts</code></td><td><code>.opencode/plugins/version-check.ts</code></td></tr>
+                    <tr><td>Windsurf</td><td><code>.windsurf/rules/deciduous.md</code> (always-on rule for Cascade)</td><td>none</td><td><code>.windsurf/hooks.json</code>, <code>.windsurf/hooks/version-check.sh</code></td></tr>
                 </tbody>
             </table>
 
-            <h2>Initializing for Different Assistants</h2>
+            <p>Earlier docs named a <code>.windsurfrules</code> file; 1.1.0 writes <code>.windsurf/rules/deciduous.md</code>. <code>AGENTS.md</code> is generated from <code>CLAUDE.md</code> when that exists, with the deciduous section inside the same <code>&lt;!-- deciduous:start --&gt;</code> markers, so <code>update</code> can find it; if <code>AGENTS.md</code> already exists the section is appended.</p>
 
-            <p>When you run <code>deciduous init</code>, the default is Claude Code integration. To add support for other assistants, use the appropriate flag:</p>
+            <pre><span class="cmd">$ cat opencode.json</span>
+<span class="output">{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md"
+  ]
+}</span>
 
-            <div class="terminal-session">
-                <div class="terminal-header">Initializing for OpenCode</div>
-                <div class="terminal-body"><span class="command">deciduous init --opencode</span>
-<span class="output">Initialized deciduous in /Users/alice/projects/snowflex
-  Created .deciduous/
-  Created .deciduous/config.toml
-  Created CLAUDE.md (decision graph workflow)
-  Created AGENTS.md (OpenCode integration)
-  Created .claude/commands/ (7 commands)
-  Created .claude/skills/ (3 skills)
-  Created docs/ (web viewer)</span></div>
-            </div>
+<span class="cmd">$ deciduous opencode status</span>
+<span class="output">OpenCode Integration Status
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-            <div class="terminal-session">
-                <div class="terminal-header">Initializing for Windsurf</div>
-                <div class="terminal-body"><span class="command">deciduous init --windsurf</span>
-<span class="output">Initialized deciduous in /Users/alice/projects/snowflex
-  Created .deciduous/
-  Created .deciduous/config.toml
-  Created CLAUDE.md (decision graph workflow)
-  Created .windsurfrules (Windsurf integration)
-  Created .claude/commands/ (7 commands)
-  Created .claude/skills/ (3 skills)
-  Created docs/ (web viewer)</span></div>
-            </div>
+Directory:
+   ✓ .opencode/
 
-            <p>You can pass multiple flags to set up integration for several assistants simultaneously:</p>
+Plugins (Hooks):
+   ✓ version-check.ts
 
-            <div class="terminal-session">
-                <div class="terminal-header">Multi-assistant init</div>
-                <div class="terminal-body"><span class="command">deciduous init --opencode --windsurf</span>
-<span class="output">Initialized deciduous in /Users/alice/projects/snowflex
-  Created .deciduous/
-  Created CLAUDE.md (decision graph workflow)
-  Created AGENTS.md (OpenCode integration)
-  Created .windsurfrules (Windsurf integration)
-  Created .claude/commands/ (7 commands)
-  ...</span></div>
-            </div>
+Commands:
+   ✓ /document
+   ✓ /work
+   ✓ /recover
+   ✓ /build-test
+   ✓ /sync
+   ✓ /serve-ui
+   ✓ /decision
+   ✓ /decision-graph
 
-            <h2>Managing OpenCode Integration</h2>
+Skills:
+   ✓ /narratives
+   ✓ /archaeology
+   ✓ /pulse
 
-            <p>For finer control over the OpenCode integration, use the <code>opencode</code> subcommand:</p>
+Agents:
+   ✓ @deciduous
 
-            <div class="terminal-session">
-                <div class="terminal-header">OpenCode management</div>
-                <div class="terminal-body"><span class="command">deciduous opencode install</span>
-<span class="output">Installed OpenCode integration:
-  Created AGENTS.md with decision graph workflow
-  Feature parity with Claude Code integration</span>
+Tools:
+   ✓ deciduous.ts
 
-<span class="command">deciduous opencode status</span>
-<span class="output">OpenCode integration: installed
-  AGENTS.md: up to date (v0.13.2)
-  Last updated: 2024-01-15</span></div>
-            </div>
+Configuration:
+   ✓ opencode.json
+   ✓ AGENTS.md</span></pre>
 
-            <p>To remove the OpenCode integration without affecting other assistants:</p>
+            <p><code>deciduous opencode install</code> adds OpenCode to a project after the fact; <code>opencode uninstall</code> removes <code>.opencode/</code>.</p>
 
-            <div class="terminal-session">
-                <div class="terminal-header">Uninstalling OpenCode</div>
-                <div class="terminal-body"><span class="command">deciduous opencode uninstall</span>
-<span class="output">Removed OpenCode integration:
-  Deleted AGENTS.md</span></div>
-            </div>
+            <h2>Same Graph</h2>
 
-            <h2>Same Graph, Different Assistants</h2>
+            <p>Every assistant that can run a shell command can run <code>deciduous add</code>, and every node lands in the same database (and, with a <code>[remote]</code>, on the same server). The OpenCode tool at <code>.opencode/tools/deciduous.ts</code> wraps the CLI for OpenCode's tool-calling; the Windsurf rules tell Cascade to run the CLI. A goal Claude Code created this morning is what OpenCode's <code>/recover</code> finds this afternoon.</p>
 
-            <p>The key insight is that every assistant writes to the same SQLite database. A node created by Claude Code is visible to OpenCode and vice versa. The CLI is the common interface:</p>
+            <h2>What Is Claude Code Only</h2>
 
-            <div class="terminal-session">
-                <div class="terminal-header">Shared database</div>
-                <div class="terminal-body"><span class="comment"># Claude Code creates a goal</span>
-<span class="command">deciduous add goal "Add CI pipelines for snowflex" -c 90</span>
-<span class="output">Created node #57: goal "Add CI pipelines for snowflex"</span>
+            <ul>
+                <li><strong>MCP registration.</strong> <code>init</code>'s server step registers the shared server with Claude Code (<code>claude mcp add --scope user --transport http deciduous &lt;url&gt;/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</code>). For any other MCP client, that is the endpoint and header to configure by hand; <code>deciduous mcp</code> is the local stdio alternative for clients that can spawn a process.</li>
+                <li><strong>Server-aware instructions.</strong> A project with a <code>[remote]</code> gets a <code>CLAUDE.md</code> section and commands written for the server model (<code>remote status</code>, no <code>graph.json</code>). The 1.0.12 changelog is explicit that OpenCode and Windsurf files have no remote-aware versions yet; their text still describes <code>deciduous sync</code> and <code>graph.json</code>.</li>
+                <li><strong>The transcript import</strong> reads Claude Code's JSONL format only. Another assistant's log is not refused, it is a file with no user prompt in it, and the import says so.</li>
+                <li><strong>The message-board hook</strong> exists for Claude Code only; the board itself (<code>deciduous board</code>) is a CLI any of them can run.</li>
+            </ul>
 
-<span class="comment"># OpenCode picks up where Claude left off</span>
-<span class="command">deciduous nodes --type goal</span>
-<span class="output">3 nodes:
-ID    TYPE    STATUS    TITLE
-1     goal    active    Create an Elixir library for querying Snowflake
-41    goal    active    Transport layer evolution
-57    goal    active    Add CI pipelines for snowflex</span>
+            <h2>Updating</h2>
 
-<span class="comment"># OpenCode adds an action linked to Claude's goal</span>
-<span class="command">deciduous add action "Implement unit test CI workflow" -c 85</span>
-<span class="output">Created node #60: action "Implement unit test CI workflow"</span>
-<span class="command">deciduous link 57 60 -r "Implementation"</span></div>
-            </div>
-
-            <p>This means you can switch between assistants mid-project without losing any decision context. The graph is the shared memory.</p>
-
-            <h2>Updating Integration Files</h2>
-
-            <p>When you upgrade deciduous, the integration files for all installed assistants are updated automatically:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Updating all integrations</div>
-                <div class="terminal-body"><span class="command">deciduous update</span>
-<span class="output">Updated integration files to v0.13.2:
-  Updated CLAUDE.md (decision graph workflow section)
-  Updated .claude/commands/ (7 commands)
-  Updated .claude/skills/ (3 skills)
-  Updated AGENTS.md (OpenCode integration)
-  Skipped .windsurfrules (not installed)</span></div>
-            </div>
-
-            <p>The <code>update</code> command auto-detects which assistants are installed by checking for their integration files. It only updates files for assistants that are present.</p>
-
-            <div class="info-box tip">
-                <strong>Check before updating</strong>
-                <p>Run <code>deciduous check-update</code> to see if your integration files are out of date without making any changes. This compares the version in <code>.deciduous/.version</code> with the current binary version.</p>
-            </div>
-
-            <h2>Integration Parity</h2>
-
-            <p>All assistant integrations have feature parity. The same behavioral rules&mdash;log before you code, connect every node, capture verbatim prompts&mdash;are encoded in each integration's instruction format. The decision graph workflow is identical; only the file format and location differ to match each assistant's conventions.</p>
+            <p><code>deciduous update</code> detects <code>.claude/</code>, <code>.opencode/</code> and <code>.windsurf/</code> and updates whichever are present, with the same rule everywhere: a file deciduous wrote is replaced, a file someone else edited is kept (Markdown gets the new text appended in a marked block), and everything changed is backed up to <code>.deciduous/update-backups/&lt;time&gt;/</code> first. OpenCode command files are generated from the Claude templates at run time, so a project's first update after 1.0.3 appended to them rather than replacing; later updates recognise them by the hash recorded when written.</p>
 
             <div class="page-nav">
-                <a href="hooks.html" class="prev">
+                <a href="../advanced/hooks.html" class="prev">
                     <span class="label">Previous</span>
                     <span class="title">Hooks</span>
                 </a>

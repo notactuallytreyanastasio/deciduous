@@ -52,11 +52,12 @@
                     <li><a href="../real-work/starting-work.html">Starting Work</a></li>
                     <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
                     <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
                     <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
                 <ul>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                     <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
@@ -82,131 +83,89 @@
 
             <h2>One Continuous Story</h2>
 
-            <p>This tutorial follows a single project from start to finish: <strong>snowflex</strong>, an Elixir library for connecting to Snowflake databases. Rather than working through contrived examples, you'll reconstruct real architectural decisions from a real codebase, then extend it by working on an actual open issue.</p>
-
-            <p>Each section builds on the previous one. The decision graph you start building in "Reconstructing History" is the same graph you'll extend in "Live Development" and export in "Sharing." By the end, you'll have a complete, connected decision graph that tells the full story of a real project.</p>
+            <p>Every section works on the same project, <strong>snowflex</strong>. The graph you build in Reconstructing History is the one you extend in Live Development and share in Sharing. Node ids carry across pages: the snowflex history is nodes 1 to 15, the CI work is 16 to 21, the transcript import adds 23 to 29.</p>
 
             <h2>Claude Drives, You Steer</h2>
 
-            <p>This tutorial emphasizes the LLM-assisted workflow. In most sections, you'll see Claude Code sessions where Claude operates deciduous commands on your behalf. You tell Claude what you want to accomplish&mdash;reconstruct this project's history, fix this issue, export this for a PR&mdash;and Claude handles the deciduous mechanics.</p>
+            <p>Most sessions here are Claude Code sessions in which Claude runs deciduous. You say what you want; it logs. You do not have to know a single deciduous command to use the tool, and your assistant already knows them all. The commands are shown so you understand what is being recorded, and so you can run them yourself when you want to.</p>
 
-            <p>CLI details appear in "under the hood" sections for readers who want to understand what's happening at the command level. But the primary path through this tutorial assumes you're working with an AI assistant.</p>
+            <p>One thing to know before the sessions: when a project is connected to the graph server, Claude writes through MCP tools (<code>add_node</code> with a <code>parent_id</code>, <code>capture_conversation_turn</code> for a whole step) rather than through the shell. This tutorial shows the CLI form because its output is readable in a terminal, and because the CLI is what you type yourself. The nodes that result are the same.</p>
 
-            <div class="info-box tip">
-                <strong>You don't need to memorize any deciduous CLI commands to get started.</strong>
-                <p>Your AI assistant already knows them all. The tutorial shows what happens during a session so you understand the system&mdash;not so you can type the commands yourself. Think of it like watching someone drive before you get behind the wheel: useful context, not a typing exercise.</p>
-            </div>
+            <h2>What the Output Is</h2>
 
-            <h2>What the Sessions Look Like</h2>
-
-            <p>Throughout the tutorial, you'll see terminal demos that show real Claude Code interactions. They look like this:</p>
+            <p>Every <code>deciduous</code> command in this tutorial was run against the 1.1.0 release binary on 2026-10-24, in a scratch repository standing in for snowflex, and the output shown is what it printed. Where a command did not do what the previous version of this tutorial claimed, the page says so. Claude's prose in the sessions is edited for length; the commands and their output are not.</p>
 
             <div class="terminal-session">
                 <div class="terminal-header">Claude Code Session</div>
-                <div class="terminal-body">
-<span class="user-input">&gt; /decision-graph</span>
+                <div class="terminal-body"><span class="user-input">&gt; /decision-graph</span>
 
-I'll analyze the git history and reconstruct the decision graph. Let me start with the earliest commits.
+I'll read the whole log before building anything.
 
-<span class="command">git log --oneline --reverse | head -15</span>
-<span class="output">a1b2c3d Initial commit - ODBC wrapper
-d4e5f6g Add basic query support
-...</span>
-
-<span class="command">deciduous add goal "snowflex connection architecture" -c 90</span>
-<span class="output">Created node #1: goal "snowflex connection architecture"</span>
-                </div>
+<span class="command">git log --oneline --reverse | wc -l</span>
+<span class="output">130</span></div>
             </div>
 
-            <p>The <code>&gt;</code> line is what you type. Everything else is Claude working. The <span class="command">highlighted commands</span> are what Claude runs, and the <span class="output">dimmer text</span> is terminal output. Narrative text between commands is Claude explaining its thinking.</p>
-
-            <p>These sessions are edited for clarity&mdash;real sessions include more back-and-forth&mdash;but every command shown is a real deciduous command that produces real output.</p>
+            <p>The <code>&gt;</code> line is what you type. Highlighted lines are commands Claude ran; dimmer lines are their output; plain text is Claude talking. Animated sessions (with Pause and Replay buttons) replay the same thing step by step.</p>
 
             <h2>Tutorial Structure</h2>
 
-            <p>The tutorial is organized into six sections:</p>
-
             <ol>
-                <li><strong>Getting Started</strong> &mdash; Install deciduous and initialize it in the snowflex repo. See what files Claude gets when you run <code>deciduous init</code> and why they matter.</li>
-                <li><strong>Reconstructing History</strong> &mdash; The heart of the tutorial. Use <code>/decision-graph</code> to mine snowflex's git log and build a decision graph covering two years of architectural evolution. Learn about observations, pivots, and the revisit node.</li>
-                <li><strong>Live Development</strong> &mdash; Switch from archaeology to forward logging. Use <code>/work</code> to tackle a real open issue (#93), attaching documents and evidence as you go.</li>
-                <li><strong>Sharing</strong> &mdash; Export your graph for teammates. Learn the patch-based sync system and the PR workflow with auto-generated writeups and decision visualizations.</li>
-                <li><strong>Advanced</strong> &mdash; Themes and tags for organizing large graphs, hooks for automating workflows, and multi-assistant support for teams using different AI tools.</li>
-                <li><strong>CLI Reference</strong> &mdash; Every command, every flag, every option. For when you need the specifics or want to script deciduous directly.</li>
+                <li><strong>Getting Started</strong>: install, <code>deciduous init</code>, the question it asks about where the graph lives, and the files your assistant is handed.</li>
+                <li><strong>Reconstructing History</strong>: <code>/decision-graph</code> on snowflex. Backdated nodes, observations, the ODBC-to-HTTP pivot via <code>archaeology pivot</code>, and the narrative.</li>
+                <li><strong>Live Development</strong>: <code>/work</code> on issue #93, attaching the issue, linking the commit, recovering after compaction, then importing the session's transcript and editing the graph.</li>
+                <li><strong>Sharing</strong>: the PR writeup and image, what teammates have to do, and the exports.</li>
+                <li><strong>Advanced</strong>: themes and tags, the hooks that exist in 1.1.0 (none of them block), and OpenCode and Windsurf.</li>
+                <li><strong>CLI Reference</strong>: every command and flag, from <code>--help</code>.</li>
             </ol>
-
-            <p>You can read straight through or jump to the section you need. If you're brand new, start with <strong>Getting Started</strong>&mdash;it takes about five minutes and gets you to a working setup. If you already have deciduous installed, skip ahead to <strong>Reconstructing History</strong> to see the tool in action on a real codebase.</p>
 
             <h2>Conventions</h2>
 
-            <h3>Terminal Commands</h3>
+            <pre><span class="cmd">$ deciduous nodes -t goal</span>
+<span class="output">4 nodes:
+ID    CHANGE    TYPE         STATUS     TITLE
+------------------------------------------------------------------------------
+1     58dbfd59  goal         pending    Create an Elixir library for querying Snowflake</span></pre>
 
-            <p>Standalone commands (outside of Claude sessions) are shown with a <code>$</code> prefix:</p>
+            <p>Lines without <code>$</code> are output. The <code>CHANGE</code> column is the first eight characters of the node's change id, which is the same on every machine while the integer id is not.</p>
 
-            <pre><span class="cmd">$ deciduous nodes --type goal</span>
-<span class="output">#1  goal  "snowflex connection architecture"  [active]  c:90
-#42 goal  "Fix connection timeout handling"   [active]  c:90</span></pre>
-
-            <p>Lines without the <code>$</code> are output from the command.</p>
-
-            <h3>Info Boxes</h3>
-
-            <div class="info-box">
-                <strong>Note</strong>
-                <p>Blue boxes contain additional context or background information.</p>
-            </div>
-
-            <div class="info-box warning">
-                <strong>Warning</strong>
-                <p>Yellow boxes flag important gotchas or things that can go wrong.</p>
-            </div>
-
-            <div class="info-box tip">
-                <strong>Tip</strong>
-                <p>Green boxes contain practical tips and shortcuts.</p>
-            </div>
+            <div class="info-box"><strong>Note</strong><p>Blue boxes are background.</p></div>
+            <div class="info-box warning"><strong>Warning</strong><p>Yellow boxes are things that go wrong.</p></div>
+            <div class="info-box tip"><strong>Tip</strong><p>Green boxes are shortcuts.</p></div>
 
             <h3>Node Types</h3>
-
-            <p>Node types are color-coded throughout the tutorial and in the web viewer:</p>
             <ul>
-                <li><span class="node-goal"><strong>goal</strong></span> &mdash; High-level objectives ("Fix timeout handling")</li>
-                <li><span class="node-option"><strong>option</strong></span> &mdash; Approaches considered ("Retry with backoff")</li>
-                <li><span class="node-decision"><strong>decision</strong></span> &mdash; Choice points ("Use retry approach")</li>
-                <li><span class="node-action"><strong>action</strong></span> &mdash; Implementation steps ("Implement retry logic")</li>
-                <li><span class="node-outcome"><strong>outcome</strong></span> &mdash; Results ("Timeouts reduced 95%")</li>
-                <li><span class="node-observation"><strong>observation</strong></span> &mdash; Discoveries ("ODBC driver leaks memory under load")</li>
-                <li><span class="node-revisit"><strong>revisit</strong></span> &mdash; Pivot points ("Reconsider ODBC as transport")</li>
+                <li><span class="node-goal"><strong>goal</strong></span>: what is being attempted ("Add CI pipelines for snowflex")</li>
+                <li><span class="node-option"><strong>option</strong></span>: an approach considered ("Separate workflow files")</li>
+                <li><span class="node-decision"><strong>decision</strong></span>: the choice ("Use separate workflow files")</li>
+                <li><span class="node-action"><strong>action</strong></span>: work done ("Implement unit test CI workflow")</li>
+                <li><span class="node-outcome"><strong>outcome</strong></span>: what resulted ("mix test passed")</li>
+                <li><span class="node-observation"><strong>observation</strong></span>: a fact found ("ODBC sessions expire after 4 hours idle")</li>
+                <li><span class="node-revisit"><strong>revisit</strong></span>: an approach reconsidered ("Reconsidering: Working single-connection ODBC wrapper")</li>
             </ul>
 
             <h2>Prerequisites</h2>
-
-            <p>This tutorial assumes you:</p>
             <ul>
-                <li>Are comfortable with the command line</li>
-                <li>Have <a href="https://www.rust-lang.org/tools/install">Rust installed</a> (for <code>cargo install</code>) or can install a prebuilt binary</li>
-                <li>Have <a href="https://claude.ai/claude-code">Claude Code</a> or another AI coding assistant set up</li>
-                <li>Have <code>git</code> installed</li>
+                <li>A terminal and <code>git</code>.</li>
+                <li><a href="https://claude.ai/claude-code">Claude Code</a>, or OpenCode or Windsurf (see <a href="../advanced/multi-assistant.html">Multi-Assistant</a>). The transcript import reads Claude Code's format only.</li>
+                <li>For the default setup, a PostgreSQL on <code>localhost:5432</code>. <code>init</code> tells you how to get one if nothing answers there.</li>
             </ul>
 
-            <p>No prior knowledge of Elixir is needed to follow the snowflex examples. The tutorial focuses on the decision-making process, not the language-specific code. No prior knowledge of decision graphs or graph databases is needed either.</p>
+            <p>No Elixir knowledge is needed; the snowflex code is never the point, the decisions are.</p>
 
             <h2>Getting Help</h2>
-
-            <p>If you get stuck:</p>
             <ul>
-                <li>Run <code>deciduous --help</code> for command documentation</li>
-                <li>Check the <a href="../reference/index.html">CLI Reference</a> for detailed command info</li>
-                <li>Open an issue on <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a></li>
+                <li><code>deciduous --help</code>, and <code>deciduous &lt;command&gt; --help</code> for any subcommand.</li>
+                <li>The <a href="../reference/index.html">CLI Reference</a>.</li>
+                <li>Issues at <a href="https://github.com/notactuallytreyanastasio/deciduous">github.com/notactuallytreyanastasio/deciduous</a>.</li>
             </ul>
 
             <div class="next-section">
-                <span>Ready to get started?</span>
+                <span>Ready?</span>
                 <a href="../getting-started/installing.html" class="btn">Installing Deciduous &rarr;</a>
             </div>
 
             <div class="page-nav">
-                <a href="what-is-deciduous.html" class="prev">
+                <a href="../introduction/what-is-deciduous.html" class="prev">
                     <span class="label">Previous</span>
                     <span class="title">What is Deciduous?</span>
                 </a>
@@ -217,5 +176,7 @@ d4e5f6g Add basic query support
             </div>
         </article>
     </main>
+
+    <script src="../terminal-demo.js"></script>
 </body>
 </html>

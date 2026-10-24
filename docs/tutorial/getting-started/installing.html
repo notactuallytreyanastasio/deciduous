@@ -52,11 +52,12 @@
                     <li><a href="../real-work/starting-work.html">Starting Work</a></li>
                     <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
                     <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
                     <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
                 <ul>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                     <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
@@ -80,13 +81,9 @@
         <article>
             <h1>Installing Deciduous</h1>
 
-            <p class="lead">Three ways to install, zero runtime dependencies.</p>
+            <p class="lead">The CLI is one static binary. The graph it writes to lives in PostgreSQL, so the one thing to have ready is a PostgreSQL on <code>localhost:5432</code>.</p>
 
-            <p>Deciduous is distributed as a single static binary. Pick whichever installation method works best for your setup.</p>
-
-            <h2>Option 1: Homebrew (macOS / Linux)</h2>
-
-            <p>The fastest path if you already have Homebrew installed:</p>
+            <h2>Homebrew (macOS or Linux)</h2>
 
             <div class="terminal-session">
                 <div class="terminal-header">Homebrew</div>
@@ -94,101 +91,80 @@
 <span class="command">brew install deciduous</span></div>
             </div>
 
-            <p>This installs the latest release and makes the <code>deciduous</code> command available globally. Homebrew will handle updates when you run <code>brew upgrade</code>.</p>
+            <p>Later upgrades are <code>brew upgrade deciduous</code>, followed by <code>deciduous update</code> in each project (<code>deciduous update --all ~/code</code> for all of them at once).</p>
 
-            <h2>Option 2: Cargo (Rust Toolchain)</h2>
-
-            <p>If you have the <a href="https://www.rust-lang.org/tools/install">Rust toolchain</a> installed:</p>
+            <h2>Cargo, or from Source</h2>
 
             <div class="terminal-session">
                 <div class="terminal-header">Cargo</div>
-                <div class="terminal-body"><span class="command">cargo install deciduous</span></div>
+                <div class="terminal-body"><span class="command">cargo install deciduous --locked</span>
+
+<span class="comment"># or build the repository; rust-toolchain.toml pins Rust 1.92.0</span>
+<span class="command">git clone https://github.com/notactuallytreyanastasio/deciduous.git</span>
+<span class="command">cd deciduous &amp;&amp; cargo build --release</span></div>
             </div>
 
-            <p>This compiles from source and places the binary in your Cargo bin directory (usually <code>~/.cargo/bin/</code>). Compilation takes a couple of minutes on most machines.</p>
+            <p>The binary lands in <code>~/.cargo/bin/</code> (or <code>target/release/</code> from source). The toolchain is pinned because stable Rust moved in October 2026 and clippy 1.99 started reporting lints inside a derive the crate uses; the pin keeps a tree that did not change building the same way.</p>
 
-            <h2>Option 3: Pre-built Binaries</h2>
+            <h2>Pre-built Binaries</h2>
 
-            <p>Download a pre-built binary directly from the <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">GitHub Releases page</a>. Binaries are available for every major platform:</p>
+            <p>From the <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">GitHub Releases</a> page:</p>
 
             <table>
-                <thead>
-                    <tr>
-                        <th>Platform</th>
-                        <th>Architecture</th>
-                        <th>Binary Name</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Platform</th><th>Binary</th></tr></thead>
                 <tbody>
-                    <tr>
-                        <td>macOS</td>
-                        <td>Apple Silicon (M1/M2/M3/M4)</td>
-                        <td><code>deciduous-darwin-arm64</code></td>
-                    </tr>
-                    <tr>
-                        <td>macOS</td>
-                        <td>Intel</td>
-                        <td><code>deciduous-darwin-amd64</code></td>
-                    </tr>
-                    <tr>
-                        <td>Linux</td>
-                        <td>x86_64</td>
-                        <td><code>deciduous-linux-amd64</code></td>
-                    </tr>
-                    <tr>
-                        <td>Linux</td>
-                        <td>ARM64</td>
-                        <td><code>deciduous-linux-arm64</code></td>
-                    </tr>
-                    <tr>
-                        <td>Windows</td>
-                        <td>x86_64</td>
-                        <td><code>deciduous-windows-amd64.exe</code></td>
-                    </tr>
+                    <tr><td>macOS, Apple Silicon</td><td><code>deciduous-darwin-arm64</code></td></tr>
+                    <tr><td>macOS, Intel</td><td><code>deciduous-darwin-amd64</code></td></tr>
+                    <tr><td>Linux, x86_64</td><td><code>deciduous-linux-amd64</code></td></tr>
+                    <tr><td>Linux, ARM64</td><td><code>deciduous-linux-arm64</code></td></tr>
+                    <tr><td>Windows, x86_64</td><td><code>deciduous-windows-amd64.exe</code></td></tr>
                 </tbody>
             </table>
 
-            <p>After downloading, make the binary executable and move it somewhere on your <code>PATH</code>:</p>
-
             <div class="terminal-session">
-                <div class="terminal-header">Manual Install</div>
-                <div class="terminal-body"><span class="command">chmod +x deciduous-darwin-arm64</span>
-<span class="command">mv deciduous-darwin-arm64 /usr/local/bin/deciduous</span></div>
+                <div class="terminal-header">Manual install</div>
+                <div class="terminal-body"><span class="command">curl -LO https://github.com/notactuallytreyanastasio/deciduous/releases/latest/download/deciduous-darwin-arm64</span>
+<span class="command">chmod +x deciduous-darwin-arm64</span>
+<span class="command">sudo mv deciduous-darwin-arm64 /usr/local/bin/deciduous</span></div>
             </div>
 
-            <h2>Verify the Installation</h2>
-
-            <p>Regardless of which method you chose, confirm that deciduous is available:</p>
+            <h2>Verify</h2>
 
             <div class="terminal-session">
                 <div class="terminal-header">Verify</div>
                 <div class="terminal-body"><span class="command">deciduous --version</span>
-<span class="output">deciduous 0.13.2</span></div>
+<span class="output">deciduous 1.1.0</span>
+<span class="command">which -a deciduous</span></div>
             </div>
 
-            <p>If you see a version number, you are good to go.</p>
+            <p><code>which -a</code> matters if you have installed more than one way: the first on <code>PATH</code> is the one that runs, and <code>deciduous update</code> compares projects against that one's version.</p>
 
-            <h2>Optional: Graphviz for PNG Export</h2>
+            <h2>PostgreSQL</h2>
 
-            <p>Deciduous can export decision graphs as DOT files natively. If you also want to generate PNG images directly (for embedding in PRs or documentation), you will need <a href="https://graphviz.org/">Graphviz</a> installed:</p>
+            <p>The graph every project writes to lives in a server backed by PostgreSQL. By default <code>deciduous init</code> installs that server on this machine as a background service against the PostgreSQL on <code>localhost:5432</code>, connecting as your OS user. If nothing answers there, <code>init</code> says so in its menu and tells you how to get one:</p>
 
             <div class="terminal-session">
-                <div class="terminal-header">Graphviz (Optional)</div>
+                <div class="terminal-header">A PostgreSQL for the default choice</div>
+                <div class="terminal-body"><span class="comment"># macOS</span>
+<span class="command">brew install postgresql@17 &amp;&amp; brew services start postgresql@17</span>
+
+<span class="comment"># Debian / Ubuntu</span>
+<span class="command">sudo apt install postgresql</span></div>
+            </div>
+
+            <p>You can instead name any other PostgreSQL by URL, let Docker run a new one for you, or point at a server someone else runs. All four are offered on the next page. Nothing else is installed by hand: the server executable (one file with Erlang and Elixir inside) is downloaded for the CLI's own version and verified against the release's checksums.</p>
+
+            <h2>Optional: Graphviz</h2>
+
+            <p><code>deciduous dot</code> writes DOT without any dependency. <code>deciduous dot --png</code> runs Graphviz's <code>dot</code> to make the image that goes in a pull request:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Graphviz (optional)</div>
                 <div class="terminal-body"><span class="comment"># macOS</span>
 <span class="command">brew install graphviz</span>
 
 <span class="comment"># Ubuntu / Debian</span>
-<span class="command">sudo apt install graphviz</span>
-
-<span class="comment"># Fedora</span>
-<span class="command">sudo dnf install graphviz</span></div>
-            </div>
-
-            <p>Without Graphviz, the <code>deciduous dot --png</code> flag will not work, but everything else functions normally. You can always install it later when you need PNG output.</p>
-
-            <div class="info-box tip">
-                <strong>One dependency: PostgreSQL</strong>
-                <p>Deciduous is a single static binary with SQLite compiled in, but the graph every project writes to lives in a shared server backed by PostgreSQL. <code>deciduous init</code> installs that server on this machine as a background service (a launchd LaunchAgent on macOS, a systemd user unit on Linux) against the PostgreSQL on localhost:5432. If there is none: <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> on macOS (or Postgres.app), <code>sudo apt install postgresql</code> on Debian/Ubuntu, or let Docker run one for you when init asks.</p>
+<span class="command">sudo apt install graphviz</span></div>
             </div>
 
             <div class="page-nav">
@@ -196,12 +172,14 @@
                     <span class="label">Previous</span>
                     <span class="title">How to Read This</span>
                 </a>
-                <a href="initializing.html" class="next">
+                <a href="../getting-started/initializing.html" class="next">
                     <span class="label">Next</span>
-                    <span class="title">Initializing on a Project</span>
+                    <span class="title">Initializing</span>
                 </a>
             </div>
         </article>
     </main>
+
+    <script src="../terminal-demo.js"></script>
 </body>
 </html>
