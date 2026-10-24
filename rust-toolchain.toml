@@ -1,0 +1,8 @@
+# The Rust this crate is built and linted with, here and in CI. Stable moved
+# on 2026-10 and clippy 1.99 reported 29 `redundant_field_names` errors on
+# field declarations inside diesel's QueryableByName derive; with warnings
+# denied, every CI job went red on a tree that had not changed. Bump this on
+# purpose, with the lints that come with it, not by accident.
+[toolchain]
+channel = "1.92.0"
+components = ["clippy", "rustfmt"]
