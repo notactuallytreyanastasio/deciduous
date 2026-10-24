@@ -50,8 +50,8 @@ When the work is done:
 deciduous add outcome "What was accomplished" -c 95 --commit HEAD
 deciduous link <action_id> <outcome_id> -r "Implementation complete"
 
-# Sync the graph
-deciduous sync
+# Anything the graph server has not got?
+deciduous remote status
 ```
 
 Before you report the work finished, check the board once more (`deciduous board read --unanswered <your-label>`) and answer what is there with `--reply-to <id>`.
@@ -84,7 +84,7 @@ Outcome node with --commit HEAD (links to action)
     |
 Attach supporting documents (optional)
     |
-deciduous sync
+deciduous remote status
 ```
 
 ## What NOT to Log
@@ -123,8 +123,8 @@ deciduous doc attach <goal> diagram.png -d "Description"
 deciduous board read --unanswered <label>
 deciduous board post --as <label> -s "subject" -m "@other body" [--reply-to <id>]
 
-# Always sync
-deciduous sync
+# Before finishing: anything the server has not got?
+deciduous remote status
 ```
 
 **Now create the goal node for: $ARGUMENTS**

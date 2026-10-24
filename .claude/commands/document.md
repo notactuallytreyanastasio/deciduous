@@ -207,8 +207,8 @@ deciduous link <goal_id> <action_id> -r "Documentation complete"
 deciduous add outcome "Documentation complete for <target>" -c 95
 deciduous link <action_id> <outcome_id> -r "Successfully documented"
 
-# Sync
-deciduous sync
+# Anything the graph server has not got?
+deciduous remote status
 ```
 
 ---

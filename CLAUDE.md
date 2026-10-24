@@ -141,7 +141,7 @@ deciduous nodes --type revisit
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
 | `/decision-graph` | Build a decision graph from commit history |
-| `/sync` | Multi-user sync - pull events, rebuild, push |
+| `/sync` | Check this copy against the graph server and refresh it |
 
 ### Available Skills
 
@@ -310,7 +310,7 @@ deciduous add goal "Title" -c 90 -p "User's original request"
 deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
-deciduous sync    # Reconcile .deciduous/graph.json with teammates
+deciduous remote status   # What this copy and the graph server disagree on
 
 # Metadata flags
 # -c, --confidence 0-100   Confidence level
@@ -346,7 +346,7 @@ main_branches = ["main", "master"]
 auto_detect = true
 ```
 
-### Audit Checklist (Before Every Sync)
+### Audit Checklist (Before Ending a Session)
 
 1. Does every **outcome** link back to what caused it?
 2. Does every **action** link to why you did it?
@@ -374,14 +374,28 @@ auto_detect = true
 ### Session Start Checklist
 
 ```bash
+deciduous remote pull     # Refresh the local cache from the graph server
+deciduous remote status   # Anything this copy has that the server lacks?
 deciduous check-update    # Update needed? Run 'deciduous update' if yes
                           # (auto-checked every 24h if auto-update is on)
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected? Any gaps?
 deciduous doc list        # Any attached documents to review?
+deciduous transcript list # Sessions not yet in the graph? import them
 deciduous board read --unanswered <label>  # parallel agents: anything waiting for you?
 git status                # Current state
 ```
+
+### The Transcript Is the Log
+
+Logging in real time is the rule, and the transcript is the backstop. Claude Code writes every prompt, edit, command and result of a session to a JSONL file; `deciduous transcript import` derives goals (the prompt, verbatim), actions (edit runs, commits) and outcomes (test and build runs with their exit, the closing report) from it, each node carrying `metadata.evidence` as `proven` (a tool call and its result) or `inferred` (the assistant said so). Importing twice adds nothing.
+
+```bash
+deciduous transcript list                 # this project's sessions: imported or new
+deciduous transcript import <session-id>  # or a path to the .jsonl; --dry-run to see counts
+```
+
+What the import cannot derive is a decision or an option: whether one approach was chosen over another is a judgement about prose. Log those as you make them; the import fills in what happened around them.
 
 ### Parallel Agents: The Message Board
 
@@ -393,17 +407,17 @@ When more than one agent works at once, coordinate through deciduous, never thro
 
 One board serves every git worktree of the repository, or the server when the project has a `[remote]`. Messages are not graph nodes: not in `graph.json`, not exported, not synced. With `DECIDUOUS_AGENT_LABEL` set in a session's environment, `board post` uses it for `--as`, and the `board-mentions.sh` hook shows that label's unanswered messages at session start and as new ones arrive.
 
-### Multi-User Sync
+### The Graph Server
 
-The graph is shared through one file, `.deciduous/graph.json`, committed with the code. It is written automatically on every change.
+This project has a `[remote]` in `.deciduous/config.toml`: its graph lives on a shared server, and `.deciduous/deciduous.db` is this machine's cache of it. There is no `.deciduous/graph.json` to commit or merge, and `deciduous sync` is not the step here. Every CLI write is queued in `.deciduous/remote-log.jsonl` and sent before the command exits; MCP tools write to the server directly (pass the `workspace` named under `[remote]`).
 
 ```bash
-deciduous sync            # after git pull: import teammates' records, export yours
-deciduous sync --check    # what is pending? (exit 1 if anything)
-git add .deciduous/graph.json  # before git push
+deciduous remote status   # what differs between this copy and the server (exit 1 if anything)
+deciduous remote pull     # send what is waiting, then refresh the local cache from the server
+deciduous remote push     # send writes still waiting in the log (the server was down)
 ```
 
-Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits merge record by record through a git merge driver; if the file ever shows conflict markers, `deciduous sync` merges it.
+Local node ids differ per machine. To point at someone else's node, use its change_id prefix (the CHANGE column in `deciduous nodes`) or the server id an agent quotes: `deciduous link a1b2c3d4 <id> -r "..."`.
 <!-- deciduous:end -->
 ## Session Start Checklist
 
@@ -493,27 +507,40 @@ Example: For web viewer work, spawn an Explore agent with:
 src/
 ├── main.rs              # CLI entry, command dispatch
 ├── lib.rs               # Public API exports
-├── db.rs                # SQLite database via Diesel ORM
+├── db.rs                # SQLite via Diesel: nodes, edges, documents, themes, the command log
 ├── schema.rs            # Diesel table definitions
-├── init.rs              # Project initialization (deciduous init)
-├── serve.rs             # HTTP server for web UI
-├── records.rs           # Multi-user sync: per-record JSON store + reconcile
-└── export.rs            # DOT export and PR writeup generation
+├── records.rs           # .deciduous/graph.json: records, reconcile, the merge driver
+├── oplog.rs             # .deciduous/remote-log.jsonl: CLI writes queued for the server
+├── remote.rs            # deciduous remote: setup, login, status, push, pull, watch
+├── server.rs            # Installing and running this machine's server as a user service
+├── local_server.rs      # The server's PostgreSQL on localhost:5432
+├── transcript.rs        # deciduous transcript: the graph derived from a Claude Code transcript
+├── archaeology.rs       # pivot, timeline, supersede
+├── pulse.rs, narratives.rs
+├── board.rs             # The message board (deciduous board)
+├── mcp/                 # deciduous mcp: the local stdio MCP server (34 tools)
+├── api.rs               # deciduous serve --api: the multi-graph JSON daemon
+├── serve.rs, viewer.html # deciduous serve: the web viewer, embedded
+├── export.rs            # DOT export and PR writeups
+├── init/                # deciduous init / update: templates, remote templates, the guard
+│   └── known_templates.rs   # @generated: sha256 of every template ever shipped
+├── hooks.rs, opencode.rs, config.rs, changelog.rs, github.rs, roadmap.rs
+├── events.rs, watch.rs  # Server events over WebSocket
+└── demo_swarm/          # deciduous demo-swarm
 
-web/                     # React/TypeScript web viewer source
-├── src/
-│   ├── utils/
-│   │   └── graphProcessing.ts  # Chain building, session grouping algorithms
-│   ├── types/
-│   │   └── graph.ts            # TypeScript types for graph data
-│   └── components/             # React components
-└── dist/                       # Built output (singlefile HTML)
+web/                     # The web viewer: React + TypeScript + D3, one App.tsx
+├── src/App.tsx
+├── src/types/           # graph.ts, archaeology.ts, qa.ts, generated/ (from the Rust types)
+└── dist/                # Built output, a single HTML file
+
+deciduous_mcp/           # The shared graph server: Elixir, PostgreSQL, 21 MCP tools
 
 .deciduous/
-├── deciduous.db         # SQLite database (decision graph)
-├── documents/           # Content-hash named document attachments
-├── config.toml          # Branch/feature configuration
-├── sync/                # Shared graph records, one JSON file each (tracked in git)
+├── config.toml          # [remote] names the server and workspace; [branch] controls tagging
+├── deciduous.db         # SQLite: with a [remote], this machine's cache; without, the graph
+├── remote-log.jsonl     # Writes waiting for the server
+├── graph.json           # The git-tracked graph for a project with no server
+├── documents/           # Attached files, content-hash named
 └── narratives.md        # Narrative tracking
 ```
 
@@ -525,8 +552,9 @@ web/                     # React/TypeScript web viewer source
 
 | File | Purpose |
 |------|---------|
-| `web/src/utils/graphProcessing.ts` | Chain building, BFS traversal, session grouping |
-| `web/src/types/graph.ts` | TypeScript interfaces for nodes, edges, chains |
+| `web/src/App.tsx` | The viewer: narrative modes, tree and detail panel, D3 graph, search, themes, the Ask panel |
+| `web/src/types/graph.ts` | TypeScript interfaces for nodes, edges, themes |
+| `web/src/types/generated/` | Types generated from the Rust side; `scripts/validate-types.sh` checks they match |
 | `src/viewer.html` | Embedded viewer served by `deciduous serve` |
 | `docs/demo/index.html` | Static demo viewer served on deciduous.dev |
 
@@ -549,14 +577,7 @@ cargo test
 cargo build --release
 ```
 
-### Chain/Graph Processing Notes
-
-The `buildChains` function in `graphProcessing.ts` uses BFS to traverse **full connected components**:
-- Follows both outgoing AND incoming edges
-- No artificial node limits (MAX_CHAIN_NODES = 0 means unlimited)
-- Chains include all nodes reachable from any direction
-
-This ensures viewing a single chain shows the entire decision tree, not a truncated subset.
+The viewer does not yet show `metadata.evidence` or `file_hashes` on transcript-derived nodes; `deciduous show` does.
 
 ## CLI Commands
 
@@ -565,17 +586,19 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 | `deciduous init` | Initialize deciduous in current directory |
 | `deciduous update` | Update Claude integration files to latest version |
 | `deciduous check-update` | Check if integration files need updating |
-| `deciduous auto-update on\|off` | Deprecated (version checking is now always-on) |
+| `deciduous auto-update on\|off` | The once-a-day crates.io version check |
 | `deciduous add <type> "title"` | Add a node (goal/decision/option/action/outcome/observation/revisit) |
 | `deciduous link <from> <to>` | Create edge between nodes |
 | `deciduous status <id> <status>` | Update node status |
 | `deciduous nodes` | List all nodes |
 | `deciduous edges` | List all edges |
 | `deciduous graph` | Output full graph as JSON |
-| `deciduous commands` | Show recent command log |
+| `deciduous commands` | Recent CLI writes, with exit status |
+| `deciduous transcript list` | This project's Claude Code sessions: imported or new |
+| `deciduous transcript import <path\|session-id>` | Derive the graph from a transcript, with evidence on every node (`--dry-run`, `--no-hash`, `--json`) |
 | `deciduous backup` | Create database backup |
 | `deciduous serve` | Start web viewer |
-| `deciduous sync` | Reconcile `.deciduous/graph.json` with the local DB, then export `docs/graph-data.json` |
+| `deciduous sync` | Reconcile `.deciduous/graph.json` with the local DB (projects with no server) |
 | `deciduous dot` | Export graph as DOT format |
 | `deciduous writeup` | Generate PR writeup markdown |
 | `deciduous sync --check` | Report pending sync changes, exit 1 if any |
@@ -587,6 +610,11 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 | `deciduous doc open <id>` | Open document in default application |
 | `deciduous doc detach <id>` | Soft-delete a document attachment |
 | `deciduous doc gc` | Garbage collect orphaned document files |
+| `deciduous remote setup\|status\|push\|pull\|watch` | The shared graph server |
+| `deciduous board post\|read\|show` | The message board for parallel agents |
+| `deciduous archaeology pivot\|supersede\|timeline` | Revisit a decision that turned out wrong |
+| `deciduous themes`, `deciduous tag` | Themes and tags |
+| `deciduous audit` | Associate commits with nodes |
 
 ## DOT Export Options
 
@@ -647,23 +675,22 @@ The database contains the decision graph. If you need to clear data:
 
 ---
 
-## Multi-User Sync
+## Sharing the graph
 
-Each machine keeps a private `.deciduous/deciduous.db` (gitignored). The shared truth is `.deciduous/graph.json`: one file holding every node, edge, theme, and tag, committed with the code. The database layer writes it on every mutation, so CLI, MCP, and HTTP API all publish. `deciduous sync` reconciles both ways (newer `updated_at` wins; deletes are tombstones; edges import once both endpoints exist).
+This repository has a `[remote]` in `.deciduous/config.toml`: the graph lives on the shared server, `.deciduous/deciduous.db` is this machine's cache of it, and MCP tools write to the server directly. CLI writes are queued in `.deciduous/remote-log.jsonl` and sent before the command exits.
 
 ```bash
-git pull
-deciduous sync                       # import theirs, export yours, refresh docs/graph-data.json
-git add .deciduous/graph.json docs/graph-data.json
-git commit -m "graph: ..." && git push
+deciduous remote status   # what this copy and the server disagree on; exit 1 if anything
+deciduous remote pull     # send what is waiting, then refresh the cache
+deciduous remote push     # resend writes the server did not get (it was down)
+deciduous remote watch    # one line per write as it lands, from every agent
 ```
 
-- Node references anywhere: local id **or** change_id prefix (`deciduous link a1b2c3d4 58`).
-- Two people editing the graph: git merges the file record by record via the `deciduous` merge driver (`.gitattributes` + `merge.deciduous.driver`, registered by init/update/sync) — both sides' additions survive, and a record both changed merges field by field. Leftover `<<<<<<<` markers are merged by `deciduous sync`.
-- `docs/graph-data.json` conflicts: take either side, rerun `deciduous sync`.
-- `deciduous events …` is a deprecated alias; `.deciduous/patches/` is dead. A 0.17 `.deciduous/sync/` directory is folded into `graph.json` on the next `sync`, `init`, or `update`.
+A project with no server shares its graph through the git-tracked `.deciduous/graph.json` instead: `deciduous sync` reconciles it with the local database both ways (newer `updated_at` wins, deletes are tombstones), and the `deciduous` merge driver registered by init/update merges concurrent edits record by record. `sync` has not exported `docs/graph-data.json` since 1.0.5; the copy in this repository is a hand-made export from 2026-09-04 that the static demo reads.
 
-Full design: `docs/MULTI_USER_SYNC.md`.
+Node references anywhere: local id **or** change_id prefix (`deciduous link a1b2c3d4 58`). `.deciduous/patches/`, `deciduous diff` and `.deciduous/sync/` are from 0.16 and 0.17 and do not exist.
+
+Full design: `docs/MULTI_USER_SYNC.md` and `docs/remote-graph.md`.
 
 ---
 
@@ -726,124 +753,24 @@ Only commit if ALL pass.
 
 ## Release Process - MANDATORY
 
-### Semantic Versioning (SemVer)
+Semver: a new command or a new field in the graph is MINOR; a fix is PATCH. 1.1.0 (2026-10-24) was the last MINOR.
 
-Follow semver strictly: `MAJOR.MINOR.PATCH`
+A release is a tag on main that `release.yml` builds and publishes. What the workflow checks before it publishes anything, and what to do in order:
 
-| Change Type | Version Bump | Example |
-|-------------|--------------|---------|
-| Breaking API change | MAJOR | 1.0.0 → 2.0.0 |
-| New feature (backward compatible) | MINOR | 1.0.0 → 1.1.0 |
-| Bug fix (backward compatible) | PATCH | 1.0.0 → 1.0.1 |
-
-### Release Checklist
-
-1. **Update version in Cargo.toml:**
-   ```toml
-   version = "X.Y.Z"
-   ```
-
-2. **Update embedded changelog in `src/changelog.rs`:**
-   ```rust
-   // Add new release at TOP of RELEASES array (newest first)
-   Release {
-       version: "X.Y.Z",
-       highlights: &[
-           "Brief description of feature 1",
-           "Brief description of feature 2",
-       ],
-   },
-   ```
-   This is REQUIRED - users see these notes when upgrading!
-
-3. **Run full test suite:**
+1. **Bump both package versions.** `Cargo.toml` and `deciduous_mcp/mix.exs` must carry the tag's version; the workflow refuses a tag whose two versions disagree (`Require both package versions to match the publishing tag`). `cargo build` updates `Cargo.lock`.
+2. **Both changelogs.** `CHANGELOG.md` (dated, Added / Changed / Fixed / Not done) and `src/changelog.rs` (the `RELEASES` array `check-update` shows on upgrade, newest first). 0.16.0 through 0.17.1 were once missing from both.
+3. **Test and package locally**: `cargo test`, `cargo clippy --all-targets`, `cargo build --release`, `cargo publish --dry-run`. The toolchain is pinned to 1.92.0 in `rust-toolchain.toml` and the workflows; bump it on purpose, not by letting stable move.
+4. **Server deps**: `cd deciduous_mcp && mix hex.audit`. A Hex advisory against any dependency fails the self-contained server build and release acceptance; 1.0.10 was tagged and never published for this, and 1.1.0 needed bandit, plug_crypto and decimal bumped on release day.
+5. **PR, merge, then tag by hand** from the merge commit:
    ```bash
-   cargo test
-   cargo build --release
-   ```
-
-4. **Commit the version bump:**
-   ```bash
-   git add Cargo.toml Cargo.lock src/changelog.rs
-   git commit -m "release: vX.Y.Z - <brief description>"
-   ```
-
-5. **Create and push a git tag:**
-   ```bash
-   git tag -a vX.Y.Z -m "vX.Y.Z: <release notes>"
-   git push --no-verify origin main
+   git tag -a vX.Y.Z <merge-sha> -m "vX.Y.Z: ..."
    git push origin vX.Y.Z
    ```
+   `Auto Release` also fires on the merge and either pushes the tag with `GITHUB_TOKEN` or fails on the duplicate; a tag pushed by the bot does not trigger `release.yml`, one pushed by a person does. If the bot got there first, `gh workflow run release.yml -f tag=vX.Y.Z -f publish=true`.
+6. **Watch the run to the end.** `release.yml` builds five CLI binaries and five server executables, runs release acceptance (an isolated PostgreSQL; the readiness wait was fixed in #319 after it raced on 1.1.0's run), then `release`, `publish-crate` (crates.io, secret `CARGO_REGISTRY_TOKEN`) and `update-homebrew` (the tap repository; the checked-in `Formula/deciduous.rb` here is a stale copy). A release looks done when nothing was published: confirm `gh release view vX.Y.Z`, crates.io, and the tap formula's version.
+7. `deciduous update` in this repository afterwards, and commit what it changed.
 
-6. **Publish to crates.io:**
-   ```bash
-   cargo publish --allow-dirty
-   ```
-
-7. **Create GitHub Release:**
-   ```bash
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes "<release notes>"
-   ```
-
-8. **Update local version file:**
-   ```bash
-   deciduous update
-   ```
-
-### Release Notes Format
-
-```markdown
-## vX.Y.Z
-
-### Added
-- New feature A
-- New feature B
-
-### Changed
-- Updated behavior of X
-
-### Fixed
-- Bug fix for Y
-- Bug fix for Z
-
-### Breaking Changes (if MAJOR bump)
-- API change description
-```
-
-### Example Full Release
-
-```bash
-# 1. Bump version
-sed -i '' 's/version = "0.3.4"/version = "0.3.5"/' Cargo.toml
-
-# 2. Test
-cargo test && cargo build --release
-
-# 3. Commit
-git add Cargo.toml Cargo.lock
-git commit -m "release: v0.3.5 - fix detail panel layout"
-
-# 4. Tag
-git tag -a v0.3.5 -m "v0.3.5: Fix detail panel layout for connections
-
-- Rationale text now displays on separate line
-- Full node titles shown without truncation
-- Improved readability of incoming/outgoing connections"
-
-# 5. Push
-git push origin main
-git push origin v0.3.5
-
-# 6. Publish
-cargo publish
-
-# 7. GitHub Release
-gh release create v0.3.5 --title "v0.3.5" --notes "Fix detail panel layout for connections
-
-- Rationale text now displays on separate line
-- Full node titles shown without truncation
-- Improved readability of incoming/outgoing connections"
-```
+Stacked PRs: never `gh pr merge --delete-branch` on a PR another open PR is based on. GitHub closes the dependent PR instead of retargeting it, and a closed PR whose base is gone cannot be reopened. Merge without deleting, `gh pr edit N --base main` for the next one, and dispatch `type-check.yml` on its branch by hand (the CI workflow only runs for PRs that were opened against main). Delete branches at the end.
 
 ---
 
