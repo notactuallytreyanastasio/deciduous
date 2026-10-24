@@ -7,13 +7,13 @@
 
     <!-- Primary Meta Tags -->
     <meta name="title" content="How I Built Myself - The Deciduous Story">
-    <meta name="description" content="The complete chronicle of how Deciduous was built. A decision graph tool that documented its own creation through 1,175 decisions over 77 days.">
+    <meta name="description" content="The complete chronicle of how Deciduous was built. A decision graph tool that documented its own creation through 1,465 nodes over 324 days.">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://deciduous.dev/story.html">
     <meta property="og:title" content="How I Built Myself - The Deciduous Story">
-    <meta property="og:description" content="The complete chronicle of how Deciduous was built. A decision graph tool that documented its own creation through 1,175 decisions over 77 days.">
+    <meta property="og:description" content="The complete chronicle of how Deciduous was built. A decision graph tool that documented its own creation through 1,465 nodes over 324 days.">
     <meta property="og:image" content="https://deciduous.dev/story-og.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -22,7 +22,7 @@
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://deciduous.dev/story.html">
     <meta property="twitter:title" content="How I Built Myself - The Deciduous Story">
-    <meta property="twitter:description" content="A decision graph tool that documented its own creation. 1,175 decisions, 1,023 connections, 77 days.">
+    <meta property="twitter:description" content="A decision graph tool that documented its own creation. 1,465 nodes, 1,313 edges, 324 days.">
     <meta property="twitter:image" content="https://deciduous.dev/story-og.png">
 
     <style>
@@ -582,18 +582,18 @@
                 Deciduous is a decision graph tool that documented its own creation.
                 Every node, edge, and pivot point in this story is queryable in the
                 <a href="demo/">live graph</a>. This is the real history, told through
-                <span id="node-count">1,175</span> decisions and <span id="edge-count">1,023</span> connections.
+                <span id="node-count">1,465</span> nodes and <span id="edge-count">1,313</span> edges (the export of 2026-09-04).
             </p>
         </header>
 
         <div class="stats-banner">
-            <div class="stat-item"><span class="stat-num" id="stat-nodes">1,175</span><span class="stat-label">Nodes</span></div>
-            <div class="stat-item"><span class="stat-num" id="stat-edges">1,023</span><span class="stat-label">Edges</span></div>
-            <div class="stat-item"><span class="stat-num">144</span><span class="stat-label">Goals</span></div>
-            <div class="stat-item"><span class="stat-num">103</span><span class="stat-label">Decisions</span></div>
-            <div class="stat-item"><span class="stat-num">5</span><span class="stat-label">Pivots</span></div>
-            <div class="stat-item"><span class="stat-num">417</span><span class="stat-label">Commits</span></div>
-            <div class="stat-item"><span class="stat-num">77</span><span class="stat-label">Days</span></div>
+            <div class="stat-item"><span class="stat-num" id="stat-nodes">1,465</span><span class="stat-label">Nodes</span></div>
+            <div class="stat-item"><span class="stat-num" id="stat-edges">1,313</span><span class="stat-label">Edges</span></div>
+            <div class="stat-item"><span class="stat-num">172</span><span class="stat-label">Goals</span></div>
+            <div class="stat-item"><span class="stat-num">124</span><span class="stat-label">Decisions</span></div>
+            <div class="stat-item"><span class="stat-num">6</span><span class="stat-label">Pivots</span></div>
+            <div class="stat-item"><span class="stat-num">894</span><span class="stat-label">Commits</span></div>
+            <div class="stat-item"><span class="stat-num">324</span><span class="stat-label">Days</span></div>
         </div>
 
         <div class="timeline">
@@ -1168,46 +1168,526 @@
             </div>
 
             <!-- ========================================== -->
+            <!-- March - July 2026 - A server, and a loss -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">March&ndash;July 2026</div>
+                <h2 class="timeline-day-title">A Server, and a Loss</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">March 4&ndash;5</div>
+                        <h3 class="event-title">PostgreSQL and Elixir Enter</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#1209</span>
+                            <span class="tag tag-node">#1263</span>
+                            <span class="tag">server</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The graph had always been one SQLite file per project. In March two things that would
+                            become the shared server were tried side by side: a PostgreSQL backend behind a Cargo
+                            feature flag, and an Elixir read path packaged with Burrito.
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-decision">decision</span>
+                                <span class="node-id-badge">#1209</span>
+                            </div>
+                            <div class="node-card-title">Adopt Ecto + OTP release for read commands, defer Burrito to CI</div>
+                        </div>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-decision">decision</span>
+                                <span class="node-id-badge">#1265</span>
+                            </div>
+                            <div class="node-card-title">Use Cargo feature flags with sqlite default, postgres optional</div>
+                        </div>
+                        <p>
+                            Observation #1220 recorded why Burrito went to CI: it needs Zig. Outcome #1267 recorded
+                            the PostgreSQL backend working. Neither shipped as the product yet; both are what 0.19
+                            was built from.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">May 6</div>
+                        <h3 class="event-title">The MCP Server</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#1376</span>
+                            <span class="tag">v0.15.0</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            v0.15.0 put an MCP server in the binary: <code>deciduous mcp</code>, over stdio, 31
+                            tools at the time. The agent no longer shelled out to the CLI; it called
+                            <code>add_node</code> and <code>search_nodes</code> directly, and each conversation
+                            could open a session with its own root goal.
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#1376</span>
+                            </div>
+                            <div class="node-card-title">MCP server auto-creates decision trees for each conversation</div>
+                        </div>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-observation">observation</span>
+                                <span class="node-id-badge">#1382</span>
+                            </div>
+                            <div class="node-card-title">Question: does session model work for long-running cowork under a project?</div>
+                        </div>
+                        <p>
+                            That question was left open in the graph. The sessions are still a local-server
+                            feature; the shared server that came later scopes a conversation by workspace and branch
+                            instead.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">July 10&ndash;17</div>
+                        <h3 class="event-title">The Database Was Lost Once</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#1422</span>
+                            <span class="tag tag-node">#1423</span>
+                            <span class="tag">v0.16.0</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-outcome">outcome</span>
+                                <span class="node-id-badge">#1422</span>
+                            </div>
+                            <div class="node-card-title">DB restored: 1,410 nodes, 1,250 edges, zero dangling refs. Graph now has a durable git-tracked copy</div>
+                        </div>
+                        <p>
+                            The database that held this story was gitignored, and in July it was gone. It came back
+                            from exports, and the outcome above is the moment the graph first got a copy that git
+                            tracked. Everything in the next two chapters follows from not wanting to do that again.
+                        </p>
+                        <p>
+                            A week later v0.16.0 added <code>deciduous serve --api</code>: a daemon serving many
+                            independent graphs over HTTP with a bearer token, one SQLite file per graph, append-and-read
+                            only. Goal #1423 names the clients it was for: bots and room servers with no
+                            <code>.deciduous/</code> of their own.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- September 4, 2026 - The Record Store -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">September 4, 2026</div>
+                <h2 class="timeline-day-title">One Sync Mechanism</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">v0.17.0</div>
+                        <h3 class="event-title">The Record Store</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#1442</span>
+                            <span class="tag tag-node">#1443</span>
+                            <span class="tag tag-commit">7c28507</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-observation">observation</span>
+                                <span class="node-id-badge">#1443</span>
+                            </div>
+                            <div class="node-card-title">Four overlapping sync mechanisms exist today</div>
+                        </div>
+                        <p>
+                            Patches, an event log, a checkpoint, and <code>docs/graph-data.json</code>: four ways for
+                            the graph to leave a machine, none of them the one everybody used. Goal #1442 replaced
+                            them with a git-native record store: <code>.deciduous/sync/</code>, one JSON file per
+                            node, edge, theme and tag, written by the database layer so the CLI, the MCP server and
+                            the HTTP API all published without being asked. Two people adding records touched
+                            different files, so git merged them with no conflict.
+                        </p>
+                        <div class="decision-grid">
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#1458</span>
+                                    <span class="decision-box-title">Merge driver + field-level 3-way merge</span>
+                                </div>
+                                <div class="decision-box-outcome">Concurrent edits of one record merge field by field through <code>deciduous merge-record</code>, with conflict-marker repair in <code>deciduous sync</code> as the fallback</div>
+                            </div>
+                        </div>
+                        <div class="commit-card">
+                            <span class="commit-hash">7c28507</span>
+                            <span class="commit-message">graph: migrate the decision graph to the record store</span>
+                        </div>
+                        <p>
+                            That commit is also the last time <code>docs/graph-data.json</code> was exported. The
+                            counts on this page come from it.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- September 18, 2026 - One File -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">September 18, 2026</div>
+                <h2 class="timeline-day-title">One File Again</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">v0.18.0</div>
+                        <h3 class="event-title">2,781 Files for a Megabyte</h3>
+                        <div class="event-tags">
+                            <span class="tag">graph.json</span>
+                            <span class="tag">merge driver</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The record store's design was sound and its bill was not: 2,781 files and 11 MB of
+                            directory overhead for a graph whose content is about 1 MB. <code>git status</code> after
+                            a sync was a wall of paths, a PR touching the graph was hundreds of files, and a rename
+                            could put a record in a file named after a different one.
+                        </p>
+                        <p>
+                            0.18.0 folded the directory into one file, <code>.deciduous/graph.json</code>, keyed by
+                            <code>change_id</code>. One file means every concurrent change conflicts in git, so the
+                            merge driver stopped being a nicety and became the mechanism: it merges the two documents
+                            record by record, keeps a record only one side has, and merges a record both sides
+                            changed field by field with the ancestor as tiebreak. A <code>graph.json</code> that will
+                            not parse stops a sync rather than reading as an empty graph, which would have exported
+                            every local row over whatever was in the file.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- September 21-22, 2026 - The Shared Server -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">September 21&ndash;22, 2026</div>
+                <h2 class="timeline-day-title">The Shared Server</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">v0.19.0 &rarr; v1.0.0</div>
+                        <h3 class="event-title">Ten Agents, Twenty-Six Minutes</h3>
+                        <div class="event-tags">
+                            <span class="tag">tetris-arena</span>
+                            <span class="tag">took_from</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            0.19.0 put every project's graph in one PostgreSQL behind an MCP endpoint over HTTP:
+                            one workspace per repository, <code>deciduous remote</code> to point a repository at it,
+                            the token stored outside every repository, the local database demoted to a cache.
+                            1.0.0, the next day, is what happened when several agents wrote to it at once.
+                        </p>
+                        <p>
+                            Ten Claude Code sessions in ten git worktrees of one repository, one workspace, told to
+                            read each other's code and reasoning. Twenty-six minutes later there were ten playable
+                            Tetris games, 386 nodes and 170 borrowed ideas with provenance. Zero of the arena's 471
+                            edges crossed a branch, because nothing said a borrow was an edge: the borrow counts came
+                            from a regular expression over observation titles. 1.0.0 added the <code>took_from</code>
+                            edge type, <code>check_activity</code> with the last node on each branch, and a
+                            <code>deciduous remote watch</code> that quotes every write instead of counting them,
+                            because a watcher that counted had invented a convention that did not exist.
+                        </p>
+                        <div class="quote">
+                            <div class="quote-text">Every MCP call from a long-lived Claude Code session hung for 300 seconds. The server answered a dead session with a 200 under a freshly generated id, not the request's id, so the client could never match it.</div>
+                            <cite class="quote-cite">&mdash; CHANGELOG, 1.0.0</cite>
+                        </div>
+                        <p>
+                            Two fixes from the same day describe the shape of the work from here on: the event socket
+                            closed every subscriber after sixty seconds because it was upgraded with no options, and
+                            every connection paid five seconds before its first call because the server answered an
+                            unknown method as if it were a notification.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- September 23-28, 2026 - Eleven patch releases -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">September 23&ndash;28, 2026</div>
+                <h2 class="timeline-day-title">Eleven Releases in Six Days</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">v1.0.2 &rarr; v1.0.3</div>
+                        <h3 class="event-title">The Hook That Blocked Work</h3>
+                        <div class="event-tags">
+                            <span class="tag">log-loop</span>
+                            <span class="tag">removed</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            1.0.2 installed a hook that counted an agent's actions between graph writes and denied
+                            its next tool call after ten, or after an unlogged commit. It lasted one release. A
+                            <code>PreToolUse</code> for one call runs before the <code>PostToolUse</code> of the graph
+                            write sent beside it; a session whose settings changed underneath it kept counting with no
+                            way to reset; an environment variable typed into the session never reached the hook. It
+                            stopped sessions cold.
+                        </p>
+                        <div class="quote">
+                            <div class="quote-text">A rule that blocks work has to be one the agent can satisfy every time, and this one could not.</div>
+                            <cite class="quote-cite">&mdash; CHANGELOG, 1.0.3</cite>
+                        </div>
+                        <p>
+                            1.0.3 removed it and made <code>deciduous update</code> stop destroying what it did not
+                            write: upgrading 86 projects on one machine had taken a script that put back 59 files.
+                            1.0.4 replaced the hook with the MCP server's <code>instructions</code> on
+                            <code>initialize</code>, which reach every client and cannot block anything.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">v1.0.5 &rarr; v1.0.9</div>
+                        <h3 class="event-title">Init Asks, Writes Become Ops, Agents Get a Board</h3>
+                        <div class="event-tags">
+                            <span class="tag">remote setup</span>
+                            <span class="tag">remote-log.jsonl</span>
+                            <span class="tag">board</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            1.0.5 made <code>init</code> refuse to finish until the project pointed at a server
+                            that answered, and dropped the GitHub Pages export, since the graph now lived on the
+                            server. 1.0.6 made it ask where the graph should live instead of choosing Docker for you.
+                            1.0.7 found one workspace with 502 nodes locally against 0 on the server it was
+                            configured to use, and nothing had said so; it also stopped putting every local server
+                            on port 4000, Phoenix's default, where it had squatted the dev server of the very project
+                            being logged.
+                        </p>
+                        <p>
+                            1.0.8 made every CLI write an op in <code>.deciduous/remote-log.jsonl</code>, replayed
+                            on the server field by field, each at most once, carrying the value it replaced so a
+                            queued edit never overwrites a newer one. 1.0.9 gave agents working in parallel a
+                            message board in the same store as the graph, with <code>@label</code> mentions and
+                            <code>reply_to</code>, in place of the scratch markdown file they kept inventing.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">v1.0.10 &rarr; v1.0.12</div>
+                        <h3 class="event-title">PostgreSQL on This Machine</h3>
+                        <div class="event-tags">
+                            <span class="tag">launchd</span>
+                            <span class="tag">systemd</span>
+                            <span class="tag">ask_graph</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            1.0.10 rebuilt <code>ask_graph</code>: anchors from trigram and full-text rankings fused by
+                            reciprocal rank, routes chosen by the shape of the question, and an honest answer when the
+                            graph has nothing on the subject. Recall@10 went from 0.611 to 0.889. It was tagged and
+                            never published: three security advisories against <code>mint</code> made every
+                            self-contained server build refuse.
+                        </p>
+                        <p>
+                            1.0.11 carried all of it, plus the change that defines the current setup: a server on this
+                            machine needs PostgreSQL, not Docker. <code>init</code> runs the release's self-contained
+                            server as a launchd LaunchAgent or a systemd user unit against the PostgreSQL already on
+                            localhost:5432, as the current user, database <code>deciduous</code>, listening on
+                            127.0.0.1 only. The local database started following <code>graph.json</code> across
+                            branch switches. 1.0.12 fixed six defects a customer case study had reproduced, each of
+                            which lost or misrepresented work without saying so; the first was that
+                            <code>update</code> rewrote hand-written server-model instructions back to the git model.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- October 17 and 24, 2026 - CI on an unchanged tree -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">October 17 and 24, 2026</div>
+                <h2 class="timeline-day-title">Red CI on a Tree That Had Not Changed</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Two days</div>
+                        <h3 class="event-title">Rust 1.92.0, Pinned</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">9d1eb8b</span>
+                            <span class="tag tag-commit">33d73b5</span>
+                            <span class="tag tag-commit">925ccaa</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Between 28 September and 24 October the only change to the tree was a documentation
+                            rewrite written on 17 October: the docs still told the 1.0.0 story of a Docker server on
+                            port 4000, and were made to say what <code>init</code> actually asks. When the release
+                            branches opened on 24 October, every CI job was red anyway.
+                        </p>
+                        <p>
+                            Stable Rust had moved. Clippy 1.99 reported 29 <code>redundant_field_names</code> errors on
+                            field declarations inside diesel's <code>QueryableByName</code> derive, and the new
+                            toolchain deprecated <code>AtomicUsize::fetch_update</code>; with warnings denied, nothing
+                            built. Four Hex advisories published against <code>bandit</code>, <code>plug_crypto</code>
+                            and <code>decimal</code> made <code>mix hex.audit</code> refuse the server build, as
+                            <code>mint</code> had done to 1.0.10.
+                        </p>
+                        <div class="commit-card">
+                            <span class="commit-hash">33d73b5</span>
+                            <span class="commit-message">ci: build and lint with Rust 1.92.0, pinned, not whatever stable is today</span>
+                        </div>
+                        <p>
+                            The slot counter uses a <code>compare_exchange_weak</code> loop, the three packages are
+                            updated, and <code>rust-toolchain.toml</code> pins 1.92.0 with a comment that says why:
+                            bump it on purpose, with the lints that come with it, not by accident.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- October 24, 2026 - The transcript is the log -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">October 24, 2026</div>
+                <h2 class="timeline-day-title">The Transcript Is the Log</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">v1.1.0</div>
+                        <h3 class="event-title">Nine Nodes, or 119 Actions</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">5548d8f</span>
+                            <span class="tag">evidence</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Every chapter above assumed the agent would log as it worked, and every release since
+                            1.0.2 had tried a different way to make it: a blocking hook, server instructions, a
+                            CLAUDE.md section. 1.1.0 stops relying on it. Claude Code already writes the whole session
+                            to a JSONL transcript; <code>deciduous transcript import</code> reads it.
+                        </p>
+                        <div class="commit-card">
+                            <span class="commit-hash">5548d8f</span>
+                            <span class="commit-message">transcript: build the graph from a Claude Code transcript, with evidence on every node</span>
+                        </div>
+                        <p>
+                            Each prompt becomes a goal with the prompt verbatim; each run of edits, or a shell command
+                            that changed files, an action naming the files; each commit an action with the hash; each
+                            build, test or lint run an outcome with its exit and summary; the assistant's closing text
+                            an outcome too. On the three-week session that built the shared server, the agent had
+                            logged nine nodes through MCP. The transcript held 119 actions, 67 command outcomes and 68
+                            verbatim prompts.
+                        </p>
+                        <p>
+                            Every derived node says what it is backed by: <code>proven</code> (a tool call and its
+                            result, or the user's own words) or <code>inferred</code> (the assistant said so). The
+                            assistant's "all tests pass" and the <code>cargo test</code> result sit side by side,
+                            labelled. Importing twice adds nothing, on any machine. What is not derived: decisions and
+                            options, because whether the assistant chose one approach over another is a judgement
+                            about prose, and that pass belongs to an agent reading the imported graph.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
             <!-- The Numbers -->
             <!-- ========================================== -->
             <div class="timeline-day">
-                <div class="timeline-day-date">February 19, 2026</div>
+                <div class="timeline-day-date">October 24, 2026</div>
                 <h2 class="timeline-day-title">Where It Stands</h2>
             </div>
 
             <div class="timeline-event">
                 <div class="event-card">
                     <div class="event-header">
-                        <div class="event-time">Day 77</div>
+                        <div class="event-time">Day 324</div>
                         <h3 class="event-title">The Graph Today</h3>
                         <div class="event-tags">
-                            <span class="tag">v0.13.1</span>
+                            <span class="tag">v1.1.0</span>
                             <span class="tag">current</span>
                         </div>
                     </div>
                     <div class="event-body">
                         <div class="final-stats">
-                            <div class="final-stat"><span class="final-stat-value" id="final-nodes">1,175</span><span class="final-stat-label">Nodes</span></div>
-                            <div class="final-stat"><span class="final-stat-value" id="final-edges">1,023</span><span class="final-stat-label">Edges</span></div>
-                            <div class="final-stat"><span class="final-stat-value">417</span><span class="final-stat-label">Commits</span></div>
-                            <div class="final-stat"><span class="final-stat-value">77</span><span class="final-stat-label">Days</span></div>
+                            <div class="final-stat"><span class="final-stat-value" id="final-nodes">1,465</span><span class="final-stat-label">Nodes</span></div>
+                            <div class="final-stat"><span class="final-stat-value" id="final-edges">1,313</span><span class="final-stat-label">Edges</span></div>
+                            <div class="final-stat"><span class="final-stat-value">894</span><span class="final-stat-label">Commits</span></div>
+                            <div class="final-stat"><span class="final-stat-value">324</span><span class="final-stat-label">Days</span></div>
                         </div>
                         <p>
-                            The graph breaks down into: 144 goals, 126 options, 103 decisions, 391 actions,
-                            246 outcomes, 160 observations, and 5 revisit nodes. 9 slash commands and 3 skills
-                            are bootstrapped by <code>deciduous init</code>. The web viewer runs at
-                            <code>deciduous serve</code> with DAG, timeline, archaeology, and Q&amp;A views.
+                            The node and edge counts are from the exported graph, <code>docs/graph-data.json</code>,
+                            last exported on 2026-09-04: 172 goals, 173 options, 124 decisions, 490 actions, 312
+                            outcomes, 188 observations and 6 revisits. Since 1.0.5 the export is not refreshed; the
+                            live graph is on the shared server and is read with <code>deciduous serve</code>,
+                            <code>ask_graph</code> and <code>deciduous nodes</code>, so the arena, the eleven
+                            September releases and the transcript import are in that graph and not in these numbers.
+                            Commits and days are from <code>git log</code> on 2026-10-24: 894 commits since 2025-12-04.
+                        </p>
+                        <p>
+                            <code>deciduous init</code> writes 9 slash commands, 3 skills and two hooks that never
+                            block, and asks where the graph lives. Two MCP servers write it: 34 tools over stdio,
+                            21 on the shared server. <code>deciduous transcript import</code> writes it from the
+                            session afterwards. The ratatui terminal UI of December 2025 is no longer in the
+                            binary; <code>deciduous serve</code> is the viewer. The toolchain is Rust 1.92.0, pinned.
                         </p>
 
                         <div class="release-grid">
                             <div class="release-item"><span class="release-version">v0.1.0</span><span class="release-desc">First publish to crates.io</span></div>
-                            <div class="release-item"><span class="release-version">v0.4.0</span><span class="release-desc">Multi-editor init flags</span></div>
                             <div class="release-item"><span class="release-version">v0.9.0</span><span class="release-desc">Backdating, archaeology workflow</span></div>
-                            <div class="release-item"><span class="release-version">v0.9.2</span><span class="release-desc">Revisit node type</span></div>
-                            <div class="release-item"><span class="release-version">v0.10.0</span><span class="release-desc">Archaeology-first web viewer</span></div>
-                            <div class="release-item"><span class="release-version">v0.12.0</span><span class="release-desc">Narrative-first web redesign</span></div>
                             <div class="release-item"><span class="release-version">v0.13.0</span><span class="release-desc">Document attachments + themes</span></div>
-                            <div class="release-item"><span class="release-version">v0.13.1</span><span class="release-desc">Safe CLAUDE.md section replacement</span></div>
+                            <div class="release-item"><span class="release-version">v0.15.0</span><span class="release-desc">MCP server in the binary</span></div>
+                            <div class="release-item"><span class="release-version">v0.16.0</span><span class="release-desc">Multi-graph HTTP API daemon</span></div>
+                            <div class="release-item"><span class="release-version">v0.17.0</span><span class="release-desc">Record store: one sync mechanism</span></div>
+                            <div class="release-item"><span class="release-version">v0.18.0</span><span class="release-desc">One graph file, merge driver</span></div>
+                            <div class="release-item"><span class="release-version">v1.0.0</span><span class="release-desc">Shared server, several agents</span></div>
+                            <div class="release-item"><span class="release-version">v1.0.3</span><span class="release-desc">No blocking hooks</span></div>
+                            <div class="release-item"><span class="release-version">v1.0.11</span><span class="release-desc">PostgreSQL on this machine, no Docker</span></div>
+                            <div class="release-item"><span class="release-version">v1.1.0</span><span class="release-desc">The transcript is the log</span></div>
                         </div>
                     </div>
                 </div>
@@ -1249,7 +1729,7 @@
             <p style="margin-top: 12px;">
                 <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> &middot;
                 <a href="https://crates.io/crates/deciduous">crates.io</a> &middot;
-                MIT License
+                Apache-2.0 License
             </p>
         </footer>
     </div>
@@ -1259,8 +1739,8 @@
         fetch('graph-data.json')
             .then(r => r.json())
             .then(data => {
-                const nodes = data.nodes ? data.nodes.length : 1175;
-                const edges = data.edges ? data.edges.length : 1023;
+                const nodes = data.nodes ? data.nodes.length : 1465;
+                const edges = data.edges ? data.edges.length : 1313;
                 document.getElementById('node-count').textContent = nodes.toLocaleString();
                 document.getElementById('edge-count').textContent = edges.toLocaleString();
                 document.getElementById('stat-nodes').textContent = nodes.toLocaleString();

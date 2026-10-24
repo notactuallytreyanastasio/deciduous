@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MCP Server - Deciduous</title>
     <meta property="og:title" content="MCP Server - Deciduous">
-    <meta property="og:description" content="Give Claude direct access to your decision graph. Works with Claude Code and Claude Desktop (Cowork support coming soon).">
+    <meta property="og:description" content="Give Claude direct access to your decision graph. Two MCP servers: the shared server deciduous init registers with Claude Code, and deciduous mcp over stdio for Claude Desktop and local projects.">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; color: #24292f; line-height: 1.6; }
@@ -117,24 +117,84 @@
         </nav>
 
         <header>
-          <span class="badge badge-new">New in v0.14</span>
-          <h1>MCP Server</h1>
-          <p class="tagline">Give Claude direct access to your decision graph. 34 tools for searching, tracing, and analyzing decisions, and for agents working in parallel to talk to each other. Works with Claude Code and Claude Desktop.</p>
+          <span class="badge badge-new">deciduous 1.1.0</span>
+          <h1>Two MCP Servers</h1>
+          <p class="tagline">The agent writes to the graph through MCP while it works. There are two servers it can write through, and <code>deciduous init</code> gives you one of them without asking. This page says which, and how Claude Code and Claude Desktop reach each.</p>
         </header>
 
         <!-- =========================================================== -->
-        <section>
-          <h2>Quick Start: Cowork <span class="badge" style="background:#fef3c7; color:#854d0e; vertical-align: middle;">Coming soon</span></h2>
-          <p>MCP support for Claude Cowork is not yet available &mdash; cowork agents currently can't load custom MCP servers. Track progress on <a href="https://github.com/anthropics/claude-code/issues/48909">anthropics/claude-code#48909</a>.</p>
-          <p>In the meantime, use the <a href="#claude-code">Claude Code</a> setup below for project-level work, or <a href="#claude-desktop">Claude Desktop</a> for free-form querying.</p>
+        <section id="which">
+          <h2>Which server you have</h2>
+          <table class="tool-table" style="width:100%; border-collapse:collapse; margin:16px 0; font-size:0.92rem;">
+            <tr><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;"></th><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;">Shared server</th><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;">Local server, <code>deciduous mcp</code></th></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">What it is</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">An Elixir app (<code>deciduous_mcp/</code>) on PostgreSQL, MCP over HTTP at <code>&lt;url&gt;/mcp</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">A subcommand of the binary, MCP over stdin/stdout</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Holds</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Every project's graph, one workspace per repository</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">One project: its <code>.deciduous/deciduous.db</code></td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Tools</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">21, every call scoped by <code>workspace</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">34, including sessions, themes, DOT and writeups</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Registered by</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>deciduous init</code> (since 1.0.5), at user scope in Claude Code</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">You, with one <code>claude mcp add</code> line</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Tells the agent when to log</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Yes: <code>instructions</code> on <code>initialize</code>, to every client (since 1.0.4)</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">No; the <code>CLAUDE.md</code> section does</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Several agents</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>check_activity</code>, live events, <code>took_from</code>, <code>ask_graph</code> across workspaces</td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">The message board only</td></tr>
+          </table>
+          <p>
+            After <code>deciduous init</code> on a 1.0.5 or newer binary, Claude Code has the
+            <strong>shared server</strong>. <code>init</code> does not finish until the project points at a
+            server that answers: this machine's (a background service against the PostgreSQL on
+            localhost:5432, since 1.0.11), or one someone else runs. It then runs <code>claude mcp get
+            deciduous</code>, and if nothing is registered under that name, <code>claude mcp add</code> at
+            user scope with the URL and the bearer token. An existing <code>deciduous</code> registration is
+            left alone. Restart Claude Code and the tools are <code>mcp__deciduous__*</code> in every
+            directory.
+          </p>
+          <p>
+            The <strong>local server</strong> is for a project kept without a <code>[remote]</code> (the
+            <code>graph.json</code> model), for Claude Desktop, or for the tools the shared server does not
+            have. With a <code>[remote]</code> configured, writes made through it are also queued in
+            <code>.deciduous/remote-log.jsonl</code> and sent to the server (CHANGELOG 1.0.8), so using
+            both does not fork the graph.
+          </p>
+        </section>
+
+        <!-- =========================================================== -->
+        <section id="claude-code">
+          <h2>Claude Code</h2>
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">the shared server: what init ran, to run by hand for another machine or client</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step"><div class="step-content code">claude mcp add --scope user --transport http deciduous http://127.0.0.1:&lt;port&gt;/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</div></div>
+              <div class="session-step"><div class="step-content">The URL is <code>[remote] url</code> in <code>.deciduous/config.toml</code> plus <code>/mcp</code>: this machine's server on 127.0.0.1 and the port <code>init</code> asked for, or <code>https://&lt;host&gt;/deciduous-mcp</code> for one someone else runs. The token is in <code>~/.config/deciduous/credentials</code>; <code>DECIDUOUS_MCP_TOKEN</code> in the environment overrides it.</div></div>
+            </div>
+          </div>
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">the local server, for this project</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step"><div class="step-content code">claude mcp add deciduous -- deciduous mcp</div></div>
+              <div class="session-step"><div class="step-content">Project scope by default; add <code>--scope user</code> to have it in every project, where it opens whichever <code>.deciduous/</code> it finds walking up from the current directory (or <code>DECIDUOUS_DB_PATH</code>). Give it another name if the shared server is already registered as <code>deciduous</code>.</div></div>
+            </div>
+          </div>
+          <p>
+            Claude Code reads MCP servers from <code>claude mcp add</code> or a project
+            <code>.mcp.json</code>, not from <code>.claude/settings.local.json</code>; a README that said
+            otherwise connected nothing until 1.0.5 fixed it. A repository that wants its workspace fixed
+            whatever a tool call says pins it in <code>.mcp.json</code> with the
+            <code>X-Deciduous-Workspace</code> header, and the token as <code>${DECIDUOUS_MCP_TOKEN}</code>,
+            never a literal; see <a href="remote.html#pin">pinning a repository</a>.
+          </p>
         </section>
 
         <!-- =========================================================== -->
         <section id="claude-desktop">
-          <h2>Quick Start: Claude Desktop</h2>
-
+          <h2>Claude Desktop</h2>
           <div class="config-block">
-            <h4>~/Library/Application Support/Claude/claude_desktop_config.json</h4>
+            <h4>~/Library/Application Support/Claude/claude_desktop_config.json (macOS); %APPDATA%\Claude\claude_desktop_config.json (Windows)</h4>
 <pre><code>{
   "mcpServers": {
     "deciduous": {
@@ -146,413 +206,212 @@
     }
   }
 }</code></pre>
-            <p>Use the <strong>absolute path</strong> to the <code>deciduous</code> binary (run <code>which deciduous</code> to find it) &mdash; Claude Desktop doesn't inherit your shell <code>PATH</code>. Point <code>DECIDUOUS_DB_PATH</code> at the SQLite database in your project's <code>.deciduous/</code> directory, then restart Claude Desktop.</p>
+            <p>Use the <strong>absolute path</strong> to the binary (<code>which deciduous</code>); Claude Desktop does not inherit your shell <code>PATH</code>. <code>DECIDUOUS_DB_PATH</code> names the project, since Desktop has no working directory to walk up from. Restart Claude Desktop. This is the local server; whether Claude Desktop can carry the bearer header the shared server needs has not been verified for this page, so no configuration for it is given here.</p>
           </div>
         </section>
 
         <!-- =========================================================== -->
-        <section id="claude-code">
-          <h2>Quick Start: Claude Code</h2>
-
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">Setting up MCP in Claude Code</span>
-            </div>
-            <div class="session-content">
-              <div class="session-step">
-                <div class="step-label system">Config</div>
-                <div class="step-content">Add to <span style="color:#7ee787">.claude/settings.local.json</span>:</div>
-              </div>
-              <div class="session-step">
-                <div class="step-content code">{
-  "mcpServers": {
-    "deciduous": { "command": "deciduous", "args": ["mcp"] }
-  }
-}</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label system">Result</div>
-                <div class="step-content">Restart Claude Code. Tools appear as <span style="color:#7ee787">mcp__deciduous__*</span></div>
-              </div>
-              <div class="session-step">
-                <div class="step-label user">You</div>
-                <div class="step-content">What decisions were made about authentication?</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">search_nodes({ query: "auth" })</div>
-                <div class="step-output">Found 8 nodes matching "auth"</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">trace_chain({ node_id: 5, direction: "outgoing" })</div>
-                <div class="step-output">{ node_count: 12, edge_count: 11 }</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content">The auth system went through 2 pivots. Started with JWT everywhere (Goal #5), hit mobile cookie size limits (Observation #8), pivoted to hybrid approach (Revisit #9, Decision #10). 12 nodes trace the full story.</div>
-              </div>
-            </div>
-          </div>
-          <p>Also available: <code>/query</code> slash command wraps MCP tools into a natural language interface.</p>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Natural Language Queries</h2>
-          <p>In Claude Code, <code>/query</code> uses MCP tools to answer questions about your decisions:</p>
-
-          <div class="session-demo" style="margin-bottom:0; border-radius:12px 12px 0 0;">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">Claude Code &mdash; /query in action</span>
-            </div>
-            <div class="session-content" style="padding-bottom:16px;">
-              <div class="session-step">
-                <div class="step-label user">You</div>
-                <div class="step-content">/query why did we choose an embedded MCP server over a CLI wrapper?</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content" style="color:#8b949e; font-size:0.82rem;">Querying decision graph...</div>
-              </div>
-              <div class="session-step" style="margin-bottom:0;">
-                <div class="step-content code" style="font-size:0.78rem;">search_nodes({ query: "embedded MCP" })    &rarr; 2 matches
-get_node_context({ node_id: 1361 })        &rarr; 3 parents, 7 children
-trace_chain({ node_id: 1361 })             &rarr; 13 nodes, 14 edges</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Claude's rendered response — proper HTML, not monospace -->
-          <div class="query-response">
-            <div class="qr-header">
-              <h3>Why Embedded Over CLI Wrapper</h3>
-              <div class="qr-tldr">The embedded approach won at 92% confidence. It fits the project's "functional core, imperative shell" constraint and gives direct DB access with no subprocess overhead.</div>
-            </div>
-
-            <h4>Options Compared</h4>
-            <table class="qr-table">
-              <tr><th>Option</th><th>Confidence</th><th>Verdict</th><th>Rationale</th></tr>
-              <tr><td>#1358 Embedded server</td><td>90%</td><td><span class="qr-chosen">Chosen</span></td><td>Single binary, pure functions, testable</td></tr>
-              <tr><td>#1359 CLI wrapper</td><td>40%</td><td><span class="qr-rejected">Rejected</span></td><td>Process spawn per call, fragile text parsing</td></tr>
-              <tr><td>#1360 Separate crate</td><td>50%</td><td><span class="qr-rejected">Rejected</span></td><td>Unnecessary build complexity</td></tr>
-            </table>
-
-            <h4>Decision Chain</h4>
-            <div class="qr-tree">
-              <div class="qr-tree-node qr-goal">Goal #1356 &mdash; Add MCP server to deciduous</div>
-              <div class="qr-tree-children">
-                <div class="qr-tree-node qr-option chosen">Option #1358 &mdash; Embedded MCP server <span class="qr-chosen">chosen</span></div>
-                <div class="qr-tree-node qr-option rejected">Option #1359 &mdash; Thin CLI wrapper <span class="qr-rejected">rejected</span></div>
-                <div class="qr-tree-node qr-option rejected">Option #1360 &mdash; Separate crate <span class="qr-rejected">rejected</span></div>
-                <div class="qr-tree-node qr-decision">Decision #1361 &mdash; Choose embedded MCP server <span style="color:#57606a">[92%]</span></div>
-                <div class="qr-tree-children">
-                  <div class="qr-tree-node qr-action">Action #1362 &mdash; Implement protocol types</div>
-                  <div class="qr-tree-node qr-action">Action #1363 &mdash; Build tool registry</div>
-                  <div class="qr-tree-node qr-action">Action #1364 &mdash; Implement CRUD handlers</div>
-                  <div class="qr-tree-node qr-action">Action #1365 &mdash; Build query/analysis engine</div>
-                  <div class="qr-tree-node qr-action">Action #1366 &mdash; Wire server loop</div>
-                  <div class="qr-tree-node qr-action">Action #1367 &mdash; Write test suite</div>
-                </div>
-              </div>
-            </div>
-
-            <h4>Key Observation</h4>
-            <div class="qr-observation">
-              <strong>#1357</strong>: &ldquo;User explicitly requested functional core, imperative shell, lots of tests&rdquo; &mdash; this made pure-function parsing and zero-IO modules the obvious architectural choice.
-            </div>
-
-            <div class="qr-result">7 actions completed. 108 MCP-specific tests passing. All pure functions trivially unit-testable, as the architecture predicted.</div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Searching Decisions</h2>
-          <p>Real output from deciduous's own graph (1,300+ nodes from building this tool):</p>
-
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">search_nodes &mdash; full-text across titles, descriptions, prompts</span>
-            </div>
-            <div class="session-content">
-              <div class="session-step">
-                <div class="step-label user">You</div>
-                <div class="step-content">What decisions were made about the MCP server?</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">search_nodes({ query: "MCP" })</div>
-              </div>
-              <div class="session-step">
-                <div class="step-result">
-<span class="step-json">{
-  "count": 26,
-  "nodes": [
-    { "id": 1356, "node_type": "goal", "title": "Add MCP server to deciduous", "confidence": 90 },
-    { "id": 1361, "node_type": "decision", "title": "Choose embedded MCP server (Option A)", "confidence": 92 },
-    { "id": 1381, "node_type": "outcome", "title": "Session lifecycle complete", "confidence": 95 },
-    ...
-  ]
-}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Tracing Decision Chains</h2>
-          <p>BFS traversal from any node. Shows the full connected decision tree with depth:</p>
-
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">trace_chain &mdash; follow edges outward from a goal</span>
-            </div>
-            <div class="session-content">
-              <div class="session-step">
-                <div class="step-label user">You</div>
-                <div class="step-content">Show me everything that came from the MCP server goal</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">trace_chain({ node_id: 1356, direction: "outgoing", max_depth: 2 })</div>
-              </div>
-              <div class="session-step">
-                <div class="step-result">
-<span class="step-json">{ "start_node_id": 1356, "node_count": 13, "edge_count": 14,
-  "nodes": [
-    { "id": 1356, "node_type": "goal",        "title": "Add MCP server to deciduous",                     "depth": 0 },
-    { "id": 1358, "node_type": "option",      "title": "Embedded MCP server via deciduous mcp subcommand","depth": 1 },
-    { "id": 1359, "node_type": "option",      "title": "Thin CLI wrapper - shells out to commands",       "depth": 1 },
-    { "id": 1360, "node_type": "option",      "title": "Separate mcp-deciduous crate/binary",            "depth": 1 },
-    { "id": 1361, "node_type": "decision",    "title": "Choose embedded MCP server (Option A)",           "depth": 2 },
-    { "id": 1376, "node_type": "goal",        "title": "Auto-create decision trees per conversation",    "depth": 1 },
-    { "id": 1377, "node_type": "option",      "title": "Session-scoped: start/end_session tools",        "depth": 2 }
-  ]
-}</span>
-                </div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content">The MCP goal spawned 3 options at depth 1 (embedded, CLI wrapper, separate crate). The embedded approach was chosen (depth 2). A sub-goal for conversation scoping also branched off at depth 1.</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Node Context</h2>
-          <p>Get a decision's full neighborhood &mdash; what options led to it, what actions came from it:</p>
-
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">get_node_context &mdash; parents, children, siblings</span>
-            </div>
-            <div class="session-content">
-              <div class="session-step">
-                <div class="step-label user">You</div>
-                <div class="step-content">What led to choosing the embedded MCP server, and what came from it?</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">get_node_context({ node_id: 1361 })</div>
-              </div>
-              <div class="session-step">
-                <div class="step-result">
-<strong>Node:</strong> #1361 [decision] "Choose embedded MCP server (Option A)" (92%)
-
-<strong>Parents (3 options considered):</strong>
-  #1358 [option] "Embedded MCP server via deciduous mcp subcommand" (90%)
-  #1359 [option] "Thin CLI wrapper MCP - shells out to commands" (40%)
-  #1360 [option] "Separate mcp-deciduous crate/binary" (50%)
-
-<strong>Children (7 actions spawned):</strong>
-  #1362 [action] "Implement MCP protocol types (protocol.rs)"
-  #1363 [action] "Build tool registry and definitions (tools.rs)"
-  #1364 [action] "Implement CRUD handlers (handlers.rs)"
-  #1365 [action] "Build query/analysis engine (query.rs)"
-  #1366 [action] "Wire server loop and CLI subcommand"
-  #1367 [action] "Write comprehensive test suite"
-  #1374 [action] "Create /query skill for NL reports"
-                </div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content">3 options were considered. The embedded approach won at 92% confidence (CLI wrapper was only 40% &mdash; too fragile). It spawned 7 implementation actions covering protocol, tools, handlers, query engine, server loop, tests, and a slash command.</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Graph Pulse</h2>
-          <p>Health check &mdash; stats, active goals, and what needs attention:</p>
-
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">get_pulse &mdash; branch health at a glance</span>
-            </div>
-            <div class="session-content">
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">get_pulse({ branch: "add-mcp-server" })</div>
-              </div>
-              <div class="session-step">
-                <div class="step-result">
-<strong>total_nodes:</strong> 37  |  <strong>total_edges:</strong> 1229
-
-<strong>By type:</strong>
-  goal: 4  |  option: 6  |  decision: 3
-  action: 11  |  outcome: 11  |  observation: 2
-
-<strong>Active goals:</strong>
-  #1356 Add MCP server to deciduous
-  #1376 MCP server auto-creates decision trees for each conversation
-  #1387 Write MCP setup docs for README + deciduous.dev
-  #1391 Rewrite MCP docs: quickstarts first, real examples
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Sessions: Per-Conversation Trees</h2>
-          <p>Each conversation gets its own scoped decision tree. Nodes auto-associate.</p>
-
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">Cowork agent starting a session</span>
-            </div>
-            <div class="session-content">
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">start_session({ name: "cowork: add MCP server", goal_title: "Add MCP server to deciduous" })</div>
-              </div>
-              <div class="session-step">
-                <div class="step-result">
-<span class="step-json">{ "session_id": 1, "root_node_id": 1356, "name": "cowork: add MCP server" }</span>
-                </div>
-              </div>
-              <div class="session-step">
-                <div class="step-label system">Later</div>
-                <div class="step-content" style="color:#8b949e">... hours of work, server may restart ...</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">get_session({})</div>
-              </div>
-              <div class="session-step">
-                <div class="step-result">
-<span class="step-json">{ "session_id": 1, "is_active": true, "node_count": 37, "nodes": [...] }</span>
-                </div>
-              </div>
-              <div class="session-step">
-                <div class="step-label system">After a break</div>
-                <div class="step-content" style="color:#8b949e">Explicitly reconnect to a previous session:</div>
-              </div>
-              <div class="session-step">
-                <div class="step-label claude">Claude</div>
-                <div class="step-content code">resume_session({ session_id: 1 })</div>
-              </div>
-              <div class="session-step">
-                <div class="step-result">
-<span class="step-json">{ "session_id": 1, "node_count": 37, "message": "Resumed session #1 (37 nodes)" }</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <p>Sessions persist to <code>.deciduous/active_session</code>. Server restarts auto-resume. Long pauses use <code>resume_session</code>.</p>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="shared-server">
-          <h2>The shared server: several agents, one workspace</h2>
+        <section id="write">
+          <h2>What the agent is told, and how it writes</h2>
           <p>
-            Everything above is the embedded server: <code>deciduous mcp</code> over stdio, one SQLite
-            file, one project. The <a href="remote.html">shared graph server</a> is a second MCP
-            endpoint, over HTTP, with one Postgres for every project. Its tool set is smaller (20)
-            and it is the one that knows about other agents. <code>deciduous init</code> (or
-            <code>deciduous remote setup</code>) registers it with Claude Code at user scope, so it is
-            present in every directory; an existing <code>deciduous</code> registration is left alone.
-            What setup ran, for registering another client by hand:
+            The shared server's <code>initialize</code> result carries an <code>instructions</code>
+            string that the client puts in the model's context for the whole session. It says when to
+            write (a request, a fork, a choice, a change, a result, a fact that changes the plan), names
+            <code>capture_conversation_turn</code> as the one-call step and <code>add_node</code> with
+            <code>parent_id</code> for a single node, and asks for <code>workspace</code> and
+            <code>branch</code> on every write. It reaches every client with no project configuration,
+            and it cannot block anything. That replaced the hook 1.0.3 removed.
           </p>
           <div class="session-demo">
             <div class="session-header">
               <span class="session-dot red"></span>
               <span class="session-dot yellow"></span>
               <span class="session-dot green"></span>
-              <span class="session-title">what setup registered</span>
+              <span class="session-title">one step, one call (shared server)</span>
             </div>
             <div class="session-content">
-              <div class="session-step"><div class="step-content code">claude mcp add --scope user --transport http deciduous http://127.0.0.1:&lt;port&gt;/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</div></div>
-              <div class="session-step"><div class="step-content">The URL is <code>[remote] url</code> in <code>.deciduous/config.toml</code> plus <code>/mcp</code>: this machine's server on 127.0.0.1, or <code>https://&lt;host&gt;/deciduous-mcp</code> for one someone else runs. The token is in <code>~/.config/deciduous/credentials</code>.</div></div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">capture_conversation_turn({
+  workspace: "my-api", branch: "rate-limit",
+  summary: "Chose a Redis token bucket for rate limiting and implemented the middleware.",
+  goal: { title: "Add rate limiting to the public API",
+          prompt: "Add rate limiting to the public API. Per-token, 100 req/min, 429 with Retry-After." },
+  options_considered: [ { title: "Token bucket in Redis", chosen: true },
+                        { title: "Fixed window counter in Postgres" } ],
+  decision: { title: "Token bucket in Redis, over the fixed window",
+              rationale: "smooths bursts; Redis already deployed; window edges allow 2x burst" },
+  action:   { title: "Implement RateLimiter middleware", files: ["src/middleware/rate_limit.rs"] },
+  outcome:  { title: "cargo test: 41 passed, 0 failed", success: true }
+})</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label system">Why one call</div>
+                <div class="step-content">The two-step form made agents write <code>add_edge</code> beside <code>add_node</code> with <code>"PLACEHOLDER"</code> where the new id belonged, five times in one night (CHANGELOG 1.0.2). The server refuses such an id now and points at <code>parent_id</code>. <code>capture_conversation_turn</code> writes the step's nodes and edges in one transaction, all or nothing; pass <code>parent_node_id</code> to put it under the goal you are working on.</div>
+              </div>
             </div>
           </div>
-          <p>Three arguments and one tool are what make it multi-agent:</p>
+          <p>
+            A single node goes through <code>add_node</code> with <code>parent_id</code> (and
+            <code>edge_type</code>, <code>rationale</code>); a borrow from another branch through
+            <code>log_observation</code> with <code>took_from</code> and <code>why</code>; a choice through
+            <code>log_decision</code>; the end of a line of work through <code>close_thread</code>. To
+            make a retried <code>add_node</code> safe, give it a <code>change_id</code>: the same one again
+            returns the node already made. The local server has none of these composites: it is
+            <code>add_node</code> then <code>link_nodes</code>, and the arguments are listed in the
+            <a href="mcp-api.html#local">API reference</a>.
+          </p>
+        </section>
+
+        <!-- =========================================================== -->
+        <section id="read">
+          <h2>Reading the graph</h2>
+          <p>On the shared server, <code>ask_graph</code> takes a question in prose and says how each answer was reached, and when the graph has nothing on the subject:</p>
           <table class="tool-table" style="width:100%; border-collapse:collapse; margin:16px 0; font-size:0.92rem;">
-            <tr><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;">Name</th><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;">What it does</th></tr>
-            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>workspace</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">on every call: the repository name. Reads accept <code>"*"</code> for every project at once; writes refuse it.</td></tr>
-            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>branch</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">on every write: the lock key. Two sessions on one branch are serialised and told about each other; on different branches they never meet. Omit it and you lock the empty-branch bucket with everyone else who omitted it.</td></tr>
-            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>took_from</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">on <code>log_observation</code>: the UUID or change_id of the node you borrowed from, on any branch. Writes the observation and a <code>took_from</code> edge in one call; <code>why</code> becomes the edge's rationale. <code>add_edge</code> takes <code>edge_type: "took_from"</code> directly.</td></tr>
-            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>check_activity</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">who holds a lock in this workspace right now, and the last node on each of the twenty most recently written branches. Call it before a burst of writes.</td></tr>
+            <tr><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;">Tool</th><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;">What it answers</th></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>ask_graph</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">"Why did we pick X?" Entry nodes by trigram and full-text match, then the edges the question calls for (choices and revisits for <em>why</em>, superseded nodes for <em>history</em>, requires/blocks for <em>depends</em>). Each result carries <code>reached_by</code> and <code>path</code>. A question naming something the graph never recorded gets <code>stop_reason: "distinctive_term_unmatched"</code> and at most three nodes, instead of 25 unrelated ones. <code>workspace: "*"</code> asks every project.</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>query_nodes</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Filter by type, status, branch, text, and <code>file</code>: what was decided about a path, with the decisions up to three edges above it.</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>show_node</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">One node, its edges, documents, themes, and <code>related</code>: nodes that name the same file or commit, found at read time, never stored as edges.</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>check_activity</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Who wrote to this workspace in the last five minutes and the last node on each branch. Writes are never refused; this is how you see the others.</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>consolidation_report</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Likely duplicate goals, competing decisions with no revisit between them, stale pending actions, parentless nodes with a suggested parent. Changes nothing.</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>list_workspaces</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">Every project on the server, with counts: the index for the <code>workspace</code> argument.</td></tr>
           </table>
+          <p>On the local server the equivalents are <code>search_nodes</code>, <code>trace_chain</code>, <code>get_node_context</code> and <code>get_pulse</code>. Real output, from a nine-node project on 1.1.0:</p>
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">deciduous mcp &mdash; search_nodes, trace_chain</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">search_nodes({ query: "Redis" })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{ "count": 4, "query": "Redis",
+  "nodes": [
+    { "id": 2, "node_type": "option",      "status": "pending",    "confidence": 70, "title": "Token bucket in Redis", ... },
+    { "id": 4, "node_type": "decision",    "status": "superseded", "confidence": 85, "title": "Token bucket in Redis, over the fixed window", ... },
+    { "id": 7, "node_type": "observation", "status": "pending",    "title": "Redis cluster failover drops bucket state; limits reset on every failover", ... },
+    { "id": 8, "node_type": "revisit",     "status": "pending",    "title": "Reconsidering: Token bucket in Redis, over the fixed window", ... }
+  ] }</span>
+                </div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">trace_chain({ node_id: 4, direction: "outgoing", max_depth: 2 })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{ "start_node_id": 4, "node_count": 5, "edge_count": 4,
+  "nodes": [
+    { "id": 4, "depth": 0, "node_type": "decision",    "status": "superseded", "title": "Token bucket in Redis, over the fixed window" },
+    { "id": 5, "depth": 1, "node_type": "action",      "status": "completed",  "title": "Implement RateLimiter middleware" },
+    { "id": 6, "depth": 2, "node_type": "outcome",     "status": "completed",  "title": "cargo test: 41 passed, 0 failed" },
+    { "id": 7, "depth": 1, "node_type": "observation", "status": "pending",    "title": "Redis cluster failover drops bucket state; limits reset on every failover" },
+    { "id": 8, "depth": 2, "node_type": "revisit",     "status": "pending",    "title": "Reconsidering: Token bucket in Redis, over the fixed window" }
+  ],
+  "edges": [
+    { "from_node_id": 4, "to_node_id": 5, "edge_type": "leads_to", "rationale": "implementation" },
+    { "from_node_id": 5, "to_node_id": 6, "edge_type": "leads_to", "rationale": "result" },
+    { "from_node_id": 4, "to_node_id": 7, "edge_type": "leads_to", "rationale": "Bucket state does not survive Redis failover" },
+    { "from_node_id": 7, "to_node_id": 8, "edge_type": "leads_to", "rationale": "Forced rethinking" }
+  ] }</span>
+                </div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content">The Redis decision (#4) was implemented and its tests passed (#5, #6), then an observation about failover (#7) led to a revisit (#8); #4 is superseded. Timestamps and change_ids are in the full result and cut here.</div>
+              </div>
+            </div>
+          </div>
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">deciduous mcp &mdash; get_node_context</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">get_node_context({ node_id: 4 })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{ "node": { "id": 4, "node_type": "decision", "status": "superseded", "confidence": 85, "title": "Token bucket in Redis, over the fixed window" },
+  "parents":  [ { "id": 2, "node_type": "option", "title": "Token bucket in Redis" },
+                { "id": 3, "node_type": "option", "title": "Fixed window counter in Postgres" } ],
+  "children": [ { "id": 5, "node_type": "action",      "title": "Implement RateLimiter middleware" },
+                { "id": 7, "node_type": "observation", "title": "Redis cluster failover drops bucket state; limits reset on every failover" } ],
+  "incoming_edges": [ { "from_node_id": 2, "to_node_id": 4, "edge_type": "chosen",   "rationale": "smooths bursts; Redis already deployed" },
+                      { "from_node_id": 3, "to_node_id": 4, "edge_type": "rejected", "rationale": "window edges allow 2x burst" } ],
+  "outgoing_edges": [ ... ], "siblings": [] }</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section id="sessions">
+          <h2>Sessions, on the local server only</h2>
           <p>
-            Writes are also pushed live: <code>GET /events</code> on the same host is a WebSocket that
-            emits one frame per node insert or update and per edge insert, with the node's title, type,
-            status and branch. <code>deciduous remote watch</code> prints it; Claude Code's
-            <code>Monitor</code> tool can sit on the URL that <code>deciduous remote watch --url
-            --claude-code</code> prints.
+            <code>start_session</code> creates a root goal and a session id; later nodes are associated
+            with it; <code>get_session</code>, <code>resume_session</code> and <code>list_sessions</code>
+            read it back; <code>end_session</code> closes it. The current id is kept in
+            <code>.deciduous/active_session</code>, so it survives a restart of the server process. The
+            shared server has no sessions: a conversation there is scoped by <code>workspace</code> and
+            <code>branch</code>, and <code>check_activity</code> is how one session sees another.
           </p>
+        </section>
+
+        <!-- =========================================================== -->
+        <section id="board">
+          <h2>The message board, on both</h2>
           <p>
-            All 20 tools: <code>add_node</code>, <code>add_edge</code>, <code>update_node</code>,
-            <code>delete_node</code>, <code>delete_edge</code>, <code>log_decision</code>,
-            <code>log_observation</code>, <code>capture_conversation_turn</code>,
-            <code>close_thread</code>, <code>check_activity</code>, <code>query_nodes</code>,
-            <code>show_node</code>, <code>get_graph</code>, <code>get_ancestors</code>,
-            <code>get_descendants</code>, <code>find_orphans</code>, <code>ask_graph</code>,
-            <code>list_workspaces</code>, <code>post_message</code>, <code>read_messages</code>. The sessions tools on this page
-            (<code>start_session</code>, <code>resume_session</code>) belong to the embedded server
-            only; on the shared server a conversation is scoped by <code>workspace</code> and
-            <code>branch</code> instead.
+            <code>post_message</code> and <code>read_messages</code> have the same arguments on both
+            servers. Agents working at the same time put interface changes, questions and answers there,
+            never in a scratch file: <code>@label</code> addresses a message, <code>reply_to</code> answers
+            one, and <code>read_messages</code> with <code>unanswered_for</code> your own label, at start
+            and before finishing, is what is waiting for you. Messages are not graph nodes and are not
+            exported. Locally the board is the main worktree's database, shared by every worktree; with a
+            <code>[remote]</code> it is on the server, which must be 1.0.9 or newer.
           </p>
-          <p><a href="remote.html#alongside">How the locks, events and <code>took_from</code> fit together &rarr;</a></p>
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">deciduous mcp &mdash; read_messages</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">read_messages({ unanswered_for: "lead" })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{ "latest_id": 2, "truncated": false,
+  "messages": [ { "id": 2, "author": "w1", "reply_to": 1, "mentions": ["lead"], "branch": "main",
+                  "subject": "re header", "body": "Both. @lead", "created_at": "2026-10-24T16:50:26.234660Z" } ] }</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- =========================================================== -->
         <div class="api-link">
           <p><a href="mcp-api.html">MCP API Reference &rarr;</a></p>
-          <p style="color:#57606a; font-size:0.9rem; margin-top:6px;">All 34 tools with parameters, types, and CLI equivalents.</p>
+          <p style="color:#57606a; font-size:0.9rem; margin-top:6px;">All 21 shared-server tools and 34 local tools, with their arguments as the source declares them.</p>
         </div>
 
         <footer>
-          <a href="index.html">Home</a> &middot; <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a> &middot; <a href="demo/">Live Graph</a> &middot; <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+          <a href="index.html">Home</a> &middot; <a href="remote.html">Shared Graph</a> &middot; <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a> &middot; <a href="demo/">Live Graph</a> &middot; <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
         </footer>
       </div>
     </div>

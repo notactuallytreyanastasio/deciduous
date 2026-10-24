@@ -138,8 +138,8 @@
 </head>
 <body>
     <div class="ai-warning-banner">
-        Work in Progress - Developer documentation being fleshed out
-        <a href="../tutorial/">View Tutorial</a> | <a href="../demo/">View Graph Demo</a>
+        Developer documentation for deciduous 1.1.0: how the binary, the two MCP servers and the files fit together.
+        <a href="../tutorial/">Tutorial</a> | <a href="../demo/">Graph Demo</a>
     </div>
 
     <nav class="doc-nav">
@@ -148,482 +148,333 @@
             <li><a href="#concepts">Concepts</a></li>
             <li><a href="#web-viewer">Web Viewer</a></li>
             <li><a href="#quick-reference">Quick Reference</a></li>
+            <li><a href="#docs">Reference documents</a></li>
         </ul>
     </nav>
 
     <main class="content">
         <article>
-            <h1>Developer Documentation <span class="wip-badge">WIP</span></h1>
-            <p class="lead">Architecture, concepts, and implementation details for deciduous.</p>
+            <h1>Developer Documentation</h1>
+            <p class="lead">Architecture, concepts and reference for deciduous 1.1.0. The sections below summarise; the documents they link to are the full text.</p>
 
             <div class="quick-links">
                 <a href="#architecture" class="quick-link">
                     <h3>Architecture</h3>
-                    <p>How the system fits together</p>
+                    <p>The binary, the two servers, where the graph lives</p>
                 </a>
                 <a href="#concepts" class="quick-link">
                     <h3>Concepts</h3>
-                    <p>Mental models and patterns</p>
+                    <p>Nodes, edges, pivots, evidence</p>
                 </a>
                 <a href="#web-viewer" class="quick-link">
                     <h3>Web Viewer</h3>
-                    <p>React app and algorithms</p>
+                    <p>deciduous serve and its API</p>
                 </a>
                 <a href="#quick-reference" class="quick-link">
                     <h3>Quick Reference</h3>
-                    <p>Commands and patterns</p>
+                    <p>Commands and file locations</p>
                 </a>
             </div>
 
             <!-- ARCHITECTURE SECTION -->
             <section id="architecture" class="doc-section">
                 <h1>Architecture</h1>
-                <p class="lead">Decision graph tooling for AI-assisted development. Track every goal, decision, and outcome. Survive context loss. Query your reasoning.</p>
+                <p class="lead">One Rust binary, one Elixir server, one graph per repository. Full text: <a href="../ARCHITECTURE.md">ARCHITECTURE.md</a>.</p>
 
-                <h2>The Core Problem</h2>
-                <p>AI assistants have <strong>context limits</strong>. When you work on a complex feature across multiple sessions:</p>
-                <ol>
-                    <li><strong>Context compaction</strong> - The AI summarizes to fit limits, losing nuance</li>
-                    <li><strong>Session boundaries</strong> - New sessions start fresh with no memory</li>
-                    <li><strong>Decision amnesia</strong> - Why did we choose approach A over B? Lost.</li>
-                    <li><strong>Pivot confusion</strong> - We changed direction, but the old code remains. Why?</li>
-                </ol>
-                <p><strong>Deciduous solves this by externalizing the AI's reasoning into a queryable graph.</strong></p>
+                <h2>The problem it solves</h2>
+                <p>A Claude Code session ends or compacts, and the reasoning goes with it: which option lost and why, what was tried, what the user asked for in their own words. Deciduous keeps that as a graph the next session can query, and since 1.1.0 can rebuild the graph from the session's transcript when the agent did not log.</p>
 
-                <h2>System Goals</h2>
+                <h2>Three writers, one graph</h2>
+                <div class="diagram-box"><pre>┌──────────────────────────────────────────────────────────────────────────────┐
+│  THE CLI                      THE AGENT (MCP)                 THE TRANSCRIPT  │
+│  deciduous add / link /       capture_conversation_turn,      deciduous       │
+│  status / archaeology pivot   add_node parent_id, ...         transcript import│
+└──────────────┬───────────────────────────┬───────────────────────────┬────────┘
+               │                           │                           │
+               ▼                           ▼                           ▼
+┌──────────────────────────────┐  ┌─────────────────────┐  ┌──────────────────────┐
+│ .deciduous/deciduous.db      │  │ shared server       │  │ ~/.claude/projects/  │
+│ SQLite; the cache            │  │ deciduous_mcp/      │  │ &lt;slug&gt;/*.jsonl       │
+│ + .deciduous/remote-log.jsonl│◀─│ Elixir + PostgreSQL │  │ read, never written  │
+│   ops replayed via POST /ops │─▶│ 21 MCP tools, HTTP  │  └──────────────────────┘
+│ + .deciduous/graph.json      │  │ /events  /export    │
+│   (no [remote]: git carries  │  │ /ops  /messages     │
+│    it; merge-record driver)  │  └─────────────────────┘
+└──────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  READING: deciduous nodes/show/pulse, deciduous serve (web viewer, :3000),    │
+│  deciduous mcp (34 tools over stdio), dot --png, writeup, ask_graph (server)   │
+└──────────────────────────────────────────────────────────────────────────────┘</pre></div>
+                <p>
+                    <strong>Where the graph lives is chosen at <code>init</code>.</strong> With a <code>[remote]</code> in <code>.deciduous/config.toml</code> (the default since 1.0.5; since 1.0.11 a server on this machine against the PostgreSQL on localhost:5432), the server is the truth and the SQLite file is a cache: CLI writes go to the cache, are logged as ops in <code>remote-log.jsonl</code>, and are sent before the command exits; MCP writes reach the cache on <code>remote pull</code>. Without a <code>[remote]</code>, <code>graph.json</code> is tracked by git, <code>deciduous sync</code> reconciles it with the database in both directions, and the <code>deciduous merge-record</code> driver (hidden from <code>--help</code>, registered by <code>init</code>) merges concurrent edits record by record. <a href="../remote-graph.md">remote-graph.md</a> and <a href="../MULTI_USER_SYNC.md">MULTI_USER_SYNC.md</a> are the two models in full.
+                </p>
+                <p>
+                    <strong>There is no hooks layer.</strong> Up to 1.0.2 a hook denied the agent's next tool call until it logged; 1.0.3 removed it. <code>init</code> installs two hooks that never block: a once-a-day version check and <code>board-mentions.sh</code>, which shows a session with <code>DECIDUOUS_AGENT_LABEL</code> its unanswered board messages. What tells the agent when to log is the shared server's <code>instructions</code> on <code>initialize</code> and the <code>CLAUDE.md</code> section; what catches what it did not log is the transcript import.
+                </p>
 
-                <h3>1. Survive Context Loss</h3>
-                <p>When an AI session ends or context is compacted, all the reasoning is gone. Deciduous captures decisions <strong>in real-time</strong> so they persist beyond any single session.</p>
-                <pre>Session 1: "Let's use JWT tokens" → logged to graph
-Session 2: "What auth approach did we choose?" → query the graph</pre>
-
-                <h3>2. Track Design Evolution</h3>
-                <p>Codebases evolve. Decisions get revisited. Deciduous captures <strong>pivots</strong> - when and why you changed direction:</p>
-                <pre>[Old Decision: JWT] → [Observation: Too large for mobile] → [REVISIT] → [New Decision: Session cookies]</pre>
-
-                <h3>3. Enable Context Recovery</h3>
-                <p>Start a new session with <code>/recover</code> and the AI can rebuild its understanding from the graph:</p>
-                <pre>deciduous nodes        # What decisions exist?
-deciduous edges        # How are they connected?
-deciduous show 42      # What was the reasoning for node 42?</pre>
-
-                <h3>4. Enforce Discipline</h3>
-                <p>Through hooks, Deciduous <strong>blocks</strong> the AI from making code changes without first logging what it's doing.</p>
-
-                <h2>How It All Fits Together</h2>
-                <div class="diagram-box"><pre>┌─────────────────────────────────────────────────────────────────────────────┐
-│                           USER + AI ASSISTANT                                │
-│                                                                              │
-│  User: "Add authentication"                                                 │
-│  AI:   Creates goal node → deciduous add goal "Add auth" --prompt "..."     │
-│  AI:   Logs decision → deciduous add decision "JWT vs sessions"             │
-│  AI:   Links them → deciduous link 1 2                                      │
-│  AI:   Makes code changes                                                   │
-│  AI:   Logs outcome → deciduous add outcome "Auth implemented"              │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              HOOKS LAYER                                     │
-│                                                                              │
-│  Pre-Tool-Use Hooks:                                                        │
-│  ├── require-action-node.sh                                                 │
-│  │   "Before Edit/Write, verify recent action node exists"                  │
-│  │   Blocks: "You must log what you're doing first!"                        │
-│                                                                              │
-│  Post-Tool-Use Hooks:                                                       │
-│  └── post-commit-reminder.sh                                                │
-│      "After Bash commit, remind to link commit to graph"                    │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            DECIDUOUS CLI                                     │
-│                                                                              │
-│  Commands:                                                                  │
-│  ├── add &lt;type&gt; &lt;title&gt;   → Create nodes (goal/decision/action/outcome)     │
-│  ├── link &lt;from&gt; &lt;to&gt;     → Connect nodes with rationale                    │
-│  ├── nodes/edges/graph    → Query the graph                                 │
-│  ├── serve                → Start web viewer                                │
-│  ├── sync                 → Export for GitHub Pages                         │
-│  └── diff export/apply    → Multi-user sync                                 │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           SQLITE DATABASE                                    │
-│                                                                              │
-│  .deciduous/deciduous.db                                                    │
-│  ├── decision_nodes      → All nodes with types, titles, metadata           │
-│  ├── decision_edges      → Connections with rationale                       │
-│  ├── command_log         → CLI operation history                            │
-│  └── roadmap_items       → ROADMAP.md sync state                            │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    ▼                ▼                ▼
-         ┌─────────────────┐  ┌───────────┐  ┌──────────────────┐
-         │   WEB VIEWER    │  │    TUI    │  │  GITHUB PAGES    │
-         │                 │  │           │  │                  │
-         │ React app with  │  │ Ratatui   │  │ Static export    │
-         │ multiple views: │  │ terminal  │  │ via sync         │
-         │ - Archaeology   │  │ interface │  │                  │
-         │ - DAG          │  │           │  │ docs/             │
-         │ - Chains       │  │           │  │ ├── index.html    │
-         │ - Timeline     │  │           │  │ ├── graph.json    │
-         │ - Roadmap      │  │           │  │ └── git-history   │
-         └─────────────────┘  └───────────┘  └──────────────────┘</pre></div>
-
-                <h2>Node Types and Their Meaning</h2>
+                <h2>Node types</h2>
                 <table>
                     <thead>
-                        <tr><th>Type</th><th>Shape</th><th>Purpose</th><th>Example</th></tr>
+                        <tr><th>Type</th><th>Purpose</th><th>Example</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td><strong>goal</strong></td><td>House</td><td>What you're trying to achieve</td><td>"Add user authentication"</td></tr>
-                        <tr><td><strong>decision</strong></td><td>Diamond</td><td>A choice point with options</td><td>"How to identify users?"</td></tr>
-                        <tr><td><strong>option</strong></td><td>Box</td><td>Possible choice for a decision</td><td>"Use JWT tokens"</td></tr>
-                        <tr><td><strong>action</strong></td><td>Rounded box</td><td>Work being done</td><td>"Implementing auth middleware"</td></tr>
-                        <tr><td><strong>outcome</strong></td><td>Ellipse</td><td>Result of work</td><td>"Auth working in staging"</td></tr>
-                        <tr><td><strong>observation</strong></td><td>Note</td><td>Something noticed</td><td>"Sessions scale better for mobile"</td></tr>
-                        <tr><td><strong>revisit</strong></td><td>Octagon</td><td>Reconsidering past decisions</td><td>"Rethinking token strategy"</td></tr>
+                        <tr><td><strong>goal</strong></td><td>What was asked for; the prompt verbatim in <code>metadata.prompt</code></td><td>"Add rate limiting to the public API"</td></tr>
+                        <tr><td><strong>option</strong></td><td>An approach considered</td><td>"Token bucket in Redis"</td></tr>
+                        <tr><td><strong>decision</strong></td><td>The option chosen, named against what it beat</td><td>"Token bucket in Redis, over the fixed window"</td></tr>
+                        <tr><td><strong>action</strong></td><td>Code or config changed; files and commit in metadata</td><td>"Implement RateLimiter middleware"</td></tr>
+                        <tr><td><strong>outcome</strong></td><td>What happened: the number or the error</td><td>"cargo test: 41 passed, 0 failed"</td></tr>
+                        <tr><td><strong>observation</strong></td><td>A fact that changes the plan</td><td>"Redis failover drops bucket state"</td></tr>
+                        <tr><td><strong>revisit</strong></td><td>An earlier choice reconsidered; connects old to new</td><td>"Reconsidering: Token bucket in Redis"</td></tr>
                     </tbody>
                 </table>
+                <p>Edge types: <code>leads_to</code>, <code>requires</code>, <code>chosen</code>, <code>rejected</code>, <code>blocks</code>, <code>enables</code>, <code>took_from</code>. Statuses: <code>pending</code>, <code>active</code>, <code>completed</code>, <code>rejected</code>, <code>superseded</code>, <code>abandoned</code>. Every node has a local integer <code>id</code> and a <code>change_id</code> UUID that is the same on every machine.</p>
 
-                <h2>Source Code Organization</h2>
+                <h2>Source layout</h2>
                 <pre>src/
-├── main.rs           # CLI command dispatcher (clap)
-├── lib.rs            # Public API exports
-├── db.rs             # SQLite database (Diesel ORM)
-├── schema.rs         # Database table definitions
-├── config.rs         # .deciduous/config.toml loader
-├── init/             # deciduous init
-│   ├── mod.rs        # Project initialization
-│   └── templates.rs  # File templates (CLAUDE.md, hooks, etc.)
-├── serve.rs          # HTTP server for web viewer
-├── export.rs         # DOT export, PR writeup generation
-├── diff.rs           # Multi-user sync patches
-├── hooks.rs          # Claude Code hook management
+├── main.rs           # clap CLI: every subcommand's definition and dispatch
+├── lib.rs            # public API exports
+├── db.rs             # SQLite via Diesel; the local database and its write path
+├── schema.rs         # Diesel table definitions
+├── records.rs        # graph.json record store: export, import, field-level merge
+├── oplog.rs          # .deciduous/remote-log.jsonl: ops queued for the server
+├── remote.rs         # client of the shared server: setup, status, pull, push, adopt
+├── server.rs         # init's server step: wizard, native (launchd/systemd) and Docker installs
+├── local_server.rs   # finding and talking to this machine's server
+├── watch.rs          # deciduous remote watch: the /events WebSocket client
+├── board.rs          # message board, local table and server routes
+├── transcript.rs     # deciduous transcript: Claude Code JSONL -&gt; nodes with evidence (1.1.0)
+├── archaeology.rs    # pivot, supersede, timeline
+├── narratives.rs     # .deciduous/narratives.md
+├── pulse.rs          # deciduous pulse
+├── export.rs         # DOT export and PR writeups
+├── serve.rs          # web viewer HTTP server; /api/ask shells out to the claude CLI
+├── api.rs            # deciduous serve --api: multi-graph JSON API daemon (0.16)
+├── events.rs         # deprecated `deciduous events`, kept as an alias
+├── config.rs         # .deciduous/config.toml
+├── hooks.rs          # deciduous hooks install|status|uninstall
 ├── opencode.rs       # OpenCode integration
-├── github.rs         # GitHub API client
-├── roadmap.rs        # ROADMAP.md parsing and sync
-├── changelog.rs      # Embedded release notes
-└── tui/              # Terminal UI
-    ├── mod.rs        # Event loop, file watcher
-    ├── app.rs        # Application state
-    ├── msg.rs        # TEA messages
-    ├── update.rs     # State transitions
-    ├── state.rs      # Pure state transformations
-    ├── ui.rs         # Rendering
-    ├── events.rs     # Keyboard/mouse handling
-    └── views/        # Timeline, DAG, Roadmap views
+├── roadmap.rs        # ROADMAP.md &lt;-&gt; GitHub Issues
+├── github.rs         # GitHub API client for roadmap
+├── changelog.rs      # embedded release notes shown on upgrade
+├── viewer.html       # the built web viewer, embedded in the binary
+├── init/
+│   ├── mod.rs              # deciduous init and update
+│   ├── templates.rs        # CLAUDE.md section, commands, skills, hooks (graph.json model)
+│   ├── remote_templates.rs # the same, for a project with a [remote]
+│   ├── known_templates.rs  # every template text ever shipped, so update knows what it wrote
+│   └── guard.rs            # what update may replace
+├── mcp/
+│   ├── protocol.rs   # JSON-RPC 2.0 and MCP types (pure)
+│   ├── tools.rs      # 34 tool definitions and argument validation (pure)
+│   ├── handlers.rs   # tool dispatch against the database
+│   ├── query.rs      # BFS, context, timeline, pulse, orphans (pure)
+│   └── mod.rs        # the stdio loop and session state
+└── demo_swarm/       # deciduous demo-swarm (hidden): the multi-agent demonstration
 
-web/                  # React/TypeScript web viewer
-├── src/
-│   ├── App.tsx       # Router setup, data loading
-│   ├── types/        # TypeScript interfaces
-│   ├── utils/        # Graph algorithms
-│   ├── hooks/        # React custom hooks
-│   ├── components/   # Reusable UI components
-│   └── views/        # Browsing mode views
-└── vite.config.ts    # Build configuration</pre>
+deciduous_mcp/        # the shared server: Elixir, Ecto, PostgreSQL, Hermes MCP over HTTP
+├── lib/deciduous_mcp/mcp/tools/*.ex   # one module per tool, 21 of them
+├── lib/deciduous_mcp/mcp/scope.ex     # the workspace argument and the X-Deciduous-Workspace pin
+├── lib/deciduous_mcp/mcp/instructions.ex  # what every client is told on initialize
+├── DEPLOY.md         # running it for a team
+└── scripts/setup.sh  # PostgreSQL 17 and the server in Docker
+
+web/                  # the viewer's React/TypeScript source; builds to src/viewer.html</pre>
             </section>
 
             <!-- CONCEPTS SECTION -->
             <section id="concepts" class="doc-section">
                 <h1>Concepts</h1>
-                <p class="lead">Mental models behind deciduous - why it exists and how to think about it.</p>
+                <p class="lead">How to think about the graph. Full text: <a href="../CONCEPTS.md">CONCEPTS.md</a> and <a href="../narratives.md">narratives.md</a>.</p>
 
-                <h2>The Context Problem</h2>
-                <p>AI assistants are powerful but forgetful. Every session:</p>
-                <ol>
-                    <li><strong>Starts fresh</strong> - no memory of past work</li>
-                    <li><strong>Gets compacted</strong> - long conversations get summarized, losing detail</li>
-                    <li><strong>Loses nuance</strong> - "we tried X but it didn't work" becomes just "we did Y"</li>
-                </ol>
+                <h2>Log before, not after</h2>
+                <pre>action   ← what is about to change, and in which files
+outcome  ← what happened: "212 passed, 0 failed", or the error
+link     ← in the same breath, to the parent</pre>
+                <p>An outcome written after the fact tends to be an adjective ("working"). One written from the test run is a number, and a number can be checked later. The transcript import applies the same rule mechanically: a <code>cargo test</code> result is an outcome marked <code>proven</code>; the assistant's "all tests pass" is marked <code>inferred</code>, next to it.</p>
 
-                <div class="info-box warning">
-                    <strong>The Result:</strong>
-                    <p>Repeated mistakes, lost reasoning, pivot confusion. The code uses approach A, but WHY? Gone.</p>
-                </div>
+                <h2>Options before decisions</h2>
+                <p>A goal does not lead straight to a decision. The options come first, with <code>chosen</code> and <code>rejected</code> edges into the decision that carry the reasons. The rejected option is the part you will want back in six months, and it is the part a summary drops.</p>
 
-                <h2>Real-Time Logging</h2>
-                <p>The key insight: <strong>Log BEFORE you do, not after.</strong></p>
-                <pre>BAD (retroactive):
-  1. Write code
-  2. Commit
-  3. "Oh I should log that"  ← Often forgotten, context lost
+                <h2>The pivot</h2>
+                <div class="diagram-box"><pre>[decision: Token bucket in Redis] (superseded)
+      │
+      ▼
+[observation: Redis failover drops bucket state]
+      │
+      ▼
+[revisit: Reconsidering: Token bucket in Redis]
+      │
+      ▼
+[decision: Fixed window counter in Postgres, 60s windows]</pre></div>
+                <p><code>deciduous archaeology pivot OLD "observation" "new approach"</code> writes the three nodes and three edges and marks the old decision superseded, atomically; <code>--dry-run</code> shows the plan. The old decision stays: deleting it would delete the reason the new one exists. <code>deciduous narratives pivots</code> reads every pivot chain back.</p>
 
-GOOD (real-time):
-  1. deciduous add action "Implementing X"  ← What you're ABOUT to do
-  2. Write code
-  3. deciduous add outcome "X complete"  ← What happened
-  4. deciduous link &lt;action&gt; &lt;outcome&gt;  ← Connect them</pre>
-
-                <h2>The Revisit Pattern (Pivots)</h2>
-                <p>When you change direction, capture the <strong>pivot</strong>:</p>
-                <div class="diagram-box"><pre>Old Approach                          New Approach
-────────────                          ────────────
-[Decision: Use JWT]                   [Decision: Use sessions]
-      │                                     ▲
-      ▼                                     │
-[Option: JWT chosen]                  [Option: Sessions chosen]
-      │                                     │
-      ▼                                     │
-[Action: Implement JWT]               ┌─────┘
-      │                               │
-      ▼                               │
-[Outcome: Working but...]             │
-      │                               │
-      ▼                               │
-[Observation: JWT too large]──────────┤
-      │                               │
-      └─────►[REVISIT]────────────────┘
-             "Reconsidering token strategy"</pre></div>
-
-                <p>The <strong>revisit</strong> node:</p>
-                <ol>
-                    <li>Links to observations that caused the rethink</li>
-                    <li>Links to the old decision being superseded</li>
-                    <li>Leads to the new decision</li>
-                </ol>
-                <p>This captures <strong>WHY</strong> we changed, not just <strong>WHAT</strong> changed.</p>
-
-                <h2>The Prompt Field</h2>
-                <p>The most important field for context recovery. When a user asks for something, capture their <strong>exact words</strong>:</p>
-                <pre># BAD - summary loses context
+                <h2>The prompt field</h2>
+                <pre># A summary loses the request
 deciduous add goal "Add auth" -p "User wants login"
 
-# GOOD - verbatim prompt enables full recovery
+# The user's words survive compaction
 deciduous add goal "Add auth" --prompt-stdin &lt;&lt; 'EOF'
 I need to add user authentication to the app. Users should be able to sign up
-with email/password, and we need OAuth support for Google and GitHub. The auth
-should use JWT tokens with refresh token rotation.
+with email/password, and we need OAuth support for Google and GitHub.
 EOF</pre>
+                <p>The CLI warns when a prompt is short enough to look like a summary; the node is created either way. The transcript import stores every prompt verbatim without being asked.</p>
 
-                <h2>Multi-User Sync</h2>
-                <p>The database is local and gitignored. How do teams share?</p>
+                <h2>Evidence</h2>
+                <p>Nodes derived from a transcript carry <code>metadata.evidence</code>: <code>kind</code> is <code>proven</code> (a tool call and its result, or the user's own words, with the entry uuids and tool_use ids) or <code>inferred</code> (the assistant said so). Actions carry <code>metadata.consulted</code>, the files read since the previous action, and <code>metadata.file_hashes</code>, git blob ids of the files touched. <code>deciduous show</code> prints them; the web viewer does not yet. Full text: <a href="../transcripts.md">transcripts.md</a>.</p>
 
-                <h3>The Dual-ID Model</h3>
-                <p>Every node has:</p>
-                <ul>
-                    <li><code>id</code> (integer): Local primary key, different on each machine</li>
-                    <li><code>change_id</code> (UUID): Globally unique, stable everywhere</li>
-                </ul>
+                <h2>Sharing</h2>
+                <p>Two models, chosen at <code>init</code>. With a <code>[remote]</code>: one PostgreSQL holds every project's graph, one workspace per repository; the CLI's writes are ops replayed on the server; agents write through the server's MCP tools; <code>deciduous remote status</code> compares the cache with the server field by field. Without one: <code>.deciduous/graph.json</code> is the shared file, carried by git, reconciled by <code>deciduous sync</code> and merged record by record by the <code>merge-record</code> driver. The 0.17 per-record directory <code>.deciduous/sync/</code> and the earlier <code>diff export</code> / <code>diff apply</code> patches are gone; a 0.17 directory is folded into <code>graph.json</code> by the next <code>sync</code>.</p>
 
-                <h3>Patch Workflow</h3>
-                <pre># Export decisions as a patch
-deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
-
-# Apply patches from teammates (idempotent)
-deciduous diff apply .deciduous/patches/*.json</pre>
-
-                <h2>Hook Enforcement</h2>
-                <p>Hooks make logging <strong>mandatory</strong>, not optional.</p>
-                <pre>[hooks]
-enabled = true
-
-[[hooks.pre_tool_use]]
-name = "require-action-node"
-matcher = "Edit|Write"
-description = "Block code edits without recent action node"
-enabled = true</pre>
-                <p>When the AI tries to edit code:</p>
-                <ol>
-                    <li>Hook script runs</li>
-                    <li>Checks: Is there an action node in the last 15 minutes?</li>
-                    <li>No? <strong>Blocks the edit</strong> with a message telling the AI to log first</li>
-                </ol>
+                <h2>Coordination is not the graph</h2>
+                <p>Agents working at the same time talk on the message board (<code>deciduous board</code>, <code>post_message</code> / <code>read_messages</code>): interface changes, questions, answers, with ids and replies. Messages are never in <code>graph.json</code>, never exported, never synced. Locally the board is the main worktree's database, shared by every worktree; with a <code>[remote]</code> it is on the server.</p>
             </section>
 
             <!-- WEB VIEWER SECTION -->
             <section id="web-viewer" class="doc-section">
                 <h1>Web Viewer</h1>
-                <p class="lead">React/TypeScript application with multiple visualization modes.</p>
+                <p class="lead"><code>deciduous serve</code>. Full text: <a href="../WEB_VIEWER.md">WEB_VIEWER.md</a>.</p>
 
-                <h2>Access Methods</h2>
-                <pre># Local development server
-deciduous serve --port 3000
+                <pre>deciduous serve                # http://localhost:3000, this project's database
+deciduous serve --port 8080</pre>
+                <p>Six views: DAG, Chains, Timeline, Graph, Roadmap, Story. The viewer is a React/TypeScript app in <code>web/</code>, built to a single HTML file and embedded in the binary as <code>src/viewer.html</code>; after changing <code>web/src/**</code>, <code>cd web &amp;&amp; npm run build</code> and copy <code>web/dist/index.html</code> over <code>src/viewer.html</code> and <code>docs/demo/index.html</code>. The <a href="../demo/">live demo</a> on this site is that build reading <code>docs/graph-data.json</code>, which was last exported on 2026-09-04; <code>deciduous sync</code> has not written it since 1.0.5.</p>
 
-# Static export for GitHub Pages
-deciduous sync
-git add docs/ && git commit -m "Update graph" && git push</pre>
-
-                <h2>Views</h2>
+                <h2>Routes the server answers</h2>
                 <table>
                     <thead>
-                        <tr><th>View</th><th>Question It Answers</th></tr>
+                        <tr><th>Route</th><th>Returns</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td><strong>Archaeology</strong></td><td>How did this system evolve? (default)</td></tr>
-                        <tr><td><strong>DAG</strong></td><td>What's connected to what?</td></tr>
-                        <tr><td><strong>Chains</strong></td><td>Show me everything related to X.</td></tr>
-                        <tr><td><strong>Timeline</strong></td><td>What happened when?</td></tr>
-                        <tr><td><strong>Story</strong></td><td>What's the full context for this goal?</td></tr>
-                        <tr><td><strong>Graph</strong></td><td>I want to explore freely.</td></tr>
-                        <tr><td><strong>Roadmap</strong></td><td>What work is planned?</td></tr>
-                        <tr><td><strong>Log</strong></td><td>What commands were run?</td></tr>
+                        <tr><td><code>GET /api/graph</code></td><td>nodes and edges</td></tr>
+                        <tr><td><code>GET /api/commands</code></td><td>the command log</td></tr>
+                        <tr><td><code>GET /api/git-history</code></td><td>commits for nodes that carry a hash</td></tr>
+                        <tr><td><code>GET /api/roadmap</code>, <code>POST /api/roadmap/checkbox</code></td><td>ROADMAP.md items; toggle one</td></tr>
+                        <tr><td><code>POST /api/ask</code></td><td>a question answered by the <code>claude</code> CLI with graph context; stored, and searchable with <code>GET /api/qa/search?q=</code></td></tr>
                     </tbody>
                 </table>
 
-                <h2>Key Algorithms</h2>
+                <h2>Chain building</h2>
+                <p><code>web/src/utils/graphProcessing.ts</code> builds chains by BFS over whole connected components, following outgoing and incoming edges, with no node cap, so one chain is the entire tree a goal belongs to. The viewer embedded in the binary draws a <code>took_from</code> edge as a plain line; the source draws it dash-dot (CHANGELOG 1.0.0).</p>
 
-                <h3>Chain Building</h3>
-                <p><code>web/src/utils/graphProcessing.ts</code></p>
-                <ol>
-                    <li>Find root nodes: all <code>goal</code> nodes + nodes with no incoming edges</li>
-                    <li>Sort roots: goals first, then by creation time</li>
-                    <li>BFS from each root following <strong>both</strong> outgoing and incoming edges</li>
-                    <li>No node limit (shows full connected components)</li>
-                </ol>
-
-                <h3>Session Grouping</h3>
-                <ol>
-                    <li>Sort all nodes by creation time</li>
-                    <li>Gap threshold: 4 hours</li>
-                    <li>New session when gap detected</li>
-                </ol>
-
-                <h3>Pivot Detection</h3>
-                <ol>
-                    <li>Find all <code>revisit</code> nodes</li>
-                    <li>Get incoming edges → observations, old decisions</li>
-                    <li>Get outgoing edges → new decisions</li>
-                    <li>Build pivot context (before/after/why)</li>
-                </ol>
-
-                <h2>Data Sources</h2>
-                <table>
-                    <thead>
-                        <tr><th>Local Server</th><th>Static Files</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr><td><code>/api/graph</code></td><td><code>./graph-data.json</code></td></tr>
-                        <tr><td><code>/api/git-history</code></td><td><code>./git-history.json</code></td></tr>
-                        <tr><td><code>/api/roadmap</code></td><td><code>./roadmap-items.json</code></td></tr>
-                    </tbody>
-                </table>
-
-                <h2>URL Structure</h2>
-                <pre>/           → Archaeology (default)
-/dag        → DAG view
-/dag/:nodeId → DAG with node selected
-/chains     → Chains view
-/timeline   → Timeline view
-/graph      → Force-directed graph
-/roadmap    → Roadmap view
-/story      → Story view</pre>
+                <h2>The other server mode</h2>
+                <p><code>deciduous serve --api --data-dir DIR --token T [--bind 127.0.0.1]</code> is not the viewer: it is the 0.16 multi-graph JSON API daemon, one SQLite file per graph under <code>DIR/graphs/&lt;id&gt;/</code>, bearer-token auth, append-and-read only (<code>DECIDUOUS_API_DATA_DIR</code> and <code>DECIDUOUS_API_TOKEN</code> answer for scripts). The shared graph server in <code>deciduous_mcp/</code> superseded it as the way to share a graph; the daemon remains in the binary.</p>
             </section>
 
             <!-- QUICK REFERENCE SECTION -->
             <section id="quick-reference" class="doc-section">
                 <h1>Quick Reference</h1>
-                <p class="lead">Fast lookup for common operations.</p>
+                <p class="lead">Every command here is in 1.1.0's <code>--help</code>. Full text: <a href="../QUICK_REFERENCE.md">QUICK_REFERENCE.md</a>; the walkthrough is <a href="../guide.html">the guide</a>.</p>
 
-                <h2>Initialize</h2>
-                <pre>deciduous init                    # Claude Code (default)
-deciduous init --opencode         # OpenCode
-deciduous init --windsurf         # Windsurf
-deciduous init --both             # Claude Code + OpenCode</pre>
+                <h2>Set up</h2>
+                <pre>deciduous init [--claude|--opencode|--windsurf|--both]   # writes the files, then asks where the graph lives
+deciduous remote setup --local | --database-url URL | --docker-postgres | --url URL   # the same answer, for scripts
+deciduous update [--all DIR]                            # replace what deciduous wrote; keep what you edited
+deciduous check-update                                  # exit 1 if integration files are behind the binary</pre>
 
-                <h2>Add Nodes</h2>
-                <pre># Basic
-deciduous add goal "Add auth"
-deciduous add decision "How to store sessions?"
-deciduous add action "Implementing middleware"
-deciduous add outcome "Auth working"
-deciduous add observation "Redis adds complexity"
-deciduous add revisit "Rethinking approach"
-
-# With metadata
-deciduous add action "Implementing X" \
-  -c 85 \                           # Confidence 0-100
-  --commit HEAD \                   # Link to current commit
-  -f "src/auth.rs,src/session.rs" \ # Associated files
-  -b feature-auth                   # Git branch
-
-# With verbatim prompt
-deciduous add goal "Title" --prompt-stdin &lt;&lt; 'EOF'
-The full user message here...
-EOF</pre>
-
-                <h2>Link Nodes</h2>
-                <pre>deciduous link 1 2                  # Default: leads_to
-deciduous link 1 2 -r "Rationale"   # With reason
-deciduous link 1 2 -t chosen        # Edge type: chosen/rejected/requires</pre>
-
-                <h2>Query Graph</h2>
-                <pre>deciduous nodes                     # List all
-deciduous nodes --branch main       # Filter by branch
-deciduous nodes --type goal         # Filter by type
-deciduous edges                     # List connections
-deciduous show 42                   # Node details
-deciduous graph                     # Full JSON</pre>
-
-                <h2>Visualize</h2>
-                <pre>deciduous serve                     # Web viewer
-deciduous tui                       # Terminal UI
-deciduous dot --png -o graph.png    # Export PNG</pre>
-
-                <h2>Export & Sync</h2>
-                <pre>deciduous sync                      # Export for GitHub Pages
-
-# Multi-user sync
-deciduous diff export --branch feature-x -o .deciduous/patches/my.json
-deciduous diff apply .deciduous/patches/*.json</pre>
-
-                <h2>Document Attachments</h2>
-                <pre>deciduous doc attach &lt;node_id&gt; &lt;file&gt;           # Attach file to node
-deciduous doc attach &lt;node_id&gt; &lt;file&gt; -d "..."  # With description
-deciduous doc attach &lt;node_id&gt; &lt;file&gt; --ai-describe  # AI description
-deciduous doc list [node_id]                     # List documents
-deciduous doc show &lt;id&gt;                          # Document details
-deciduous doc describe &lt;id&gt; "text"               # Set description
-deciduous doc open &lt;id&gt;                          # Open in default app
-deciduous doc detach &lt;id&gt;                        # Soft-delete
-deciduous doc gc                                 # Clean orphaned files</pre>
-
-                <h2>Common Patterns</h2>
-
-                <h3>Start New Feature</h3>
-                <pre>deciduous add goal "Feature name" --prompt-stdin &lt;&lt; 'EOF'
-User's full request here...
+                <h2>Write</h2>
+                <pre>deciduous add goal "Title" -c 90 --prompt-stdin &lt;&lt; 'EOF'
+the user's message
 EOF
-deciduous add decision "Key design question" -c 85
-deciduous link &lt;goal_id&gt; &lt;decision_id&gt; -r "Design question for feature"</pre>
+deciduous add option "A" ; deciduous add option "B"
+deciduous add decision "A, over B" -c 85
+deciduous link GOAL A -r "possible approach" ; deciduous link GOAL B -r "possible approach"
+deciduous link A DECISION -t chosen -r "why" ; deciduous link B DECISION -t rejected -r "why not"
+deciduous add action "What changes" -c 85 -f "src/a.rs,src/b.rs"
+deciduous add outcome "212 passed, 0 failed" -c 95 --commit HEAD
+deciduous add observation "Title" -d "what was seen and what it implies"
+deciduous status ID completed|superseded|abandoned|active|pending|rejected
+deciduous archaeology pivot OLD "observation" "new approach" -c 80 -r "why" [--dry-run]
+deciduous transcript import SESSION_ID [--dry-run] [--no-hash]</pre>
 
-                <h3>Record a Pivot</h3>
-                <pre>deciduous add observation "Problem with current approach"
-deciduous add revisit "Reconsidering X"
-deciduous link &lt;observation_id&gt; &lt;revisit_id&gt; -r "Caused rethinking"
-deciduous link &lt;revisit_id&gt; &lt;new_decision_id&gt; -r "New approach"
-deciduous status &lt;old_decision_id&gt; superseded</pre>
+                <h2>Read</h2>
+                <pre>deciduous nodes [-b BRANCH] [-t TYPE] [--theme NAME]
+deciduous edges
+deciduous show ID [--json]
+deciduous pulse [--summary]
+deciduous commands
+deciduous archaeology timeline [-l N]
+deciduous narratives pivots
+deciduous transcript list
+deciduous graph                      # everything, JSON</pre>
 
-                <h3>After Committing Code</h3>
-                <pre>git commit -m "feat: add auth"
-deciduous add action "Implemented auth" -c 90 --commit HEAD
-deciduous link &lt;goal_id&gt; &lt;action_id&gt; -r "Implementation"</pre>
+                <h2>Output</h2>
+                <pre>deciduous serve [-p 3000]
+deciduous dot --png --auto           # docs/decision-graph-&lt;branch&gt;.png (needs Graphviz)
+deciduous writeup -t "Title" -n 1-9 [--auto]
+deciduous doc attach ID FILE [-d "..."] ; doc list [ID] ; doc show ; doc open ; doc detach ; doc gc
+deciduous board post --as LABEL -s "subject" -m "@other body" ; board read --unanswered LABEL ; board show ID</pre>
 
-                <h2>File Locations</h2>
+                <h2>Share</h2>
+                <pre># with a [remote]
+deciduous remote status              # cache vs server, field by field; exit 1 on any difference
+deciduous remote pull                # take the server's side
+deciduous remote push [--seed]       # send the queued ops; --seed sends history that predates the server
+deciduous remote watch               # one line per write, live
+
+# without a [remote]
+deciduous sync                       # reconcile .deciduous/graph.json with the database
+deciduous sync --check               # exit 1 if anything is pending
+git add .deciduous/graph.json        # by path, never git add -A</pre>
+
+                <h2>File locations</h2>
                 <table>
                     <thead>
                         <tr><th>Path</th><th>Purpose</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td><code>.deciduous/deciduous.db</code></td><td>SQLite database (gitignored)</td></tr>
-                        <tr><td><code>.deciduous/config.toml</code></td><td>Configuration</td></tr>
-                        <tr><td><code>.deciduous/.version</code></td><td>Binary version</td></tr>
-                        <tr><td><code>.deciduous/documents/</code></td><td>Content-hash named document attachments</td></tr>
-                        <tr><td><code>.deciduous/patches/</code></td><td>Multi-user sync patches</td></tr>
-                        <tr><td><code>.claude/hooks/</code></td><td>Claude Code hooks</td></tr>
-                        <tr><td><code>.claude/commands/</code></td><td>Slash commands</td></tr>
-                        <tr><td><code>docs/graph-data.json</code></td><td>Exported graph</td></tr>
+                        <tr><td><code>.deciduous/deciduous.db</code></td><td>SQLite database; the cache with a <code>[remote]</code>, the store without one. Gitignored.</td></tr>
+                        <tr><td><code>.deciduous/config.toml</code></td><td><code>[remote] url</code> and <code>workspace</code>, branch settings. Committed; holds no credential.</td></tr>
+                        <tr><td><code>.deciduous/graph.json</code></td><td>The git-tracked graph for a project without a <code>[remote]</code>; merged by <code>merge-record</code>.</td></tr>
+                        <tr><td><code>.deciduous/remote-log.jsonl</code></td><td>Ops queued for the server. Gitignored.</td></tr>
+                        <tr><td><code>.deciduous/documents/</code></td><td>Attached files, named by content hash.</td></tr>
+                        <tr><td><code>.deciduous/narratives.md</code></td><td>Evolution narratives.</td></tr>
+                        <tr><td><code>.deciduous/.version</code></td><td>The binary version the integration files were written by.</td></tr>
+                        <tr><td><code>.deciduous/harness.json</code>, <code>update-backups/</code>, <code>update-templates/</code></td><td>What <code>update</code> wrote and its hashes; backups of everything it changes; the template it would have written for a file you edited, for <code>diff</code>.</td></tr>
+                        <tr><td><code>.deciduous/active_session</code></td><td>The local MCP server's current session id.</td></tr>
+                        <tr><td><code>.claude/commands/</code>, <code>.claude/skills/</code>, <code>.claude/hooks/</code>, <code>.claude/agents.toml</code>, <code>CLAUDE.md</code></td><td>What <code>init</code> writes for Claude Code.</td></tr>
+                        <tr><td><code>~/.config/deciduous/credentials</code></td><td>The server token, mode 0600, outside every repository.</td></tr>
+                        <tr><td><code>~/.config/deciduous/server/.env</code></td><td>This machine's server: database URL, token, port, mode, version.</td></tr>
+                        <tr><td><code>~/.claude/projects/&lt;slug&gt;/*.jsonl</code></td><td>Claude Code's transcripts, read by <code>deciduous transcript</code>.</td></tr>
                     </tbody>
                 </table>
+
+                <h2>Environment variables the binary reads</h2>
+                <table>
+                    <thead>
+                        <tr><th>Variable</th><th>Effect</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>DECIDUOUS_MCP_TOKEN</code></td><td>The server token; overrides the credentials file. Never written to config.</td></tr>
+                        <tr><td><code>DECIDUOUS_DB_PATH</code></td><td>The database to use instead of walking up to <code>.deciduous/</code>; for Claude Desktop and worktrees.</td></tr>
+                        <tr><td><code>DECIDUOUS_PORT</code></td><td>The port for this machine's server, the first time it is set up.</td></tr>
+                        <tr><td><code>DECIDUOUS_NO_SERVER</code></td><td>Skip <code>init</code>'s server step (tests, CI).</td></tr>
+                        <tr><td><code>DECIDUOUS_QUIET_LOCAL_ONLY</code></td><td>Silence the stderr line a write prints when the project has no server anywhere.</td></tr>
+                        <tr><td><code>DECIDUOUS_OPS_TIMEOUT</code></td><td>Per-request timeout when replaying ops to the server.</td></tr>
+                        <tr><td><code>DECIDUOUS_AGENT_LABEL</code></td><td>This session's board label; <code>board post --as</code> default and the board-mentions hook.</td></tr>
+                        <tr><td><code>DECIDUOUS_API_DATA_DIR</code>, <code>DECIDUOUS_API_TOKEN</code></td><td><code>serve --api</code> settings.</td></tr>
+                        <tr><td><code>DECIDUOUS_BIND_ADDRESS</code></td><td>In <code>~/.config/deciduous/server/.env</code>: the address this machine's server listens on (setup writes 127.0.0.1).</td></tr>
+                    </tbody>
+                </table>
+                <p><code>DECIDUOUS_ENV_FILE</code>, <code>DECIDUOUS_SERVER_MODE</code> and <code>DECIDUOUS_MCP_INSTALL_DIR</code> also exist in the source, for the server install; they are not documented here because their behaviour was not verified for this page.</p>
+            </section>
+
+            <!-- DOCS SECTION -->
+            <section id="docs" class="doc-section">
+                <h1>Reference documents</h1>
+                <div class="quick-links">
+                    <a href="../ARCHITECTURE.md" class="quick-link"><h3>ARCHITECTURE.md</h3><p>How the binary, the servers and the files fit together</p></a>
+                    <a href="../CONCEPTS.md" class="quick-link"><h3>CONCEPTS.md</h3><p>The mental model: nodes, edges, pivots, prompts</p></a>
+                    <a href="../QUICK_REFERENCE.md" class="quick-link"><h3>QUICK_REFERENCE.md</h3><p>Commands, one screen</p></a>
+                    <a href="../WEB_VIEWER.md" class="quick-link"><h3>WEB_VIEWER.md</h3><p>deciduous serve: views, routes, rebuilding</p></a>
+                    <a href="../remote-graph.md" class="quick-link"><h3>remote-graph.md</h3><p>The shared server: init's choices, status, pull, push, events</p></a>
+                    <a href="../MULTI_USER_SYNC.md" class="quick-link"><h3>MULTI_USER_SYNC.md</h3><p>graph.json through git, for a project without a [remote]</p></a>
+                    <a href="../transcripts.md" class="quick-link"><h3>transcripts.md</h3><p>The transcript import: what is derived, evidence, the SessionEnd hook</p></a>
+                    <a href="../DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md" class="quick-link"><h3>DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md</h3><p>Attaching documents in the flow of work</p></a>
+                    <a href="../narratives.md" class="quick-link"><h3>narratives.md</h3><p>Pulse, narratives and archaeology: the three skills</p></a>
+                    <a href="https://github.com/notactuallytreyanastasio/deciduous/blob/main/deciduous_mcp/DEPLOY.md" class="quick-link"><h3>deciduous_mcp/DEPLOY.md</h3><p>Running the shared server for a team</p></a>
+                    <a href="https://github.com/notactuallytreyanastasio/deciduous/blob/main/CHANGELOG.md" class="quick-link"><h3>CHANGELOG.md</h3><p>Every release from 0.3.2 to 1.1.0, with what was left undone</p></a>
+                </div>
             </section>
 
             <div class="page-nav" style="margin-top: 60px;">
