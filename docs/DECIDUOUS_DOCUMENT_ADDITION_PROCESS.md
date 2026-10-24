@@ -1,387 +1,238 @@
 # Document Attachments: The Full Process
 
-How to use `deciduous doc` in the real flow of working with an AI assistant. Not just the commands — the thinking, the triggers, and the habits that make documents actually useful for context recovery.
+A decision often rests on something that is not text in the repository: the
+screenshot of the bug, the diagram drawn before the approach was chosen, the
+PDF spec, the cost breakdown that forced the pivot. `deciduous doc` attaches
+such files to nodes so a later session can see what the decision was made
+from, not only that it was made. This page is the commands, verified against
+1.1.0, and the habits that make attachments worth having.
 
 ---
 
-## Why Attach Documents?
+## The commands
 
-The decision graph captures *reasoning*. But reasoning often depends on things that aren't text:
-
-- **The screenshot** the user showed you of a bug
-- **The architecture diagram** you discussed before choosing an approach
-- **The PDF spec** that defined the requirements
-- **The Figma export** that drove the UI decisions
-- **The error output** you saved before debugging
-
-Without these, a future session sees "chose approach B over approach A" but not *the diagram that made it obvious why*. Documents fill that gap.
-
----
-
-## The Commands
+Every subcommand and flag below is in `deciduous doc --help`.
 
 ```bash
-# Attach a file to a node
-deciduous doc attach <node_id> <file_path>
-deciduous doc attach <node_id> <file_path> -d "What this document is"
-deciduous doc attach <node_id> <file_path> --ai-describe   # Claude writes the description
+deciduous doc attach <node> <file>                  # node: local id, change_id prefix, or server id
+deciduous doc attach <node> <file> -d "What this is"
+deciduous doc attach <node> <file> --ai-describe     # the claude CLI writes the description
 
-# See what's attached
-deciduous doc list                    # Everything
-deciduous doc list <node_id>          # Documents for one node
-deciduous doc show <doc_id>           # Full detail on one document
+deciduous doc list                                   # every attached document
+deciduous doc list <node>                            # one node's
+deciduous doc list --include-detached [--json]       # detached ones too
+deciduous doc show <doc_id> [--json]
 
-# Update a description
 deciduous doc describe <doc_id> "Better description"
-deciduous doc describe <doc_id> --ai  # Let Claude describe it
+deciduous doc describe <doc_id> --ai
+deciduous doc describe <doc_id> < description.txt    # text on stdin when omitted
 
-# Open in your default app
-deciduous doc open <doc_id>
-
-# Remove (soft-delete — recoverable)
-deciduous doc detach <doc_id>
-
-# Clean up orphaned files on disk
+deciduous doc open <doc_id>                          # default application
+deciduous doc detach <doc_id>                        # soft delete, recoverable
+deciduous doc gc --dry-run                           # files no active record references
 deciduous doc gc
-deciduous doc gc --dry-run            # Preview first
 ```
 
-Files are stored in `.deciduous/documents/` with content-hash names. Same file attached twice = stored once.
+From a scratch project:
 
----
+```
+$ deciduous doc attach 1 spec.md -d "Rate limit spec from kickoff"
+Attached document 1 to node 1 (spec.md)
+  Description: Rate limit spec from kickoff
 
-## When to Attach Documents
+$ deciduous doc show 1
+Document Details
+  ID:          1
+  Node:        1
+  Filename:    spec.md
+  MIME type:   text/markdown
+  Size:        5B
+  Hash:        3b92cc255009c1a8541990fd00bcde181bc803a80b234f086647210c078bb7e4
+  Storage:     .deciduous/documents/spec.md.3b92cc25
+  Attached:    2026-10-24T12:47:21.048730-04:00
+  Description: Rate limit spec from kickoff (manual)
 
-Not everything needs a document. Here's the filter:
+$ deciduous doc detach 1
+Detached document 1
+
+$ deciduous doc gc --dry-run
+1 orphaned files:
+  .deciduous/documents/spec.md.3b92cc25
+(dry run - no files deleted)
+```
+
+## Storage
+
+| | |
+|---|---|
+| Location | `.deciduous/documents/`, next to the database; not in git (`.deciduous/*` is ignored) |
+| File name | `<original filename>.<first 8 hex of the SHA-256>`: `spec.md.3b92cc25`, not a bare hash |
+| Deduplication | the same bytes attached to two nodes are one file on disk and two records |
+| Record | `node_documents` in the local database: original filename, MIME type, size, full hash, description and whether it was `manual` or `ai`, who attached it and when, `detached_at` |
+| Detach | sets `detached_at`; the record stays and `list --include-detached` shows it; the file stays until `gc` |
+| `gc` | deletes files no active record references; `--dry-run` lists them first |
+| Limits | the local MCP server's `attach_document` reads regular files inside the project up to 25 MiB |
+
+## Sharing
+
+Documents are not in `.deciduous/graph.json`, so they do not travel through
+git with the rest of the graph; a teammate who pulls sees the node and not the
+file. With a `[remote]`, `deciduous remote push --seed` sends documents the
+server lacks, bytes included, and the server stores them once per SHA-256
+across workspaces. Attaching does not send; seeding does. For a git-model
+project, a file that must be shared belongs in the repository and in the
+node's `-f` list instead.
+
+## When to attach
 
 | Situation | Attach? | Why |
-|-----------|---------|-----|
-| User shares a screenshot of a bug | **Yes** | The visual context is irreplaceable |
-| User drops in a PDF spec | **Yes** | The spec drove the goal — link it |
-| User pastes an error message | No | Capture in the node description instead |
-| You generate an architecture diagram | **Yes** | Visual evidence of the design at this point |
-| User references a Figma file | **Yes** if they export it | External URLs aren't recoverable |
-| Code file already in the repo | No | Use `-f "src/auth.rs"` instead |
-| Meeting notes about a decision | **Yes** | Context that doesn't live in code |
+|---|---|---|
+| The user shares a screenshot of a bug | yes | the visual state is not recoverable any other way |
+| The user drops in a PDF spec | yes | it drove the goal |
+| The user pastes an error message | no | put it in the node's description |
+| You generate an architecture diagram | yes | evidence of the design at that moment |
+| The user references a Figma file | yes, if exported | a URL is not a copy |
+| A code file already in the repository | no | `-f "src/auth.rs"` on the node |
+| Meeting notes behind a decision | yes | context that lives nowhere in the code |
 
-**The rule**: Attach it if a future session would need to *see* it to understand why a decision was made, and it's not already in the repo.
+The rule: attach it if a later session would need to see it to understand why
+a decision was made, and it is not already in the repository.
 
----
+## How the agent uses it
 
-## How the AI Should Use This
-
-The CLAUDE.md behavioral triggers tell the AI when to suggest documents:
+The `CLAUDE.md` section `init` writes tells the agent when to offer:
 
 ```
-| User shares an image or screenshot | Ask: "Want me to attach this to the current goal/action node?" |
-| User references an external document | Ask: "Should I attach a copy to the decision graph?" |
-| Architecture diagram is discussed    | Suggest attaching it to the relevant goal node |
-| Files not in the project are dropped in | Attach to the most relevant active node |
+| User shares an image or screenshot        | Ask: "Want me to attach this to the current goal/action node?" |
+| User references an external document      | Ask: "Should I attach a copy to the decision graph?"           |
+| Architecture diagram is discussed         | Suggest attaching it to the relevant goal node                 |
+| Files not in the project are dropped in   | Attach to the most relevant active node                        |
 ```
 
-The AI should **not** prompt on every message. Only when files are directly relevant to a decision node that's in play.
+and not to ask on every message. In practice:
 
-### What "intelligent" use looks like
+1. A screenshot arrives: ask once, attach on yes, move on.
+2. A spec arrives with the request: attach it to the goal without asking.
+3. "The architecture doc" is mentioned: `deciduous doc list` first; it may be there.
+4. At `/recover`: `deciduous doc list` and name the documents on active nodes.
+5. At `/work`: after the goal node, check whether reference material came with it.
+6. In `/narratives`: attached diagrams and specs are evidence for a narrative.
 
-1. User shares a screenshot → AI asks once, attaches if yes, moves on
-2. User drops in a PDF → AI attaches it to the active goal without asking (it's obviously relevant)
-3. User mentions "the architecture doc" → AI checks `deciduous doc list` to see if it's already attached
-4. During `/recover` → AI runs `deciduous doc list` and mentions any documents on active nodes
-5. During `/work` → After creating the goal node, AI checks if reference materials should be attached
+## Walkthrough: a notification service
 
----
-
-## Walkthrough: Building a Notification Service
-
-Here's a realistic project showing documents woven into the deciduous workflow from start to finish.
-
-### Day 1: The Kickoff
-
-User drops in a requirements PDF and says:
+Day 1, the user drops in a requirements PDF:
 
 > Build a notification service. Users can subscribe to topics and receive notifications via email, SMS, or push. Here's the product spec.
 
 ```bash
-# AI creates the goal with the verbatim prompt
 deciduous add goal "Build notification service" -c 90 --prompt-stdin << 'EOF'
 Build a notification service. Users can subscribe to topics and receive
 notifications via email, SMS, or push. Here's the product spec.
 EOF
 # Created node 1
+deciduous doc attach 1 ~/Downloads/notification-service-spec.pdf -d "Product requirements spec from kickoff"
 
-# AI attaches the spec PDF to the goal
-deciduous doc attach 1 /tmp/notification-service-spec.pdf -d "Product requirements spec from kickoff"
-# Attached document 1
-
-# AI maps the first design question
 deciduous add option "Fan-out on write (eager delivery)" -c 80
-deciduous link 1 2 -r "possible_approach"
-
+deciduous link 1 2 -r "possible approach"
 deciduous add option "Fan-out on read (pull-based)" -c 80
-deciduous link 1 3 -r "possible_approach"
-
+deciduous link 1 3 -r "possible approach"
 deciduous add option "Hybrid: write for push/SMS, read for email digests" -c 85
-deciduous link 1 4 -r "possible_approach"
+deciduous link 1 4 -r "possible approach"
 ```
 
-**What happened**: The PDF is now linked to the goal. Any future session that opens node 1 can read the spec and understand exactly what was requested.
-
-### Day 1: The Architecture Discussion
-
-User sketches a diagram and drops it in:
-
-> Here's how I'm thinking about the delivery pipeline. What do you think?
+The user sketches the delivery pipeline and drops the image in:
 
 ```bash
-# AI creates an observation about the architecture
 deciduous add observation "User proposed delivery pipeline architecture" -c 85
-deciduous link 1 5 -r "architecture_context"
-
-# AI attaches the diagram
-deciduous doc attach 5 /tmp/delivery-pipeline-sketch.png --ai-describe
-# AI generates: "Hand-drawn architecture diagram showing a message broker
-# fanning out to three delivery channels (email via SES, SMS via Twilio,
-# push via FCM) with a retry queue feeding back into the broker."
+deciduous link 1 5 -r "architecture context"
+deciduous doc attach 5 ~/Downloads/delivery-pipeline-sketch.png --ai-describe
 ```
 
-**What happened**: The observation node captures *that* there was an architecture discussion. The attached diagram captures *what* was discussed. The AI-generated description means the diagram is searchable and recoverable even without opening the image.
+`--ai-describe` runs the `claude` CLI over the file and stores its description
+marked `ai`, so the diagram is findable from `doc list` without opening it.
+Without the CLI installed the attach still succeeds and the description is
+empty; add one with `describe`.
 
-### Day 2: Choosing the Approach
+Day 2, the choice:
 
 ```bash
-# After discussing trade-offs, user picks the hybrid approach
-deciduous add decision "Chose hybrid fan-out: eager for push/SMS, batched for email" -c 90
-deciduous link 4 6 -r "chosen"
-deciduous link 2 6 -r "rejected: too expensive at scale for email"
-deciduous link 3 6 -r "rejected: latency too high for push/SMS"
-
-# AI starts implementing
+deciduous add decision "Hybrid fan-out over eager and pull-based" -c 90
+deciduous link 4 6 -t chosen
+deciduous link 2 6 -t rejected -r "too expensive at scale for email"
+deciduous link 3 6 -t rejected -r "latency too high for push and SMS"
 deciduous add action "Implementing message broker with topic subscriptions" -c 85 -f "src/broker.rs,src/subscription.rs"
 deciduous link 6 7 -r "implementation"
 ```
 
-No documents needed here — the decision is captured in the graph itself.
+No document: the decision is in the graph itself.
 
-### Day 3: The Bug Report
-
-User comes back with a screenshot:
-
-> Push notifications aren't reaching iOS devices. Here's what I'm seeing in the Firebase console.
+Day 3, a bug with a screenshot of the Firebase console:
 
 ```bash
-# AI creates a new goal for the bug
 deciduous add goal "Fix iOS push notification delivery failure" -c 90 --prompt-stdin << 'EOF'
 Push notifications aren't reaching iOS devices. Here's what I'm seeing
 in the Firebase console.
 EOF
 # Created node 8
-
-# AI attaches the screenshot
-deciduous doc attach 8 /tmp/firebase-console-error.png -d "Firebase console showing 0% delivery rate for iOS, 98% for Android"
-
-# AI investigates and finds the issue
+deciduous doc attach 8 ~/Desktop/firebase-console-error.png -d "Firebase console: 0% delivery on iOS, 98% on Android"
 deciduous add observation "APNs certificate expired 3 days ago" -c 95
-deciduous link 8 9 -r "root_cause"
-
+deciduous link 8 9 -r "root cause"
 deciduous add action "Renewing APNs certificate and updating FCM config" -c 90 -f "config/firebase.json"
 deciduous link 8 10 -r "fix"
 ```
 
-**What happened**: The screenshot is attached to the bug goal. When this bug comes up again in 3 months (maybe the cert expires again), a future session can see the exact Firebase console state and immediately recognize the pattern.
+When the certificate expires again, the screenshot is the pattern to
+recognise.
 
-### Day 5: The Pivot
-
-User sends a benchmark report:
-
-> Email delivery via SES is costing us $400/month for just the dev environment. We need to switch to a self-hosted SMTP relay. Here's the cost breakdown.
+Day 5, a cost report forces a pivot:
 
 ```bash
-# AI attaches the cost report to an observation
-deciduous add observation "SES costs $400/mo in dev — unsustainable" -c 95
-deciduous doc attach 11 /tmp/aws-cost-breakdown.csv -d "AWS billing CSV showing SES as 60% of dev costs"
-
-# AI creates the pivot
-deciduous add revisit "Reconsidering email delivery: SES to self-hosted SMTP" -c 85
-deciduous link 11 12 -r "forced_rethinking"
-deciduous status 6 superseded
-
-deciduous add decision "Switch to Postfix relay for email delivery" -c 85
-deciduous link 12 13 -r "new_approach"
+deciduous add observation "SES costs $400/mo in dev" -c 95 -d "SES is 60% of the dev AWS bill"
+deciduous doc attach 11 ~/Downloads/aws-cost-breakdown.csv -d "AWS billing CSV, SES line items"
+deciduous archaeology pivot 6 "SES costs $400/mo in dev; unsustainable" "Postfix relay for email delivery" -c 85 -r "cost"
 ```
 
-**What happened**: The cost CSV is the *evidence* for the pivot. Without it, a future session sees "we switched from SES to Postfix" but not *why*. With the document, the reasoning is grounded in data.
+`archaeology pivot` writes the observation, the revisit and the new decision,
+links them, and marks decision 6 superseded. The CSV on observation 11 is the
+evidence; without it a later session sees "switched from SES to Postfix" and
+not the number.
 
-### Day 7: Session Recovery
+Day 7, a new session runs `/recover`, which runs `deciduous doc list` among
+other things and gets four rows: the spec on goal 1, the sketch on
+observation 5, the console screenshot on goal 8, the billing CSV on
+observation 11, each with its description. The requirements, the
+architecture, the bug's symptom and the pivot's evidence are one command away,
+and nobody has to ask "what were the requirements?"
 
-New session starts. AI runs `/recover`:
+## In the viewer
+
+`deciduous serve` shows a node's documents in its detail panel: filename,
+size, MIME type and description, with `(AI)` after descriptions the CLI
+wrote. It lists them and stops there: the page has no link to the file, even
+though the server answers `GET /api/documents/file/<id>`. To see the file,
+`deciduous doc open <id>`.
+
+## Anti-patterns
+
+- **Attaching repository files.** Use `-f` on the node. Documents are for what
+  version control does not hold.
+- **Attaching every screenshot.** A debugging screenshot that will not matter
+  in a week is noise. Attach what explains a decision.
+- **No description.** `IMG_4392.png` with no description is useless in three
+  months. `--ai-describe` beats nothing.
+- **Documents instead of structure.** A PDF does not replace a goal, its
+  options and the decision. The graph carries reasoning; documents carry
+  evidence.
+
+## Quick reference card
 
 ```bash
-deciduous nodes
-deciduous edges
-deciduous doc list
-git status
-```
-
-The recovery report includes:
-
-> **Active goals**: "Build notification service" (node 1), "Fix iOS push delivery" (node 8)
->
-> **Attached documents** (5 total):
-> - Node 1: notification-service-spec.pdf — Product requirements spec
-> - Node 5: delivery-pipeline-sketch.png — Architecture diagram
-> - Node 8: firebase-console-error.png — Firebase console error screenshot
-> - Node 11: aws-cost-breakdown.csv — AWS billing showing SES costs
->
-> **Recent pivot**: Switched from SES to Postfix for email (node 12)
->
-> **Open work**: Postfix relay implementation in progress
-
-The documents provide instant context. The AI doesn't need to ask "what were the requirements?" or "why did we switch from SES?" — the answers are attached to the graph.
-
----
-
-## Document Lifecycle
-
-```
-File arrives (user shares, AI generates, dropped in)
-    |
-    v
-deciduous doc attach <node_id> <file> -d "description"
-    |
-    v
-File hashed (SHA-256), copied to .deciduous/documents/
-Record created in node_documents table
-    |
-    v
-Available in:
-├── deciduous doc list          (CLI)
-├── deciduous doc show <id>     (CLI detail)
-├── Web viewer detail panel     (visual)
-├── GET /api/documents          (API)
-├── /recover context reports    (AI sessions)
-└── Event sync to teammates     (multi-user)
-    |
-    v
-If no longer needed:
-    deciduous doc detach <id>   (soft-delete, recoverable)
-    |
-    v
-If orphaned files pile up:
-    deciduous doc gc            (removes unreferenced files from disk)
-```
-
----
-
-## Storage Details
-
-- **Location**: `.deciduous/documents/`
-- **Naming**: Content hash (SHA-256) — `a1b2c3d4...` not `architecture.png`
-- **Deduplication**: Same file attached to two nodes = one file on disk, two records
-- **Soft delete**: `detach` sets `detached_at` timestamp but keeps the file
-- **Hard delete**: `gc` removes files with no active references
-- **Metadata tracked**: original filename, MIME type, file size, description, who attached it, when
-
----
-
-## Multi-User Sync
-
-Documents are not part of multi-user sync yet. Attachment metadata and the files
-in `.deciduous/documents/` stay on the machine that attached them; `.deciduous/graph.json`
-covers nodes, edges, themes, and tags. For sharing a file,
-include it in the repo or use a shared drive. See `docs/MULTI_USER_SYNC.md`.
-
----
-
-## Integration Points
-
-### In `/work` transactions
-
-```bash
-/work "Build the payment integration"
-
-# Step 1: Goal created
-# Step 2: AI checks — "Did the user provide any reference materials?"
-#         If yes → deciduous doc attach <goal_id> <file>
-# Step 3: Action nodes as work proceeds
-# Step 4: Outcome with --commit HEAD
-# Step 5: Attach any generated artifacts (diagrams, reports)
-```
-
-### In `/recover` sessions
-
-```bash
-/recover
-
-# AI runs: deciduous doc list
-# Reports: "There are 3 documents attached to active nodes:
-#   - requirements.pdf on goal 'Build payment integration'
-#   - stripe-flow.png on observation 'Stripe webhook lifecycle'
-#   - error-log.txt on goal 'Fix webhook timeout'"
-```
-
-### In `/pulse` mapping
-
-```bash
-/pulse
-
-# When mapping current design, AI checks:
-#   deciduous doc list <goal_id>
-# If architecture diagrams exist, references them when building the model
-```
-
-### In the web viewer
-
-Select any node → detail panel shows:
-
-```
-DOCUMENTS (2)
-┌─────────────────────────────────────────┐
-│ notification-service-spec.pdf           │
-│ 2.1 MB  application/pdf                │
-│ Product requirements spec from kickoff  │
-├─────────────────────────────────────────┤
-│ delivery-pipeline-sketch.png            │
-│ 145 KB  image/png                       │
-│ Hand-drawn architecture diagram...  (AI)│
-└─────────────────────────────────────────┘
-```
-
-AI-generated descriptions show an **(AI)** badge.
-
----
-
-## Anti-Patterns
-
-**Don't attach code files that are in the repo.** Use `-f "src/auth.rs"` on the node instead. Documents are for things *not* tracked in version control.
-
-**Don't attach every screenshot.** If it's a quick debug session and the screenshot won't matter in a week, don't bother. Attach evidence that explains *decisions*, not transient debugging.
-
-**Don't skip descriptions.** A file named `IMG_4392.png` with no description is useless in 3 months. Use `--ai-describe` if you're lazy — it's better than nothing.
-
-**Don't use documents as a substitute for graph structure.** The graph captures *reasoning*. Documents capture *evidence*. A PDF doesn't replace a proper goal → option → decision chain.
-
----
-
-## Quick Reference Card
-
-```bash
-# The basics
-deciduous doc attach <node> <file> -d "what this is"
-deciduous doc list [node]
-deciduous doc show <id>
+deciduous doc attach <node> <file> -d "what this is"     # or --ai-describe
+deciduous doc list [node] [--include-detached] [--json]
+deciduous doc show <id> [--json]
+deciduous doc describe <id> "text" | --ai
 deciduous doc open <id>
-
-# Maintenance
-deciduous doc detach <id>        # Soft-delete
-deciduous doc gc --dry-run       # Preview cleanup
-deciduous doc gc                 # Remove orphans
-
-# AI descriptions
-deciduous doc attach <node> <file> --ai-describe
-deciduous doc describe <id> --ai
-
-# In the workflow
-/work "task"     → attach reference materials to the goal
-/recover         → review documents on active nodes
-/pulse           → check for architecture docs
+deciduous doc detach <id>
+deciduous doc gc --dry-run && deciduous doc gc
+deciduous remote push --seed                            # send documents to the server ([remote] projects)
 ```

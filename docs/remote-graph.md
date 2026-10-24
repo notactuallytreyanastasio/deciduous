@@ -642,9 +642,10 @@ importer would have to re-earn all of that and would drift from it.
   Before 1.0 the server answered such a call with a `200` under a made-up id,
   and Claude Code waited 300 seconds for a reply it could never match, on
   every call, until the process was restarted.
-- **Themes do not transfer.** `deciduous graph` exports nodes, edges and
-  documents; the SQLite `themes`/`node_themes` tables and the matching Postgres
-  columns both exist, but nothing carries the assignments across.
+- **Themes do not transfer.** The local `themes` and `node_themes` tables
+  travel in `graph.json` and in `deciduous graph`, but neither `remote push`
+  nor `remote pull` carries them, and `remote status` says so: "Themes and
+  tags are not sent to the server, so they are not compared."
 - **`push` is not the normal write path.** It exists to seed a workspace and to
   carry history that predates the server. Routine writes should go through MCP.
 - **Documents are not ops.** `remote push --seed` sends documents attached

@@ -1,16 +1,96 @@
 # Multi-User Sync
 
-How several people (and several machines) share one decision graph through git.
+Several people, several machines, several agents, one graph. There are two
+ways a project shares it, chosen when `deciduous init` asks where the graph
+lives, and they do not mix:
 
-## The model in one paragraph
+| | Shared server (`[remote]` in `.deciduous/config.toml`) | Git (no `[remote]`) |
+|---|---|---|
+| The truth | PostgreSQL behind the server; one workspace per repository | `.deciduous/graph.json`, committed with the code |
+| Agents write | straight to the server over MCP | to the local database, which mirrors `graph.json` |
+| The CLI writes | the local database, then an op to the server | the local database and `graph.json` at once |
+| Concurrent edits meet | on the server, compare-and-set field by field | in git, through the `deciduous merge-record` merge driver |
+| Catch up | `deciduous remote pull` | `git pull`; the next command follows the file |
+| Check | `deciduous remote status` (exit 1 on drift) | `deciduous sync --check` (exit 1 if pending) |
+| Boards, documents | on the server (`remote push --seed` for documents) | the board in the main worktree's database; documents stay local |
 
-Every machine has a private SQLite database, `.deciduous/deciduous.db`, which is
-gitignored. The shared source of truth is `.deciduous/graph.json`, one file holding
-the whole graph, committed with the code. Every graph write goes to the database and
-to that file at the same time. When git changes the file (a pull, a checkout, a
-reset, a stash), the database follows it before the next command runs. That is
-the whole mechanism. There is no event log, no checkpoint, no patch export, no
-directory of records, and nothing to compact.
+In both models `.deciduous/deciduous.db` is a per-machine cache and is never
+committed. `deciduous diff export` and `diff apply` do not exist; the patch
+model was removed in 0.17. `.deciduous/sync/` was 0.17 only, and `deciduous
+sync` folds a leftover one into `graph.json` and deletes it.
+
+---
+
+## Identity: local ids, change ids, server ids
+
+| Field | Scope | Example | Use it for |
+|-------|-------|---------|------------|
+| `id` | one machine | `42` | typing quickly at your own prompt |
+| `change_id` | everywhere | `8311856e-…` | anything that crosses machines |
+| server id | the server | a UUID the MCP tools return | what agents quote; resolved last |
+
+Alice's goal is `#12` on her laptop and `#907` on Bob's. Its `change_id` is the
+same on both. Records reference each other only by `change_id`; local ids are
+assigned on import and never leave the machine.
+
+Every command that takes a node id also takes a `change_id` prefix (four or more
+hex characters, unique). `deciduous nodes` prints the first eight in the CHANGE
+column:
+
+```
+ID    CHANGE    TYPE         STATUS     TITLE
+1     8311856e  goal         pending    Rate limit the public API
+5     34367f53  action       pending    Add token bucket middleware
+```
+
+```bash
+deciduous link 8311856e 5 -r "implements the goal Alice logged"
+deciduous status 34367f53 completed
+deciduous show 8311
+```
+
+The MCP tools accept the same thing: `"node_id": "8311856e"` instead of an
+integer. A digit-only prefix is tried as a local id first; quote eight or
+more characters of a server id when it could also be the start of a local
+node's `change_id`.
+
+## The shared server
+
+Agents write through the server's MCP tools and never touch the local
+database. The CLI writes locally first, so it works offline, and appends one
+op per field change to `.deciduous/remote-log.jsonl`; the ops are replayed to
+`POST /ops` before the command exits, and by `deciduous remote push` later.
+The server applies each op at most once and only over the value it replaced,
+so a `status` change queued while an agent retitled the node cannot put the
+old title back; it is refused by name instead.
+
+```bash
+deciduous remote status        # waiting ops, and every node, edge, document that differs, field by field
+deciduous remote pull          # send what is waiting, then take the server's rows (newer edit wins per node)
+deciduous remote push          # send what is waiting; --seed for history from before the remote
+deciduous remote watch         # one line per write, as agents make them
+```
+
+```
+Log: 0 write(s) waiting, 0 rejected  (.deciduous/remote-log.jsonl)
+
+                 local    server
+  nodes            719       719
+  edges            845       845
+
+In sync: no writes waiting, and every node, edge and document matches field by field.
+Themes and tags are not sent to the server, so they are not compared.
+```
+
+A git worktree whose `config.toml` lacks `[remote]` sends to its main
+checkout's server (same repository, one workspace). The server has no
+branches: a node written on any branch is in the workspace for every branch.
+`init` and `update` on a project with a `[remote]` leave `.gitignore`,
+`.gitattributes`, the merge driver and `graph.json` alone. The rest of the
+server model, including how workspaces are named and what `check_activity`
+and `took_from` are for, is in [remote-graph.md](remote-graph.md).
+
+## Git: the graph file
 
 ```text
 .deciduous/
@@ -29,167 +109,127 @@ directory of records, and nothing to compact.
 }
 ```
 
-## Identity: local ids vs change ids
+Every graph write goes to the database and to that file at the same time. When
+git changes the file (a pull, a checkout, a reset, a stash), the database
+follows it before the next command runs. `deciduous init` writes the rules:
 
-| Field | Scope | Example | Use it for |
-|-------|-------|---------|------------|
-| `id` | one machine | `42` | typing quickly at your own prompt |
-| `change_id` | everywhere | `a1b2c3d4-…` | anything that crosses machines |
+```
+# .gitignore
+.deciduous/*
+!.deciduous/config.toml
+!.deciduous/graph.json
 
-Alice's goal is `#12` on her laptop and `#907` on Bob's. Its `change_id` is the same
-on both. Records reference each other only by `change_id`; local ids are assigned
-when a record is imported and never leave the machine.
-
-Every command that takes a node id also takes a `change_id` prefix (four or more
-characters, unique). `deciduous nodes` prints the first eight characters in the
-CHANGE column:
-
-```text
-ID    CHANGE    TYPE         STATUS     TITLE
-57    a1b2c3d4  goal         pending    Rate limit the public API
-58    9f8e7d6c  action       pending    Add token bucket middleware
+# .gitattributes
+.deciduous/graph.json merge=deciduous linguist-generated=true
 ```
 
-```bash
-deciduous link a1b2c3d4 58 -r "implements the goal Alice logged"
-deciduous status 9f8e7d6c completed
-deciduous show a1b2
-```
+and registers the merge driver in the clone's git config
+(`merge.deciduous.driver = deciduous merge-record %O %A %B`). `linguist-generated`
+folds the file in pull request diffs; it is still there to expand.
 
-The MCP tools accept the same thing: pass `"node_id": "a1b2c3d4"` instead of an
-integer.
-
-## What a record looks like
+### What a record looks like
 
 One entry of `nodes`, keyed by its `change_id`:
 
 ```json
 {
   "author": "Alice Example",
-  "change_id": "a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-  "created_at": "2026-09-02T10:15:00-04:00",
+  "change_id": "8311856e-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+  "created_at": "2026-10-24T12:47:10-04:00",
   "metadata": {
-    "branch": "feat/rate-limit",
+    "branch": "main",
     "confidence": 90,
-    "prompt": "add rate limiting to the public API"
+    "prompt": "Add rate limiting to the public API..."
   },
   "node_type": "goal",
   "status": "pending",
   "title": "Rate limit the public API",
-  "updated_at": "2026-09-02T10:15:00-04:00"
+  "updated_at": "2026-10-24T12:47:10-04:00"
 }
 ```
 
-Maps and keys are sorted and the file ends with a newline, so two machines holding
-the same graph write byte-identical files and a diff shows only what changed.
-`metadata` is the expanded form of the database's `metadata_json` string so diffs
-stay readable.
+Maps and keys are sorted and the file ends with a newline, so two machines
+holding the same graph write byte-identical files and a diff shows only what
+changed. `metadata` is the expanded form of the database's `metadata_json`.
 
-An `edges` entry is the same idea. `edge_id` is a hash of
+An `edges` entry is the same idea. Its key is a hash of
 `(from_change_id, to_change_id, edge_type)`, so the same edge created on two
 machines lands under one key.
 
 A deleted record is not dropped. It is rewritten with `deleted_at` set (a
-tombstone) and keeps its last fields. That way a deletion reaches machines that
-already have the record, and `git log` still shows what was deleted.
+tombstone) and keeps its last fields, so the deletion reaches machines that
+already have the record and `git log` still shows what was deleted.
 
-## Why one file
+### Why one file
 
-0.17 kept one small JSON file per record under `.deciduous/sync/`. The reasoning was
-that two people adding records never touch the same file, so git merges their
-branches with no conflict at all, and `git log -- .deciduous/sync/nodes/<id>.json`
-is the history of one decision.
+0.17 kept one small JSON file per record under `.deciduous/sync/`, so two
+people adding records never touched the same file and git merged with no
+conflict. It worked, and it cost more than it solved: a real graph was 2,781
+files and 11 MB of mostly directory overhead for ~1 MB of content, `git status`
+after a sync was a wall of paths, and a PR touching the graph was hundreds of
+files. 0.18 folded it into one file. The trade is that every concurrent change
+now collides in git, which turned the merge driver from a nicety into the
+mechanism, and a mechanism exercised on every merge is one you find out about
+quickly rather than one that rots until the day it matters.
 
-Both of those are true. They were not worth what they cost:
-
-| | Directory of records (0.17) | One file (0.18) |
-|---|---|---|
-| A real graph on disk | 2,781 files, 11 MB of mostly directory overhead | one file, ~1 MB |
-| `git status` after a sync | a wall of paths | one path |
-| A PR that touches the graph | hundreds of files in the diff | one file |
-| Reading the graph | `read_dir` + open + parse per record | one read, one parse |
-| A record's file renamed, or two files claiming one id | possible, and has to be detected and reported | not expressible |
-| Concurrent adds on two branches | merge with no conflict | git conflict, resolved by the merge driver |
-
-The last row is the trade. Adding a record used to be conflict-free; now every
-concurrent change collides in git. That turned the merge driver from a nicety into
-the mechanism, which is the honest place for it to be: the driver was already
-required for the case people actually hit (two people editing the same decision),
-and a mechanism exercised on every merge is one you find out about quickly, rather
-than one that quietly rots until the day it matters.
-
-`deciduous init` and `deciduous update` add
-`.deciduous/graph.json linguist-generated=true` to `.gitattributes`, so GitHub folds
-the file by default in pull request diffs. It is still there to expand and review.
-
-## The workflow
+### The workflow
 
 ```bash
 git pull
 deciduous sync              # optional since 1.0.11: any command follows graph.json first
 # ... work; every add/link/status/delete writes the file immediately ...
-git add .deciduous/graph.json docs/graph-data.json
-git commit -m "graph: chose token bucket over leaky bucket"
+git add .deciduous/graph.json
+git commit -m "graph: chose token bucket over fixed window"
 git push
 ```
 
-`deciduous sync --check` reports what is pending and exits 1 if sync would write
-to `graph.json` or something is unresolved (an edge waiting for a node, a record
-that will not read, a conflict), which makes it a usable pre-push hook. A local
-database that is merely behind the file is not pending: the next command
-catches it up.
+```
+$ deciduous sync --check
+Checked .deciduous/graph.json (8 nodes, 7 edges, 1 themes, 1 tags on disk)
+  Database and records already agree
+```
 
-The AI assistant templates (`/sync`, `/recover`, `/decision`) tell the assistant to
-run `deciduous sync` at session start and after any pull, and to use change_id
-prefixes when linking to another person's nodes.
+`sync --check` exits 1 if `sync` would write to `graph.json` or something is
+unresolved (an edge waiting for a node, a record that will not read, an
+unfinished merge), which makes it a usable pre-push hook. A local database
+that is merely behind the file is not pending: the next command catches it up.
 
-## Branches, old commits and resets
+`deciduous sync` no longer writes `docs/graph-data.json`; that export went
+with GitHub Pages in 1.0.5.
 
-The database is one per clone and is shared by every branch and commit you
-check out; `graph.json` is versioned like any other file. Since 1.0.11 the
-database **follows the file**: before any command (or, in a running `deciduous
-mcp` server, before any tool call), if `graph.json` is not the file the
-database last mirrored, the database is brought to it. The graph you see is
-the graph of the commit that is checked out, like every other file in the tree.
+### Branches, old commits and resets
+
+The database is one per clone and shared by every branch you check out;
+`graph.json` is versioned like any other file. Since 1.0.11 the database
+follows the file: before any command (or, in a running `deciduous mcp`, before
+any tool call), if `graph.json` is not the file the database last mirrored,
+the database is brought to it.
 
 - **A branch's nodes stay on that branch.** A node added on `spike` leaves the
   local graph on `git checkout main` and comes back on `git checkout spike`,
-  under the same local id, with the documents attached to it. It is never
-  written into `main`'s file.
+  under the same local id, with its documents. It is never written into
+  `main`'s file.
 - **Git can take things out.** `git reset --hard`, `git stash` and
-  `git checkout -- .deciduous/graph.json` discard graph changes exactly as they
+  `git checkout -- .deciduous/graph.json` discard graph changes as they
   discard code changes; `git stash pop` brings them back.
 - **A detached commit is read, not written.** On `git checkout <old commit>`,
   a bisect step or a CI checkout, the local graph shows that commit's graph and
-  the file is left exactly as the commit has it, so `git checkout main` still
-  works afterwards. Adds and edits made there stay in the database, recorded as
-  unpublished, and are published into the next branch you check out. Deletions
-  there are refused by name: a deletion has to land in some branch's file. A
-  stopped rebase, merge, cherry-pick or revert is detached too, but there the
-  file is being rewritten, so writes go into it as usual.
-- **Following is local.** With a `[remote]`, a node that leaves the local graph
-  on a checkout is not deleted on the server, and an older version a reset
-  brings back is not sent as an edit. Only records that are newer in the file
-  than in the database (a teammate's, arriving by `git pull`) are queued for
-  the server, as before.
+  the file is left as the commit has it. Adds and edits made there are kept in
+  the database as unpublished and published into the next branch you check
+  out; deletions there are refused by name. A stopped rebase, merge,
+  cherry-pick or revert is detached too, but there the file is being
+  rewritten, so writes go into it as usual.
 
-How it tells a local write the file never got from a row git took out: every
-graph write is in `graph.json` before it is acknowledged, except a write made
-while HEAD is detached (or whose file write failed), and those are recorded in
-a local `unpublished` table. The database also records the digest of the file
-it mirrors; git never updates it, so a checkout shows up as a digest that
-differs. A lock held from each write's database commit to its line in the file,
-and for the whole of a follow, keeps a follow in one process from mistaking
-another process's write in flight for a row git removed.
+The database records the digest of the file it mirrors; git never updates
+it, so a checkout shows up as a digest that differs. Writes made while HEAD is
+detached, or whose file write failed, are recorded in a local `unpublished`
+table, which is how a local write the file never got is told from a row git
+took out.
 
-A database from before 1.0.11 has neither record. Its first sync takes out only
-rows some local branch's `graph.json` has (git keeps them), and treats rows no
-branch has as unpublished writes, publishing them rather than losing them.
+### How reconcile decides
 
-## How reconcile decides
-
-For each kind (nodes, themes, edges, tags), `deciduous sync` compares the file to
-the database by `change_id`:
+For nodes, themes, edges and tags, `deciduous sync` compares the file to the
+database by `change_id`:
 
 | File | Database | Result |
 |------|----------|--------|
@@ -198,154 +238,107 @@ the database by `change_id`:
 | record newer (`updated_at`) | row older | update the row |
 | record older | row newer | rewrite the record |
 | tombstone at or after the row's `updated_at` | row | delete locally |
-| tombstone before the row's `updated_at` | row | the row was edited after the delete: rewrite the record (resurrect) |
+| tombstone before the row's `updated_at` | row | the row was edited after the delete: rewrite the record |
 
-Edges import once both endpoints exist locally. An edge whose endpoint has not
-arrived yet is reported as pending (and `sync --check` exits 1 until it arrives) and
-imports on a later sync. An edge that points at a tombstoned node is skipped.
+Edges import once both endpoints exist locally; one whose endpoint has not
+arrived is reported as pending (`sync --check` exits 1) and imports later. An
+edge that points at a tombstoned node is skipped. Edges have no `updated_at`:
+an edge both sides have whose rationale differs takes the file's version.
 
-Edges have no `updated_at`. An edge both sides have whose rationale or weight differs
-(someone unlinked and relinked it) takes the file's version: local writes reach the
-file as they happen, so a row that differs is stale.
+Deleting a node tombstones its edges and tags with a `deleted_with` marker. If
+the node comes back (edited elsewhere after the delete), those tombstones no
+longer count and the edges and tags come back with it. A deliberate unlink or
+untag has no marker and stays.
 
-Deleting a node tombstones its edges and tags with a `deleted_with` marker naming
-that deletion. If the node comes back (edited elsewhere after the delete), those
-tombstones no longer count and the edges and tags come back with it. A deliberate
-unlink or untag has no marker and stays.
+A local write is always stamped later than the version of its record already
+in the file, even when that version's timestamp is ahead of this clock
+(`add --date` in the future, a fast clock elsewhere); otherwise the next sync
+would revert the edit. A `graph.json` that does not parse stops the run rather
+than being read as an empty graph, which would export every local row over
+whatever is actually there. A record filed under a key that disagrees with its
+own `change_id` (a hand edit) is reported and never written over. Same-named
+themes created on two machines are folded: the smaller `change_id` becomes
+canonical and the other's tags are re-pointed.
 
-A local write is always stamped later than the version of its record already in the
-file, even when that version's timestamp is ahead of this clock (`add --date` in the
-future, a teammate whose clock runs fast). Otherwise last-writer-wins would keep the
-file's version and the next sync would revert the edit.
+`deciduous sync` is idempotent: a second run reports "already agree".
 
-Four details keep this honest:
+### Two people change the graph
 
-- On an `updated_at` tie the file wins if the content differs. A merge-driver
-  result keeps the winning side's `updated_at` but carries fields from both
-  sides, and the database only has ours.
-- A `graph.json` that does not parse stops the run. It is never treated as an
-  empty graph, because that would export every local row over whatever is
-  actually in there.
-- A record filed under a key that disagrees with its own `change_id` (a hand
-  edit) is reported and never written over.
-- A record the database refuses (a constraint violation, say) is listed under
-  "the database refused a record" and the rest of the run still completes.
-  Same-named themes created on two machines before syncing are folded first:
-  the smaller `change_id` becomes canonical everywhere and the other's tags
-  are re-pointed to it.
-
-Write-through follows the same rule in the other direction. When a local
-`status`, `link`, or `tag` writes its record, it merges with whatever is already
-in the file rather than replacing it, so a teammate's version that was pulled but
-not yet synced into the database keeps its fields.
-
-A sync that exports thousands of records rewrites `graph.json` once, not once per
-record: `reconcile` runs inside `RecordStore::batch`, which keeps the document in
-memory and writes on the way out.
-
-Nothing here depends on the order records are read, so `deciduous sync` is
-idempotent: a second run right after the first reports "already agree".
-
-## Two people change the graph
-
-Because everyone writes one file, git reports a conflict on every concurrent
-change — and then never shows it to you, because `deciduous init`, `update`, and
-`sync` register a merge driver in the clone's git config and `.gitattributes`
-routes the file through it:
-
-```text
-.gitattributes:   .deciduous/graph.json merge=deciduous linguist-generated=true
-git config:       merge.deciduous.driver = deciduous merge-record %O %A %B
-```
-
-Git hands the driver the common ancestor of the file (`%O`) along with both sides.
-The driver merges the two documents **record by record**:
+Everyone writes one file, so git reports a conflict on every concurrent
+change, and never shows it to you, because the merge driver runs. Git hands
+it the common ancestor (`%O`) and both sides, and it merges record by record:
 
 | Situation | Result |
 |-----------|--------|
-| Only one side has a record | keep it — both people's new nodes survive |
+| Only one side has a record | keep it: both people's new nodes survive |
 | Both sides have it, unchanged | keep it |
 | Both sides changed it | merge field by field, below |
-| One side dropped it from the map, the other left it alone | it goes |
+| One side dropped it, the other left it alone | it goes |
 | One side dropped it, the other edited it | the edit wins |
 
-For the one record both sides changed, the ancestor is the fingerprint that tells a
-one-sided change from a real collision:
+For the record both sides changed:
 
 | Situation | Result |
 |-----------|--------|
 | Only one side changed a field | that side's value |
-| Both changed `metadata` | merged key by key with the same rules (Alice's `confidence` and Bob's `commit` both survive) |
+| Both changed `metadata` | merged key by key (Alice's `confidence` and Bob's `commit` both survive) |
 | Both changed the same field to different values | the side whose record has the later `updated_at` |
 | `updated_at` / `deleted_at` | the later one; `created_at` the earlier |
-| One side deleted, the other edited **after** the delete | the edit wins, the record lives |
-| One side deleted, the other edited **before** the delete | the tombstone stands, keeping the edited fields |
-| Both sides created the record independently (no ancestor) | every differing field is a collision: later `updated_at` wins, `metadata` still unions |
+| One side deleted, the other edited after the delete | the edit wins, the record lives |
+| One side deleted, the other edited before the delete | the tombstone stands, keeping the edited fields |
+| Both created the record independently (no ancestor) | every differing field is a collision: later `updated_at` wins, `metadata` still unions |
 
-A version that still carries conflict markers (someone committed a conflicted file)
-is resolved by merging its own sides first, so it does not poison every later merge
-whose ancestor it is. An ancestor that will not parse at all fails the driver: a
-merge without it would hand every field the sides differ on to the newer record and
-silently lose the older side's edits. The error names the way to do that anyway,
-knowingly (`deciduous merge-record /dev/null <ours> <theirs>`: an empty base is the
-two-way merge).
+A version that still carries conflict markers is resolved by merging its own
+sides first. An ancestor that will not parse fails the driver, because a merge
+without it would hand every differing field to the newer record; the error
+names the way to do that knowingly (`deciduous merge-record /dev/null <ours>
+<theirs>`).
 
-When the driver does fail (a side is not JSON), or git cannot run it (`deciduous` is
-not on the PATH git sees: GUI clients, CI images), git does **not** fall back to an
-ordinary conflict. It leaves our side in the file untouched, with no markers, and
-marks the path unmerged (`UU` in `git status`). That file parses and looks clean;
-committing it silently drops the other side. `deciduous sync --check` reports the
-unmerged state and exits 1, and `deciduous sync` finishes the merge from git's own
-three versions (`git ls-files -u`), keeping any local writes made to the working file
-since, and stages the result.
+When the driver fails, or git cannot run it (`deciduous` not on the PATH git
+sees: GUI clients, CI images), git does not fall back to an ordinary conflict.
+It leaves our side in the file with no markers and marks the path unmerged
+(`UU` in `git status`). That file looks clean; committing it silently drops the
+other side. `deciduous sync --check` reports the unmerged state and exits 1,
+and `deciduous sync` finishes the merge from git's own three versions
+(`git ls-files -u`), keeping local writes made since, and stages the result.
+While a merge, rebase or cherry-pick is stopped, `sync` also folds the
+incoming commit's version (`MERGE_HEAD`, `REBASE_HEAD`, `CHERRY_PICK_HEAD`) into
+the working file.
 
-Staging that file by hand (`git add`) clears the unmerged state but not the problem.
-So while a merge, rebase or cherry-pick is stopped, `sync` and `sync --check` also
-fold the incoming commit's version (`MERGE_HEAD`, `REBASE_HEAD`, `CHERRY_PICK_HEAD`)
-into the working file, measured from its base. For a file the driver merged this
-changes nothing; for one that is missing the other side, `--check` exits 1 and
-`sync` merges and stages it. A merge already committed is out of reach.
+A clone that never ran `deciduous sync`, or a GitHub web merge, can still
+produce conflict markers inside `graph.json`. `deciduous sync` reconstructs
+both sides from the markers (using the `|||||||` base when
+`merge.conflictStyle` is `diff3` or `zdiff3`), applies the same merge, rewrites
+the file and imports the result; `sync --check` reports it and exits 1 without
+touching the file.
 
-Git config is per clone, so a clone that has never run `deciduous sync` (or a GitHub
-web merge) can still produce conflict markers inside `graph.json`. That is not
-fatal: `deciduous sync` reconstructs both sides from the markers, applies the same
-merge (using the `|||||||` base section when git's `merge.conflictStyle` is `diff3`
-or `zdiff3`, otherwise a two-way merge), rewrites the file, and imports the result.
-`deciduous sync --check` reports it and exits 1 without touching the file.
+### Where writes come from
 
-`docs/graph-data.json` is a generated export and contains local ids. If it
-conflicts, take either side and run `deciduous sync` to regenerate it.
+The graph file is written by the database layer, so every entry point
+publishes: the CLI, `deciduous mcp`, the archaeology commands, and the HTTP API
+daemon when a `graph.json` sits next to a graph's database. A write to the
+file that fails is reported on stderr and never fails the database write; the
+next `deciduous sync` exports whatever is missing.
 
-## Where writes come from
+### Upgrading
 
-The graph file is written by the database layer, so every entry point publishes: the
-CLI, the MCP server (`add_node`, `link_nodes`, `update_status`, `delete_node` and
-the rest), the `deciduous pivot`/`supersede` archaeology commands, and the HTTP API
-daemon if a `graph.json` sits next to a graph's database. A write to the file that
-fails is reported on stderr and never fails the database write; the next
-`deciduous sync` exports whatever is missing.
-
-## Upgrading
-
-From **0.17** (`.deciduous/sync/` full of per-record files): run `deciduous update`
-and then `deciduous sync`. The first sync folds every record into `graph.json` and
-deletes the directory. A record the file already has in a *newer* version is not
-overwritten by the older file, so folding in a directory that arrived with a pull
-does not lose the pulled work. If any file will not parse, the directory is kept and
-the offending files are listed, so nothing is dropped silently. Afterwards
+From **0.17** (`.deciduous/sync/`): `deciduous update`, then `deciduous sync`.
+The first sync folds every record into `graph.json` and deletes the directory;
+a record the file already has in a newer version is not overwritten. If any
+file will not parse, the directory is kept and the files listed. Afterwards
 `git rm -r .deciduous/sync`.
 
-From **pre-0.17** (`.deciduous/sync/events/*.jsonl` and `checkpoint.json`): the same
-`deciduous sync` replays them, writes the result into `graph.json`, and deletes the
-legacy files. Lines that held two JSON objects glued together (a bug in the old
-appender) are split and both objects recovered.
+From **pre-0.17** (`.deciduous/sync/events/*.jsonl` and `checkpoint.json`):
+the same `deciduous sync` replays them into `graph.json` and deletes them.
+`deciduous events` still exists as a hidden, deprecated alias so old scripts
+do not break.
 
-`deciduous events …` still works as a deprecated alias for the equivalent
-`deciduous sync` behaviour. The `diff export` / `diff apply` patch commands were
-removed earlier; `.deciduous/patches/` is no longer read.
+## Not synced through git
 
-## Not synced (yet)
-
-- **Documents** (`.deciduous/documents/`): attachment metadata and files stay local.
-- **Sessions and the command log**: local by design.
+- **Documents** (`.deciduous/documents/`): metadata and files stay on the
+  machine that attached them. With a `[remote]`, `remote push --seed` sends
+  them to the server.
+- **The message board**: coordination, not graph; never in `graph.json` or on
+  any export.
+- **Sessions, the Q&A history and the command log**: local by design.
 - **Roadmap items**: synced through `ROADMAP.md` itself.
