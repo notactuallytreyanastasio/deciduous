@@ -62,6 +62,7 @@ pub mod roadmap;
 pub mod schema;
 pub mod serve;
 pub mod server;
+pub mod transcript;
 pub mod watch;
 
 pub use config::Config;

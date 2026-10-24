@@ -2746,6 +2746,86 @@ impl Database {
         Ok(id)
     }
 
+    /// The local id of the node whose change_id is exactly this, if any.
+    pub fn node_id_by_change_id(&self, change_id: &str) -> Result<Option<i32>> {
+        let mut conn = self.get_conn()?;
+        Ok(decision_nodes::table
+            .filter(decision_nodes::change_id.eq(change_id))
+            .select(decision_nodes::id)
+            .first::<i32>(&mut conn)
+            .optional()?)
+    }
+
+    /// Whether an edge of this type already joins these two nodes.
+    pub fn edge_exists(&self, from_id: i32, to_id: i32, edge_type: &str) -> Result<bool> {
+        let mut conn = self.get_conn()?;
+        Ok(decision_edges::table
+            .filter(decision_edges::from_node_id.eq(from_id))
+            .filter(decision_edges::to_node_id.eq(to_id))
+            .filter(decision_edges::edge_type.eq(edge_type))
+            .select(decision_edges::id)
+            .first::<i32>(&mut conn)
+            .optional()?
+            .is_some())
+    }
+
+    /// Create a node derived from a record outside the graph (a transcript):
+    /// the caller supplies the change_id, the creation time and the whole
+    /// metadata object. Published to the store and the server log like any
+    /// other write. The change_id must not exist yet; see
+    /// `node_id_by_change_id`.
+    pub fn create_derived_node(
+        &self,
+        change_id: &str,
+        node_type: &str,
+        title: &str,
+        description: Option<&str>,
+        metadata: Option<&serde_json::Value>,
+        created_at: &str,
+    ) -> Result<i32> {
+        one_of("node type", node_type, NODE_TYPES)?;
+        if title.trim().is_empty() {
+            return Err(DbError::Validation(
+                "a node needs a non-empty title".to_string(),
+            ));
+        }
+        let _mirror = self.require_readable_store()?;
+        let _log = self.hold_log()?;
+        let mut conn = self.get_conn()?;
+        let metadata = metadata
+            .filter(|m| m.as_object().is_some_and(|o| !o.is_empty()))
+            .map(|m| m.to_string());
+
+        let new_node = NewDecisionNode {
+            change_id,
+            node_type,
+            title,
+            description,
+            status: "pending",
+            created_at,
+            updated_at: created_at,
+            metadata_json: metadata.as_deref(),
+        };
+
+        let body = self.node_created_body(&new_node);
+        let (id, queued) = conn.immediate_transaction(|conn| {
+            diesel::insert_into(decision_nodes::table)
+                .values(&new_node)
+                .execute(conn)?;
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+            let queued = self.queue_in_tx(conn, body.into_iter().collect())?;
+            Ok::<_, DbError>((id, queued))
+        })?;
+        drop(conn);
+
+        self.publish_node_by_id(id);
+        self.to_log(queued);
+        Ok(id)
+    }
+
     // ========================================================================
     // Record store import (used by `records::reconcile`). These write the
     // database only; they never publish back to the store.
