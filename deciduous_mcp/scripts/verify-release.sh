@@ -77,11 +77,22 @@ docker run -d --name "$db" --network "$network" --network-alias db --network-ali
   -v "$test_id-certs:/certs:ro" "$postgres_image" \
   -c ssl=on -c ssl_cert_file=/certs/server.crt -c ssl_key_file=/certs/server.key >/dev/null
 
-for attempt in {1..90}; do
-  if docker exec "$db" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+# The postgres image's entrypoint starts a temporary server to run its init
+# scripts, stops it, and starts the real one. pg_isready answers during the
+# temporary one too, and the first psql of v1.1.0's release run landed in
+# the gap between the two ("No such file or directory" on the socket). Three
+# consecutive ready answers a second apart outlive the temporary server.
+ready=0
+for attempt in {1..120}; do
+  if docker exec "$db" pg_isready -U postgres >/dev/null 2>&1; then
+    ready=$((ready + 1))
+    if [ "$ready" -ge 3 ]; then break; fi
+  else
+    ready=0
+  fi
   sleep 1
 done
-docker exec "$db" pg_isready -U postgres >/dev/null
+[ "$ready" -ge 3 ] || { echo "PostgreSQL in $db never stayed ready" >&2; docker logs "$db" >&2; exit 1; }
 
 sql() { docker exec "$db" psql -X -U postgres -d "$1" -v ON_ERROR_STOP=1 -Atc "$2"; }
 client() {
