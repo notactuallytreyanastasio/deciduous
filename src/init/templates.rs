@@ -400,6 +400,17 @@ done
 deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
 ```
 
+## Step 1.6: Import Sessions the Graph Does Not Have
+
+A session that logged little still left a transcript. Import what is missing before reading the graph, so the graph is complete when you read it.
+
+```bash
+deciduous transcript list                 # "new" = not yet imported
+deciduous transcript import <session-id>  # goals, actions, outcomes, each with its evidence
+```
+
+Derived nodes say in `metadata.evidence.kind` whether they are `proven` (a tool call and its result) or `inferred` (the assistant's own words). Trust the proven ones.
+
 ## Step 1.7: Check the Message Board
 
 If other agents are working on this project at the same time, read what they have asked you before doing anything else:
@@ -797,9 +808,21 @@ deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected? Any gaps?
 deciduous doc list        # Any attached documents to review?
+deciduous transcript list # Sessions not yet in the graph? import them
 deciduous board read --unanswered <label>  # parallel agents: anything waiting for you?
 git status                # Current state
 ```
+
+### The Transcript Is the Log
+
+Logging in real time is the rule, and the transcript is the backstop. Claude Code writes every prompt, edit, command and result of a session to a JSONL file; `deciduous transcript import` derives goals (the prompt, verbatim), actions (edit runs, commits) and outcomes (test and build runs with their exit, the closing report) from it, each node carrying `metadata.evidence` as `proven` (a tool call and its result) or `inferred` (the assistant said so). Importing twice adds nothing.
+
+```bash
+deciduous transcript list                 # this project's sessions: imported or new
+deciduous transcript import <session-id>  # or a path to the .jsonl; --dry-run to see counts
+```
+
+What the import cannot derive is a decision or an option: whether one approach was chosen over another is a judgement about prose. Log those as you make them; the import fills in what happened around them.
 
 ### Parallel Agents: The Message Board
 
