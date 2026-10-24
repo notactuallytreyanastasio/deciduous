@@ -12,6 +12,16 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.1.0",
+        highlights: &[
+            "`deciduous transcript import <path|session-id>` builds the graph from a Claude Code transcript: prompts become goals (verbatim), edit runs and commits become actions, test and build runs become outcomes with their exit and summary, the assistant's closing text an outcome; the agent did not have to log anything",
+            "Every derived node carries metadata.evidence: `proven` (a tool call and its result, or the user's words, with uuids and tool_use ids) or `inferred` (the assistant said so); `show` prints it",
+            "Actions list the files the agent read before them (`consulted`) and hash the files they touched as git blob ids (`file_hashes`)",
+            "Importing the same transcript twice adds nothing, on any machine: change ids are derived from the session and entry uuids. `--dry-run`, `--json`, `--no-hash`",
+            "`deciduous transcript list` shows this project's transcripts and which are already imported; docs/transcripts.md has a SessionEnd hook that imports at the end of every session",
+        ],
+    },
+    Release {
         version: "1.0.12",
         highlights: &[
             "`update` keeps sections and command files you edited, and projects with a [remote] get remote-aware templates instead of git-model text; a second update changes nothing",

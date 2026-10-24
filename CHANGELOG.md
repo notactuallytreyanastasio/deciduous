@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.1.0] - 2026-10-24
+
+The agent does not have to log anything for a session to be in the graph. Claude Code already wrote the whole session to a JSONL transcript; 1.1.0 reads it.
+
+### Added
+- **`deciduous transcript import <path|session-id>...`** derives a graph from a Claude Code transcript: each prompt a `goal` with the prompt verbatim; each run of `Edit`/`Write` calls, or a shell command Claude Code saw change files, an `action` naming the files; each `git commit` an `action` carrying the hash; each build, test or lint run (`cargo test`, `npm run build`, `pytest`, `mix compile`, `make`...) an `outcome` with its exit and summary (`212 passed, 0 failed`); `gh pr create` an `outcome` with the PR; the assistant's closing text an `outcome` (or an `observation` for a turn that only answered). One session is one tree under the first prompt. On a three-week session that had logged nine nodes through MCP, the import found 119 actions, 67 command outcomes and 68 verbatim prompts.
+- **Every derived node says what it is backed by.** `metadata.evidence.kind` is `proven` (a tool call and its result, or the user's own words, with the entry uuids and tool_use ids) or `inferred` (the assistant said so). `deciduous show` prints it. The assistant's "all tests pass" and the `cargo test` result sit side by side, labelled.
+- **The read trail, from the transcript.** Each action lists in `metadata.consulted` the files the agent `Read` since the previous action: the evidence trail a filesystem watcher would give, without one, on every platform.
+- **File hashes on actions.** Files an action touched are hashed at import time into `metadata.file_hashes` as git blob ids (`git:<sha1>`, the id `git log --find-object` takes), `sha256:` without git. `--no-hash` skips it.
+- **Idempotent and machine-independent.** Change ids are derived from the session and entry uuids, so a second import adds nothing and two machines importing the same transcript produce the same nodes for `sync` to merge. `--dry-run` shows the counts and writes nothing; `--json` prints the report.
+- **`deciduous transcript list`** shows this project's transcripts (`~/.claude/projects/<slug>/`) with title, prompt count, date, and whether each is already imported. `import` takes a session id prefix as well as a path.
+- `docs/transcripts.md`, including a `SessionEnd` hook that imports the transcript when a session ends.
+
+### Fixed
+- **The docs assume your PostgreSQL on 5432, not a server on 4000.** docs/remote.html, docs/remote-graph.md, docs/index.html, docs/mcp.html, the tutorial and DEPLOY.md still told the 1.0.0 story (SQLite per project, `remote login` then `remote init <url>`, a Docker deploy). They now show what `deciduous init` asks since 1.0.11 and the native server against the PostgreSQL already on localhost:5432; the wizard says how to get a PostgreSQL when nothing answers there. 4000 is the port inside the container only.
+- **CI builds again on a tree that had not changed.** Stable Rust moved and deprecated `AtomicUsize::fetch_update`, and clippy 1.99 reports `redundant_field_names` on field declarations inside diesel's `QueryableByName` derive; with warnings denied, every job went red. The slot counter uses a `compare_exchange_weak` loop and the toolchain is pinned to 1.92.0 (`rust-toolchain.toml` and the workflows). Four Hex advisories published against bandit, plug_crypto and decimal made `mix hex.audit` refuse the server build, as mint did to 1.0.10; the three are updated (#317).
+
+### Not done
+- Decisions and options are not derived: a choice between approaches is a judgement about prose. The material is in each action's description (what the assistant said it was about to do); the pass that writes `option` and `decision` nodes belongs to an agent reading the imported graph.
+- Subagent transcripts (`<session>/subagents/*.jsonl`) are counted and skipped, not imported as subtrees.
+- Only Claude Code's transcript format is read.
+- The web viewer does not yet show evidence kind or file hashes; `show` and `show --json` do.
+
 ## [1.0.12] - 2026-09-28
 
 A customer case study reproduced six defects on 1.0.10, each of which lost or misrepresented work without saying so. 1.0.12 fixes them, plus two found while releasing.
