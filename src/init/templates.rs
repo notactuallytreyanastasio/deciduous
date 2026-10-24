@@ -1705,7 +1705,7 @@ argument-hint: <goal title>
 
 **USE THIS BEFORE STARTING ANY IMPLEMENTATION.**
 
-This skill creates the required deciduous nodes BEFORE you write any code. The Edit/Write hooks will BLOCK you if you don't have a recent node.
+This skill creates the deciduous nodes BEFORE you write any code, so the work has a goal to hang from. Nothing blocks you if you skip it; the graph is just missing the why.
 
 ## Step 1: Create the Goal Node
 
