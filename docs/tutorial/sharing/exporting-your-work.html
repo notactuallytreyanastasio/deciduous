@@ -231,7 +231,7 @@ This PR corresponds to deciduous nodes: 57, 58, 59, 60, 61</span></div>
 
             <div class="info-box warning">
                 <strong>Never delete the database</strong>
-                <p>The SQLite database at <code>.deciduous/deciduous.db</code> is the source of truth. Always use <code>deciduous backup</code> before risky operations, and never delete the database file directly.</p>
+                <p>The SQLite database at <code>.deciduous/deciduous.db</code> is this clone's cache of the shared server, and the only copy of anything not yet sent (<code>deciduous remote status</code> lists what is waiting). Always use <code>deciduous backup</code> before risky operations, and never delete the database file directly.</p>
             </div>
 
             <div class="page-nav">

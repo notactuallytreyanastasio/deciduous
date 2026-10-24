@@ -187,8 +187,8 @@
             <p>Without Graphviz, the <code>deciduous dot --png</code> flag will not work, but everything else functions normally. You can always install it later when you need PNG output.</p>
 
             <div class="info-box tip">
-                <strong>Zero runtime dependencies</strong>
-                <p>Deciduous is a single static binary with SQLite compiled in. There is no database server to install, no runtime to configure, and no background process to manage. The binary is entirely self-contained for all core features.</p>
+                <strong>One dependency: PostgreSQL</strong>
+                <p>Deciduous is a single static binary with SQLite compiled in, but the graph every project writes to lives in a shared server backed by PostgreSQL. <code>deciduous init</code> installs that server on this machine as a background service (a launchd LaunchAgent on macOS, a systemd user unit on Linux) against the PostgreSQL on localhost:5432. If there is none: <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> on macOS (or Postgres.app), <code>sudo apt install postgresql</code> on Debian/Ubuntu, or let Docker run one for you when init asks.</p>
             </div>
 
             <div class="page-nav">

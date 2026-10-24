@@ -498,18 +498,21 @@ trace_chain({ node_id: 1361 })             &rarr; 13 nodes, 14 edges</div>
             Everything above is the embedded server: <code>deciduous mcp</code> over stdio, one SQLite
             file, one project. The <a href="remote.html">shared graph server</a> is a second MCP
             endpoint, over HTTP, with one Postgres for every project. Its tool set is smaller (20)
-            and it is the one that knows about other agents. Register it once at user scope and it is
-            present in every directory:
+            and it is the one that knows about other agents. <code>deciduous init</code> (or
+            <code>deciduous remote setup</code>) registers it with Claude Code at user scope, so it is
+            present in every directory; an existing <code>deciduous</code> registration is left alone.
+            What setup ran, for registering another client by hand:
           </p>
           <div class="session-demo">
             <div class="session-header">
               <span class="session-dot red"></span>
               <span class="session-dot yellow"></span>
               <span class="session-dot green"></span>
-              <span class="session-title">one registration, every project</span>
+              <span class="session-title">what setup registered</span>
             </div>
             <div class="session-content">
-              <div class="session-step"><div class="step-content code">claude mcp add --scope user --transport http deciduous https://&lt;host&gt;/deciduous-mcp/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</div></div>
+              <div class="session-step"><div class="step-content code">claude mcp add --scope user --transport http deciduous http://127.0.0.1:&lt;port&gt;/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</div></div>
+              <div class="session-step"><div class="step-content">The URL is <code>[remote] url</code> in <code>.deciduous/config.toml</code> plus <code>/mcp</code>: this machine's server on 127.0.0.1, or <code>https://&lt;host&gt;/deciduous-mcp</code> for one someone else runs. The token is in <code>~/.config/deciduous/credentials</code>.</div></div>
             </div>
           </div>
           <p>Three arguments and one tool are what make it multi-agent:</p>

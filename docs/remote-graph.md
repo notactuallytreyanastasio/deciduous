@@ -4,21 +4,53 @@ A single Postgres holds every repository's decision graph, one workspace per
 repository, behind an MCP endpoint. Claude reaches it from any directory on the
 machine; the CLI reaches it with `deciduous remote`.
 
-The local `.deciduous/deciduous.db` becomes a **cache**. The server is the
-truth.
+The local `.deciduous/deciduous.db` is a **cache**. The server is the truth.
 
-## Why that distinction matters
+## Why a server
 
-Before the server existed there was one writable store. Now there are two, and
-they do not know about each other:
+Agents write through the HTTP MCP server, so a project with no server is a
+project whose agents have nowhere to write. Every project points at one, and
+`deciduous init` does not finish until the project points at one that answers.
+
+The server does not have to be somewhere else. By default it runs on this
+machine, as a background service installed under `~/.config/deciduous/server/`
+(a launchd LaunchAgent on macOS, a systemd user unit on Linux), and keeps its
+data in a PostgreSQL on `localhost:5432`, connecting as the current OS user to
+a database called `deciduous` that it creates and migrates itself. That is the
+PostgreSQL a `brew install postgresql@17` or a distribution package already
+runs. If nothing answers on 5432, `init` says so in the menu and prints what
+to do:
 
 ```
-deciduous add …  (CLI)  ──►  .deciduous/deciduous.db   local SQLite
-add_node         (MCP)  ──►  deciduous_mcp_prod        remote Postgres
+  Nothing answers on localhost:5432, so choice 1 needs a PostgreSQL first:
+    macOS:          brew install postgresql@17 && brew services start postgresql@17
+    Debian/Ubuntu:  sudo apt install postgresql
+  Or name another PostgreSQL (choice 2, --database-url), or let Docker run one
+  for you (choice 3, --docker-postgres).
 ```
 
-A node added with the CLI never reaches the server on its own. A node Claude
-writes through MCP never reaches SQLite. Left alone they drift silently, and
+Any other PostgreSQL works if you give its URL. Docker can run both PostgreSQL
+and the server, if you would rather install neither. A team can run one server
+on a shared machine and hand out its URL and token; that runbook is
+`deciduous_mcp/DEPLOY.md`, and the projects that use it take choice 4 below.
+
+Wherever it runs, every repository gets its own workspace, and one query can
+cross all of them. "What did I decide about auth, across every project I've
+touched?" has an answer because the data is in one place.
+
+## Why the cache/truth distinction matters
+
+There are two writable stores, and they do not know about each other:
+
+```
+deciduous add …  (CLI)  ──►  .deciduous/deciduous.db   local SQLite, then an op in the log
+add_node         (MCP)  ──►  deciduous                 the server's Postgres
+```
+
+A node the CLI adds is written locally and queued as an op that is sent to the
+server before the command exits (see [How CLI writes reach the
+server](#how-cli-writes-reach-the-server)). A node Claude writes through MCP
+never reaches SQLite until `deciduous remote pull`. Left alone they drift, and
 nothing in the graph tells you which half you are looking at.
 
 Naming the server as the truth is what makes that tractable: local can always
@@ -27,51 +59,226 @@ letting you discover it months later.
 
 ## Setting up a repository
 
-The server is registered once, globally — every directory already has it:
+`deciduous init` (and `deciduous update`) in a project whose
+`.deciduous/config.toml` has no `[remote]` asks, in a terminal, where the
+project's graph should live:
 
-```bash
-claude mcp add --scope user --transport http deciduous \
-  https://<host>/deciduous-mcp/mcp \
-  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
+```
+Shared graph server
+   This project has no server yet ([remote] in .deciduous/config.toml).
+
+Where should this project's graph live?
+
+  1) This machine: the deciduous server as a background service, using PostgreSQL on
+     localhost:5432 as you (answering now)
+  2) This machine: the server as a background service, using a PostgreSQL you name
+     (any host, port, user, password)
+  3) This machine, in Docker: a new PostgreSQL and the server in containers
+  4) A server someone else runs: you need its URL and token
+
+  1 and 2 install the release's server executable in /Users/you/.config/deciduous/server
+  and start it at login. --docker runs that server in Docker instead.
+
+Choose 1-4 [1]:
 ```
 
-Then, inside the repository:
+- **1**, the default. The first time on a machine, `init` downloads the server
+  executable for its own version (one file with Erlang and Elixir inside),
+  checks it against the release's `checksums.txt`, and runs it once to create
+  the database `deciduous` and apply migrations. If PostgreSQL refuses (no
+  such role, wrong password, no CREATEDB), you see its reason and the menu
+  again. Then it installs the server as a user service that starts at login.
+  It listens on `127.0.0.1` only.
+- **2**. The same server, against a PostgreSQL you name:
+  `postgres://USER@HOST:PORT/DATABASE`, with `?sslmode=require` or
+  `verify-full` for TLS. The password is asked separately and not shown.
+- **3**. Downloads the Docker bundle for its own version, checks it, and
+  starts PostgreSQL 17 and the server in containers (a few minutes the first
+  time). This is what 1.0.10 and earlier always did; an existing Docker
+  install stays as it is.
+- **4**. Asks for the URL and the token (typed without being shown), and checks
+  both against the server before storing anything.
 
-```bash
-export DECIDUOUS_MCP_TOKEN=<token>        # never goes in the repo
-deciduous remote init https://<host>/deciduous-mcp
+For 1 to 3 the server needs a port on this machine, and `init` asks for it
+with a free one suggested from 20000-32767:
+
+```
+The server needs a port on this machine. 24871 is free right now; anything
+already using the port you pick (a dev server on 4000, say) would stop this
+server from starting.
+
+Port [24871]:
 ```
 
-`init` verifies the server answers **and** that the token works before writing
-anything. If either fails it says which, and leaves the project untouched — a
-saved URL that does not answer is worse than no URL, because the failure only
-surfaces later, on some unrelated command.
+The port is asked rather than fixed so that the server never squats one the
+machine already wants. Choice 1 on a Mac prints, in order:
 
-It writes one table to `.deciduous/config.toml`:
+```
+   Downloading https://github.com/notactuallytreyanastasio/deciduous/releases/download/v1.0.12/deciduous-mcp-darwin-arm64
+   Installed /Users/you/.config/deciduous/server/bin/deciduous-mcp
+   Preparing postgres://you@localhost:5432/deciduous (created if missing, then migrated; the first run unpacks the server)
+   Created database deciduous
+   Wrote /Users/you/.config/deciduous/server/.env (mode 600: database URL, token, port 24871)
+   Started launchd agent dev.deciduous.server (/Users/you/Library/LaunchAgents/dev.deciduous.server.plist), logs in /Users/you/.config/deciduous/server/logs/server.log
+   Ready http://127.0.0.1:24871/ready
+   Stored token in /Users/you/.config/deciduous/credentials
+   Wrote .deciduous/config.toml [remote] url = http://127.0.0.1:24871
+   Connected http://127.0.0.1:24871 holds 0 nodes, 0 edges in workspace my-project
+   Registered Claude Code: deciduous MCP at http://127.0.0.1:24871/mcp (user scope; restart Claude Code)
+
+Done: this project writes to http://127.0.0.1:24871. Restart Claude Code so it picks up the server;
+it sends the logging instructions when it connects.
+```
+
+On Linux the `Started` line names `deciduous-server.service` under
+`~/.config/systemd/user/`, followed by a note that user services stop at
+logout unless `loginctl enable-linger <user>` is on.
+
+**Restart Claude Code.** When it connects, the server sends the logging
+instructions (when to write, and how to write one step in one call). There is
+no hook to install. If anything is missing (no PostgreSQL, a server that does
+not answer, no token), `init` and `update` stop with exit 1 and say how to fix
+it.
+
+### What setup wrote
+
+| File | Holds | Commit it? |
+|---|---|---|
+| `.deciduous/config.toml`, `[remote]` | the server's `url` and this repository's `workspace` name | yes: every clone and worktree finds the same workspace through it, and it holds no credential |
+| `~/.config/deciduous/credentials` (mode 0600) | the token | no: it is outside every repository on purpose |
+| `~/.config/deciduous/server/.env` (mode 600) | this machine's server: database URL, token, port, server mode and version | no |
+| Claude Code's user-scope MCP list | `deciduous` at `<url>/mcp` with the bearer header | not a file in the repo |
 
 ```toml
 [remote]
-url = "https://<host>/deciduous-mcp"
+url = "http://127.0.0.1:24871"
 workspace = "my-project"
 ```
 
-A URL and the workspace name, decided once, here. **The token is read from
-`DECIDUOUS_MCP_TOKEN`**, so committing this file leaks a hostname and no
-credential. That config *should* be committed — it is how every clone and
-worktree of the repo finds the same workspace, whatever its directory is
-called.
+The token is read from `DECIDUOUS_MCP_TOKEN` in the environment first, then
+from the credentials file. The variable is for CI and one-off overrides; on a
+developer machine nothing needs to be exported.
+
+The Claude Code registration is this, run for you:
+
+```bash
+claude mcp add --scope user --transport http deciduous \
+  http://127.0.0.1:24871/mcp \
+  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
+```
+
+An existing `deciduous` server in Claude Code is left alone (`Unchanged
+Claude Code already has a deciduous MCP server`). If `claude` is not on
+`PATH`, setup prints `Claude Code not found; register the server in your
+client: <url>/mcp` and the line above is what to run, or what to translate
+for another MCP client.
+
+### The second project on this machine
+
+Every later `deciduous init` finds the server that is already running, in
+about a second, and skips the installation:
+
+```
+   Found local server at http://127.0.0.1:24871
+   Wrote .deciduous/config.toml [remote] url = http://127.0.0.1:24871
+   Connected http://127.0.0.1:24871 holds 0 nodes, 0 edges in workspace other-project
+   Unchanged Claude Code already has a deciduous MCP server
+```
+
+`deciduous remote setup` asks the same question on its own, in a project that
+already has `[remote]` too (it offers to keep the current server first). Once
+this machine has a server, the menu shrinks to two choices: that server, or
+one someone else runs. `deciduous update` also upgrades this machine's server
+executable when it is older than the CLI.
+
+### In a script
+
+There is no terminal to ask, so give the answer instead; without one `init`
+stops and prints these:
+
+```bash
+deciduous remote setup --local                  # this machine: a background service, PostgreSQL on localhost:5432
+deciduous remote setup --database-url <url>     # this machine's server, a PostgreSQL you name
+deciduous remote setup --docker-postgres        # this machine: PostgreSQL and the server in Docker
+deciduous remote setup --url <url>              # a server someone else runs
+```
+
+`--docker` runs this machine's server in Docker against the PostgreSQL from
+`--local` or `--database-url`. `--port <n>` or `DECIDUOUS_PORT` answers the
+port question the first time; after that the port in
+`~/.config/deciduous/server/.env` stands. `--url` takes its token from
+`DECIDUOUS_MCP_TOKEN` or the stored one. `DATABASE_URL` in your environment
+is never used unless you pass it with `--database-url`. Tests and CI in a
+throwaway directory set `DECIDUOUS_NO_SERVER=1` to skip the step.
+
+### The lower-level commands
+
+Setup is built from three commands that still work on their own.
+
+`deciduous remote login` stores a token by hand. It reads from stdin so the
+token never lands in shell history or the process list, and with `--url` it
+checks the token against that server before storing anything:
+
+```
+$ deciduous remote login --url https://example.com/deciduous-mcp
+Token (read from stdin, not saved to shell history):
+Token: stored in /Users/you/.config/deciduous/credentials
+  mode 0600, outside every repository
+```
+
+`deciduous remote init <url>` points one repository at a server whose token is
+already stored or in the environment. It verifies the server answers **and**
+claims the workspace before writing; if either fails it says which and leaves
+the project untouched. Then it sends the server the local history it lacks:
+
+```
+$ deciduous remote init https://example.com/deciduous-mcp
+Remote: https://example.com/deciduous-mcp
+  workspace: blog
+  claim: verified (by this repository's root commit)
+  server holds 719 nodes, 845 edges, 0 documents
+  sent 12 local node(s), 9 edge(s) the server lacked
+
+Written to .deciduous/config.toml. The token stays in ~/.config/deciduous/credentials (or DECIDUOUS_MCP_TOKEN), never here.
+```
+
+`--workspace <name>` overrides the derived name; see [How
+workspaces are named](#how-workspaces-are-named).
+
+`deciduous remote adopt <dir> --url <url>` walks a directory for projects that
+already have a `.deciduous` and points each at the server. It never repoints a
+project already aimed somewhere else; `--dry-run` first lists what it would
+do.
 
 ## The commands
 
 | Command | What it does |
 |---|---|
+| `deciduous remote setup` | Choose where this project's graph lives (the question `init` asks), set up this machine's server if that is the answer, store the token, write `[remote]`, register the server with Claude Code. `--local`, `--database-url`, `--docker-postgres`, `--docker`, `--url`, `--port` answer for scripts |
+| `deciduous remote login` | Store a token by hand, read from stdin, outside every repository (mode 0600). `--url` verifies it first |
+| `deciduous remote logout` | Forget the stored token |
 | `deciduous remote init <url>` | Point this repo at a server; verifies and claims the workspace before writing, then sends local history the server lacks |
+| `deciduous remote adopt <dir> --url <url>` | Point every project under a directory at a server; never repoints one already configured |
 | `deciduous remote status` | Writes waiting in the log, and every node, edge and document that differs, field by field, each with the command that fixes it. Exits 1 when anything differs |
 | `deciduous remote pull` | Send what is waiting, then refresh the local cache from the server (including its deletions) |
 | `deciduous remote push` | Send what is waiting in the log. `--seed` also sends rows and documents (with their bytes) no op covers, such as history from before the remote. `--repair` makes the server's fields match this copy's for every node status lists as Different. `--drop-rejected` discards ops the server refused, `--retry-rejected` sends them again, `--drop <op id>` discards one op by the id `remote status` prints. Also sends again what this machine set aside, and exits 1 if anything is still set aside or a row could not be seeded |
 
-`status` compares content, not counts. Two graphs can hold the same number of
-nodes and different nodes:
+`status` compares content, not counts. When nothing differs it says so:
+
+```
+Log: 0 write(s) waiting, 0 rejected  (.deciduous/remote-log.jsonl)
+
+                 local    server
+  nodes            719       719
+  edges            845       845
+
+In sync: no writes waiting, and every node, edge and document matches field by field.
+Themes and tags are not sent to the server, so they are not compared.
+```
+
+Two graphs can hold the same number of nodes and different nodes, which is why
+the table is not the verdict. When they differ, each side's extra rows are
+listed by name:
 
 ```
 Log: 1 write(s) waiting, 0 rejected  (.deciduous/remote-log.jsonl)
@@ -225,8 +432,9 @@ called, or to share one workspace between repositories on purpose:
 deciduous remote init <url> --workspace my-project
 ```
 
-To pin a repository so that no tool call can write its nodes anywhere else, add
-a header in `.mcp.json`. The header beats the `workspace` argument, on reads
+Setup registers the server with Claude Code at user scope, which is all one
+machine needs. To pin a repository so that no tool call can write its nodes
+anywhere else, add a header in a committed `.mcp.json`. The header beats the `workspace` argument, on reads
 and writes alike:
 
 ```json
@@ -336,16 +544,18 @@ which one. The workspace setting `lock_scope` no longer does anything.
 
 ### check_activity
 
-The read side. Call it before a burst of writes.
+The read side. Call it before a burst of writes, and after every milestone,
+instead of polling `query_nodes`.
 
 | Field | What it holds |
 |---|---|
-| `sessions` | every session, MCP or CLI, that wrote in the last five minutes (`window_seconds`): branch, client, version, whether it is you, first and last write, seconds since |
+| `sessions` | every session, MCP or CLI, that wrote in the last five minutes (`window_seconds`): `branch`, `client`, `client_version`, `session`, `is_you`, `first_seen_at`, `last_seen_at`, `seconds_ago` |
 | `active_sessions` | how many distinct sessions that is |
-| `branches` | the twenty most recently written branches: each with its last node (type, title, change_id, created_at) and `writers`, the sessions above that wrote it. `branches: N` for more; `branches_total` says how many exist |
+| `branches` | the twenty most recently written branches: each with `last_node` (id, change_id, node_type, title, status, created_at) and `writers`, the sessions above that wrote it. `branches: N` for more; `branches_total` says how many the workspace has in all |
 
 It used to list unexpired locks, which had always lapsed by the time anyone
-looked, so a run of short-lived clients read `active_sessions: 0` throughout.
+looked, so a run of short-lived clients read `active_sessions: 0` throughout,
+and CLI writes, which took no lock, never appeared at all.
 
 ### Events
 
