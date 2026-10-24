@@ -506,10 +506,10 @@
         <nav>
             <h2>Contents</h2>
             <ul>
-                <li><a href="#why">Why Decision Graphs?</a></li>
+                <li><a href="#why">What the Graph Is</a></li>
                 <li><a href="#quickstart">Quick Start</a></li>
-                <li><a href="#real-scenario">Real Scenario</a></li>
-                <li><a href="#patterns">Common Patterns</a></li>
+                <li><a href="#real-scenario">A Walkthrough</a></li>
+                <li><a href="#patterns">Patterns</a></li>
                 <li><a href="#commands">Command Reference</a></li>
                 <li><a href="#troubleshooting">Troubleshooting</a></li>
             </ul>
@@ -520,142 +520,119 @@
         <div class="content-wrapper">
             <header>
                 <h1>Deciduous Guide</h1>
-                <p class="subtitle">Real-world patterns for decision graph tooling in AI-assisted development</p>
+                <p class="subtitle">The CLI, walked through on 1.1.0. Every command on this page was run against the release binary; every flag is in its <code>--help</code>.</p>
             </header>
 
             <section id="why">
-            <h2>Why Decision Graphs?</h2>
+            <h2>What the Graph Is</h2>
 
-            <p>If you've worked with AI coding assistants, you've experienced this:</p>
-
-            <div class="scenario">
-                <div class="user-message">
-                    "Why did we use Redux instead of Context? I thought we discussed this yesterday..."
-                </div>
-                <div class="claude-action">
-                    "I don't have context from previous sessions. Could you remind me what was decided?"
-                </div>
-            </div>
-
-            <p>Every time Claude's context resets, you lose:</p>
-            <ul style="margin: 1rem 0 1rem 2rem;">
-                <li>Why you chose approach A over B</li>
-                <li>What was tried and didn't work</li>
-                <li>The reasoning behind architectural decisions</li>
-                <li>The full scope of what the user originally asked for</li>
-            </ul>
-
-            <p><strong>Deciduous fixes this.</strong> It creates a persistent graph of goals, decisions, actions, and outcomes that survives context loss. When a new session starts, Claude can query the graph to understand what happened and why.</p>
+            <p>A new session of Claude Code knows nothing about the last one. Compaction keeps a summary; the summary does not keep the option you rejected or the reason you rejected it. Deciduous keeps a graph per repository of exactly that:</p>
 
             <div class="graph-visual">
-[goal] "Add user authentication"
+[goal]     "Add rate limiting to the public API"        prompt: the user's words, verbatim
    |
-   +---> [decision] "Choose auth method"
-   |        |
-   |        +---> [option] "JWT tokens" (CHOSEN: stateless, scales well)
-   |        +---> [option] "Sessions" (REJECTED: need Redis, more complexity)
-   |
-   +---> [action] "Implement JWT middleware"
-   |        |
-   |        +---> [outcome] "JWT auth working" (commit: a1b2c3d)
-   |
-   +---> [observation] "Found existing bcrypt in codebase, will reuse"
+   +--> [option]   "Token bucket in Redis"
+   +--> [option]   "Fixed window counter in Postgres"
+             |            |
+          chosen       rejected: "window edges allow 2x burst"
+             v            v
+        [decision] "Token bucket in Redis, over the fixed window"
+             |
+             +--> [action]  "Implement RateLimiter middleware"     files: src/middleware/rate_limit.rs
+             |        +--> [outcome] "cargo test: 41 passed, 0 failed"
+             |
+             +--> [observation] "Redis cluster failover drops bucket state"
+                      +--> [revisit] "Reconsidering: Token bucket in Redis"
+                               +--> [decision] "Fixed window counter in Postgres, 60s windows"
             </div>
 
-            <p>This graph is queryable. In a new session, Claude can run <code>deciduous nodes</code> and immediately understand the project's decision history.</p>
+            <p>Seven node types: <span class="node-type node-goal">goal</span>, <span class="node-type node-option">option</span>, <span class="node-type node-decision">decision</span>, <span class="node-type node-action">action</span>, <span class="node-type node-outcome">outcome</span>, <span class="node-type node-observation">observation</span> and <code>revisit</code>. Seven edge types: <code>leads_to</code>, <code>requires</code>, <code>chosen</code>, <code>rejected</code>, <code>blocks</code>, <code>enables</code>, <code>took_from</code>. The flow is goal &rarr; options &rarr; decision &rarr; actions &rarr; outcomes. Goals do not lead straight to decisions: the options come first, because the rejected one is the part you will want back.</p>
+
+            <p>Three things write the graph. The CLI below. The MCP tools the agent calls while it works (<a href="mcp.html">two servers</a>). And since 1.1.0, <code>deciduous transcript import</code>, which derives the graph from the Claude Code transcript after the fact, so a session that logged nothing is still in it.</p>
         </section>
 
         <section id="quickstart">
-            <h2>Quick Start (5 minutes)</h2>
+            <h2>Quick Start</h2>
 
             <div class="step">
                 <span class="step-number">1</span>
-                <strong>Install deciduous</strong>
-                <pre><code>cargo install deciduous</code></pre>
+                <strong>Install</strong>
+                <pre><code>brew tap notactuallytreyanastasio/tap &amp;&amp; brew install deciduous   # macOS or Linux
+cargo install deciduous --locked                                    # or, with a Rust toolchain
+deciduous --version                                                  # deciduous 1.1.0</code></pre>
+                <p style="margin-top: 0.5rem; color: var(--text-muted);">Or a binary from <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">the releases page</a>: <code>deciduous-linux-amd64</code>, <code>deciduous-linux-arm64</code>, <code>deciduous-darwin-amd64</code>, <code>deciduous-darwin-arm64</code>, <code>deciduous-windows-amd64.exe</code>.</p>
             </div>
 
             <div class="step">
                 <span class="step-number">2</span>
-                <strong>Initialize in your project</strong>
+                <strong>Initialize, and answer where the graph lives</strong>
                 <pre><code>cd your-project
-deciduous init</code></pre>
-                <p style="margin-top: 0.5rem; color: var(--text-muted);">This creates <code>.deciduous/</code>, <code>.claude/</code> with slash commands, and updates <code>CLAUDE.md</code>.</p>
+deciduous init            # Claude Code; --opencode, --windsurf, --both for others</code></pre>
+                <p style="margin-top: 0.5rem; color: var(--text-muted);"><code>init</code> writes <code>.deciduous/</code>, nine slash commands and three skills under <code>.claude/</code>, two hooks that never block, and a <code>CLAUDE.md</code> section. Then, if <code>.deciduous/config.toml</code> has no <code>[remote]</code>, it asks where the graph should live: this machine (the server as a background service against your PostgreSQL on localhost:5432, the default), a PostgreSQL you name, Docker, or a server someone else runs. It stores the token outside the repository, writes <code>[remote]</code>, and registers the server with Claude Code. Restart Claude Code. In a script: <code>deciduous remote setup --local</code> (or <code>--database-url</code>, <code>--docker-postgres</code>, <code>--url</code>); <code>DECIDUOUS_NO_SERVER=1</code> skips the step for tests. The <a href="remote.html">shared graph page</a> shows the menu and what each choice does.</p>
             </div>
 
             <div class="step">
                 <span class="step-number">3</span>
-                <strong>Start working - log as you go</strong>
-                <pre><code># When starting new work
-deciduous add goal "Add dark mode toggle" -c 90
-
-# Before writing code
-deciduous add action "Creating ThemeContext provider" -c 85
-deciduous link 1 2 -r "Implementation step"
-
-# After committing
-git commit -m "feat: add theme context"
-deciduous add outcome "Theme context working" -c 95 --commit HEAD
-deciduous link 2 3 -r "Complete"</code></pre>
+                <strong>Write as you go</strong>
+                <pre><code>deciduous add goal "Add dark mode toggle" -c 90 -p "Add a dark mode toggle to settings"
+deciduous add option "CSS variables switched by a class on body" -c 80
+deciduous add option "Second stylesheet loaded on toggle" -c 50
+deciduous link 1 2 -r "possible approach"
+deciduous link 1 3 -r "possible approach"
+deciduous add decision "CSS variables, over a second stylesheet" -c 85
+deciduous link 2 4 -t chosen -r "one file, no flash on load"
+deciduous link 3 4 -t rejected -r "two stylesheets drift"
+deciduous add action "Add ThemeContext and the toggle" -c 85 -f "src/theme.tsx,src/settings.tsx"
+deciduous link 4 5 -r "implementation"
+git commit -m "feat: dark mode toggle"
+deciduous add outcome "Toggle works; 14 tests pass" -c 95 --commit HEAD
+deciduous link 5 6 -r "result"</code></pre>
             </div>
 
             <div class="step">
                 <span class="step-number">4</span>
-                <strong>View your graph</strong>
-                <pre><code># Terminal UI
-deciduous tui
-
-# Web viewer (opens browser)
-deciduous serve
-
-# Export for GitHub Pages
-deciduous sync</code></pre>
+                <strong>Read it back</strong>
+                <pre><code>deciduous nodes              # every node: id, change_id prefix, type, status, title
+deciduous edges              # every edge with its rationale
+deciduous show 4             # one node, its metadata and connections
+deciduous pulse              # summary, active goals as a tree, coverage gaps
+deciduous serve              # web viewer at http://localhost:3000</code></pre>
             </div>
 
             <div class="success">
-                <strong>That's it!</strong> You now have a queryable decision history. In future sessions, run <code>deciduous nodes</code> to see what decisions exist.
+                <strong>Import the transcript at the end.</strong> <code>deciduous transcript list</code> shows this project's Claude Code sessions and which are already imported; <code>deciduous transcript import &lt;session-id&gt;</code> adds what the agent did not log, each node saying whether it is <code>proven</code> by a tool result or <code>inferred</code> from what the assistant said. See <a href="transcripts.md">docs/transcripts.md</a>.
             </div>
         </section>
 
         <section id="real-scenario">
-            <h2>Real Scenario: Building an E-commerce Cart</h2>
+            <h2>A Walkthrough: Rate Limiting, Then a Pivot</h2>
 
-            <p>Let's walk through a realistic development scenario. Watch how the work evolves, requirements expand, and decisions compound - all captured in the graph.</p>
+            <p>This is a real session against a fresh project on 1.1.0, output included. Click a phase to expand it.</p>
 
             <div class="phase">
                 <div class="phase-header" onclick="togglePhase(this)">
                     <div>
-                        <strong>Phase 1: Initial Request</strong>
-                        <span style="color: var(--text-muted); margin-left: 1rem;">The user asks for a shopping cart</span>
+                        <strong>Phase 1: The request, verbatim</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">A goal with the prompt</span>
                     </div>
                     <span class="arrow">▶</span>
                 </div>
                 <div class="phase-content">
                     <div class="user-message">
-                        I need to add a shopping cart to our React e-commerce site. Users should be able to add items, change quantities, and see a running total. The cart should persist across page refreshes.
+                        Add rate limiting to the public API. Per-token, 100 req/min, 429 with Retry-After.
                     </div>
 
                     <div class="claude-action">
-                        First, I'll create a goal node with the user's exact request:
+                        The goal carries the request word for word. <code>-p</code> for one line, <code>--prompt-stdin</code> for several.
                     </div>
 
-                    <pre><code>deciduous add goal "Add shopping cart feature" -c 90 --prompt-stdin << 'EOF'
-I need to add a shopping cart to our React e-commerce site. Users should be able
-to add items, change quantities, and see a running total. The cart should persist
-across page refreshes.
-EOF</code></pre>
-
-                    <p><strong>Output:</strong> <code>Created node 1 (type: goal)</code></p>
+                    <pre><code>$ deciduous add goal "Add rate limiting to the public API" -c 90 -p "Add rate limiting to the public API. Per-token, 100 req/min, 429 with Retry-After."
+Warning: Prompt is only 82 chars. This looks like a summary, not a full prompt.
+         Capture the verbatim user message for better context recovery.
+Created node 1 (type: goal, title: Add rate limiting to the public API) [confidence: 90%] [prompt: 82 chars] [branch: main]</code></pre>
 
                     <div class="info">
-                        <strong>Why capture the full prompt?</strong> When context resets, Claude can read this verbatim request and understand exactly what was asked for - not a summary, but the actual words.
-                    </div>
-
-                    <div class="todo-list">
-                        <h5>Current Understanding</h5>
-                        <ul>
-                            <li>[ ] Add shopping cart UI</li>
-                            <li>[ ] Persist cart across refreshes</li>
-                        </ul>
+                        <strong>The warning is a heuristic.</strong> A short prompt is often a summary someone typed instead of the user's message. Here the user's message really was 82 characters; the node is created either way. A multi-line request goes in with <code>--prompt-stdin &lt;&lt; 'EOF'</code>.
                     </div>
                 </div>
             </div>
@@ -663,71 +640,30 @@ EOF</code></pre>
             <div class="phase">
                 <div class="phase-header" onclick="togglePhase(this)">
                     <div>
-                        <strong>Phase 2: Exploration & Decisions</strong>
-                        <span style="color: var(--text-muted); margin-left: 1rem;">Claude investigates the codebase and makes decisions</span>
+                        <strong>Phase 2: Options, then the decision</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">chosen and rejected edges carry the reasons</span>
                     </div>
                     <span class="arrow">▶</span>
                 </div>
                 <div class="phase-content">
-                    <div class="claude-action">
-                        Before coding, I'll explore the codebase to understand the existing patterns...
-                    </div>
+                    <pre><code>$ deciduous add option "Token bucket in Redis" -c 70
+Created node 2 (type: option, title: Token bucket in Redis) [confidence: 70%] [branch: main]
+$ deciduous add option "Fixed window counter in Postgres" -c 60
+Created node 3 (type: option, title: Fixed window counter in Postgres) [confidence: 60%] [branch: main]
+$ deciduous link 1 2 -r "possible approach"
+Created edge 1 (1 -&gt; 2 via leads_to)
+$ deciduous link 1 3 -r "possible approach"
+Created edge 2 (1 -&gt; 3 via leads_to)
 
-                    <pre><code># After exploring, log what was found
-deciduous add observation "App uses Redux Toolkit, should follow existing pattern" -c 85
-deciduous link 1 2 -r "Codebase discovery"
+$ deciduous add decision "Token bucket in Redis, over the fixed window" -c 85
+Created node 4 (type: decision, title: Token bucket in Redis, over the fixed window) [confidence: 85%] [branch: main]
+$ deciduous link 2 4 -t chosen -r "smooths bursts; Redis already deployed"
+Created edge 3 (2 -&gt; 4 via chosen)
+$ deciduous link 3 4 -t rejected -r "window edges allow 2x burst"
+Created edge 4 (3 -&gt; 4 via rejected)</code></pre>
 
-deciduous add observation "Found existing useLocalStorage hook in utils/" -c 90
-deciduous link 1 3 -r "Codebase discovery"</code></pre>
-
-                    <div class="claude-action">
-                        Now I need to decide on the cart state management approach:
-                    </div>
-
-                    <pre><code># Create the decision
-deciduous add decision "Choose cart state management approach" -c 75
-deciduous link 1 4 -r "Architectural decision needed"
-
-# Add the options we're considering
-deciduous add option "Redux slice with localStorage sync" -c 80
-deciduous link 4 5 -r "Option: follows existing patterns"
-
-deciduous add option "React Context with useLocalStorage" -c 70
-deciduous link 4 6 -r "Option: simpler but inconsistent with app"
-
-deciduous add option "Zustand store" -c 60
-deciduous link 4 7 -r "Option: new dependency"</code></pre>
-
-                    <div class="graph-visual">
-[goal:1] "Add shopping cart feature"
-   |
-   +---> [observation:2] "App uses Redux Toolkit"
-   +---> [observation:3] "Found useLocalStorage hook"
-   +---> [decision:4] "Choose cart state management"
-            |
-            +---> [option:5] "Redux + localStorage"
-            +---> [option:6] "Context + useLocalStorage"
-            +---> [option:7] "Zustand"
-                    </div>
-
-                    <div class="claude-action">
-                        I'll recommend Redux since it matches the existing architecture:
-                    </div>
-
-                    <pre><code># Mark the decision
-deciduous link 4 5 -r "CHOSEN: Consistent with existing Redux architecture, team already knows it" -t chosen
-deciduous link 4 6 -r "REJECTED: Would create inconsistency in state management" -t rejected
-deciduous link 4 7 -r "REJECTED: Adds new dependency when Redux already exists" -t rejected</code></pre>
-
-                    <div class="todo-list">
-                        <h5>Expanded Understanding</h5>
-                        <ul>
-                            <li class="done">[x] Decide state management (Redux)</li>
-                            <li>[ ] Create cart Redux slice</li>
-                            <li>[ ] Add localStorage persistence</li>
-                            <li>[ ] Build cart UI components</li>
-                            <li>[ ] Add "Add to Cart" buttons to product pages</li>
-                        </ul>
+                    <div class="info">
+                        <strong>Why the options point at the decision and not the other way.</strong> The decision is what the options led to; the edge type says which one won. Six months on, <code>deciduous show 4</code> prints both edges with their rationale, which is the answer to "why not Postgres?".
                     </div>
                 </div>
             </div>
@@ -735,55 +671,30 @@ deciduous link 4 7 -r "REJECTED: Adds new dependency when Redux already exists" 
             <div class="phase">
                 <div class="phase-header" onclick="togglePhase(this)">
                     <div>
-                        <strong>Phase 3: Implementation</strong>
-                        <span style="color: var(--text-muted); margin-left: 1rem;">Writing code with action/outcome logging</span>
+                        <strong>Phase 3: Action before the code, outcome after</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">files on the action, the number on the outcome</span>
                     </div>
                     <span class="arrow">▶</span>
                 </div>
                 <div class="phase-content">
-                    <div class="claude-action">
-                        Before each piece of implementation, I log what I'm about to do:
-                    </div>
+                    <pre><code>$ deciduous add action "Implement RateLimiter middleware" -c 85 -f "src/middleware/rate_limit.rs"
+Created node 5 (type: action, title: Implement RateLimiter middleware) [confidence: 85%] [files: src/middleware/rate_limit.rs] [branch: main]
+$ deciduous link 4 5 -r "implementation"
+Created edge 5 (4 -&gt; 5 via leads_to)
 
-                    <pre><code># About to create the Redux slice
-deciduous add action "Creating cartSlice with add/remove/updateQty reducers" -c 85 \
-  -f "src/store/cartSlice.ts"
-deciduous link 1 8 -r "Implementation"</code></pre>
+# ... the code is written and tested ...
 
-                    <p><em>...writes the cartSlice.ts code...</em></p>
-
-                    <pre><code># After committing
-git add src/store/cartSlice.ts
-git commit -m "feat(cart): add cartSlice with core reducers"
-
-deciduous add outcome "Cart slice created with add/remove/updateQty" -c 95 --commit HEAD
-deciduous link 8 9 -r "Complete"</code></pre>
+$ deciduous add outcome "cargo test: 41 passed, 0 failed" -c 95
+Created node 6 (type: outcome, title: cargo test: 41 passed, 0 failed) [confidence: 95%] [branch: main]
+$ deciduous link 5 6 -r "result"
+Created edge 6 (5 -&gt; 6 via leads_to)
+$ deciduous status 5 completed
+Updated node 5 status to 'completed'
+$ deciduous status 6 completed
+Updated node 6 status to 'completed'</code></pre>
 
                     <div class="warning">
-                        <strong>Key pattern:</strong> Log the <strong>action</strong> BEFORE writing code, then log the <strong>outcome</strong> AFTER committing. This creates a clear trail of intent -> result.
-                    </div>
-
-                    <pre><code># Next piece: localStorage persistence
-deciduous add action "Adding localStorage sync middleware" -c 85 \
-  -f "src/store/cartSlice.ts,src/store/index.ts"
-deciduous link 1 10 -r "Implementation"
-
-# ...writes the middleware...
-
-git commit -m "feat(cart): add localStorage persistence"
-deciduous add outcome "Cart persists across page refreshes" -c 95 --commit HEAD
-deciduous link 10 11 -r "Complete"</code></pre>
-
-                    <div class="graph-visual">
-[goal:1] "Add shopping cart feature"
-   |
-   +---> [decision:4] "Choose state management" -> [option:5] Redux (CHOSEN)
-   |
-   +---> [action:8] "Creating cartSlice"
-   |        +---> [outcome:9] "Cart slice created" (commit: f3e4d5c)
-   |
-   +---> [action:10] "Adding localStorage sync"
-            +---> [outcome:11] "Persistence working" (commit: a1b2c3d)
+                        <strong>An outcome is a number or an error, not an adjective.</strong> "Rate limiting working" cannot be checked later; "41 passed, 0 failed" can. After a commit, <code>--commit HEAD</code> stores the full hash on the node (a rev git cannot resolve in this checkout is refused).
                     </div>
                 </div>
             </div>
@@ -791,56 +702,44 @@ deciduous link 10 11 -r "Complete"</code></pre>
             <div class="phase">
                 <div class="phase-header" onclick="togglePhase(this)">
                     <div>
-                        <strong>Phase 4: Scope Expansion</strong>
-                        <span style="color: var(--text-muted); margin-left: 1rem;">User adds requirements mid-stream</span>
+                        <strong>Phase 4: The pivot, in one command</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">observation, revisit, new decision; old decision superseded</span>
                     </div>
                     <span class="arrow">▶</span>
                 </div>
                 <div class="phase-content">
                     <div class="user-message">
-                        Oh, I forgot to mention - we also need the cart to sync with the backend when users are logged in, so it persists across devices. Can you add that?
+                        Redis cluster failover keeps resetting the limits. Can we not depend on it?
                     </div>
 
                     <div class="claude-action">
-                        This is a significant scope change. I'll create a new goal linked to the original:
+                        A pivot is seven commands by hand. <code>archaeology pivot</code> does them atomically, and <code>--dry-run</code> shows the plan first.
                     </div>
 
-                    <pre><code>deciduous add goal "Add backend cart sync for logged-in users" -c 85 --prompt-stdin << 'EOF'
-Oh, I forgot to mention - we also need the cart to sync with the backend when
-users are logged in, so it persists across devices. Can you add that?
-EOF
-deciduous link 1 12 -r "Scope expansion from user"</code></pre>
+                    <pre><code>$ deciduous archaeology pivot 4 "Redis cluster failover drops bucket state; limits reset on every failover" "Fixed window counter in Postgres, 60s windows" -c 80 -r "Bucket state does not survive Redis failover"
+=== PIVOT CREATED ===
 
-                    <pre><code># This triggers new decisions
-deciduous add decision "Cart sync strategy" -c 70
-deciduous link 12 13 -r "Need to decide sync approach"
+  #7 [observation] "Redis cluster failover drops bucket state; limits reset on every failover"
+    └── linked from #4 "Token bucket in Redis, over the fixed window"
+  #8 [revisit] "Reconsidering: Token bucket in Redis, over the fixed window"
+    └── linked from #7 [observation]
+  #9 [decision] "Fixed window counter in Postgres, 60s windows"
+    └── linked from #8 [revisit]
 
-deciduous add option "Sync on every change (real-time)" -c 60
-deciduous link 13 14 -r "Option: immediate but chatty"
+  Superseded: #4 "Token bucket in Redis, over the fixed window" -&gt; status: superseded
 
-deciduous add option "Debounced sync (batch changes)" -c 80
-deciduous link 13 15 -r "Option: efficient, handles rapid changes"
+  Summary: 3 nodes created, 3 edges created, 1 node superseded</code></pre>
 
-deciduous add option "Sync only on checkout/logout" -c 50
-deciduous link 13 16 -r "Option: minimal but risks data loss"</code></pre>
+                    <pre><code>$ deciduous narratives pivots
+=== PIVOTS === (1 found)
+
+Pivot #1: [revisit #8] "Reconsidering: Token bucket in Redis, over the fixed window"
+  Old approach: #4 [decision] "Token bucket in Redis, over the fixed window" (superseded)
+  Triggered by: #7 [observation] "Redis cluster failover drops bucket state; limits reset on every failover"
+  New approach: #9 [decision] "Fixed window counter in Postgres, 60s windows"</code></pre>
 
                     <div class="info">
-                        <strong>Why link scope changes?</strong> When someone asks "why does cart have backend sync?", the graph shows the exact user request that triggered it, linked to the original goal.
-                    </div>
-
-                    <div class="todo-list">
-                        <h5>Expanded Scope (discovered during implementation)</h5>
-                        <ul>
-                            <li class="done">[x] Decide state management (Redux)</li>
-                            <li class="done">[x] Create cart Redux slice</li>
-                            <li class="done">[x] Add localStorage persistence</li>
-                            <li>[ ] Build cart UI components</li>
-                            <li>[ ] Add "Add to Cart" buttons</li>
-                            <li class="new">[ ] NEW: Backend cart API endpoints</li>
-                            <li class="new">[ ] NEW: Sync middleware for logged-in users</li>
-                            <li class="new">[ ] NEW: Merge local cart with server cart on login</li>
-                            <li class="new">[ ] NEW: Handle sync conflicts</li>
-                        </ul>
+                        The superseded decision stays. <code>deciduous nodes -t decision</code> lists both, one marked <code>superseded</code>; that is the history, and deleting it would delete the reason the new approach exists.
                     </div>
                 </div>
             </div>
@@ -848,345 +747,314 @@ deciduous link 13 16 -r "Option: minimal but risks data loss"</code></pre>
             <div class="phase">
                 <div class="phase-header" onclick="togglePhase(this)">
                     <div>
-                        <strong>Phase 5: Bug Discovery</strong>
-                        <span style="color: var(--text-muted); margin-left: 1rem;">Something goes wrong and needs investigation</span>
+                        <strong>Phase 5: Evidence and a note to a colleague</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">a document on the goal; the message board</span>
                     </div>
                     <span class="arrow">▶</span>
                 </div>
                 <div class="phase-content">
-                    <div class="user-message">
-                        The cart total is showing wrong values sometimes. Can you investigate?
-                    </div>
+                    <pre><code>$ deciduous doc attach 1 rate-limit-spec.md -d "Rate limit spec"
+Attached document 1 to node 1 (rate-limit-spec.md)
+  Description: Rate limit spec
+$ deciduous doc list 1
+1 documents:
+ID    NODE     FILENAME                  TYPE       SIZE     DESCRIPTION
+--------------------------------------------------------------------------------
+1     1        rate-limit-spec.md        text/m...  34B      Rate limit spec</code></pre>
 
-                    <pre><code>deciduous add goal "Fix cart total calculation bug" -c 75 --prompt-stdin << 'EOF'
-The cart total is showing wrong values sometimes. Can you investigate?
-EOF
-deciduous link 1 17 -r "Bug in cart feature"</code></pre>
+                    <p>Files go to <code>.deciduous/documents/</code> under a content-hash name, so the same file attached twice is stored once. <code>doc detach</code> is a soft delete; <code>doc gc</code> removes files no live record names.</p>
 
-                    <div class="claude-action">
-                        I'll log observations as I investigate...
-                    </div>
+                    <pre><code>$ deciduous board post --as lead -s "header name for the limit?" -m "@w1 X-RateLimit-Remaining or Retry-After only?"
+Posted #1, to w1
+$ deciduous board post --as w1 -s "re header" -m "Both. @lead" --reply-to 1
+Posted #2 (reply to #1), to lead
+$ deciduous board read --unanswered lead
+#2  w1 -&gt; lead  re #1  [main]  2026-10-24T16:50:26.234660Z
+    re header
+    | Both. @lead
+$ deciduous board read --unanswered w1
+Nothing addressed to w1 is waiting for an answer.</code></pre>
 
-                    <pre><code># While debugging
-deciduous add observation "Total uses floating point, seeing precision errors" -c 90
-deciduous link 17 18 -r "Investigation finding"
-
-deciduous add observation "Bug only occurs with items priced at $X.99" -c 95
-deciduous link 17 19 -r "Investigation finding"</code></pre>
-
-                    <pre><code># Decide on fix approach
-deciduous add decision "How to fix price precision" -c 80
-deciduous link 17 20 -r "Need to decide fix"
-
-deciduous add option "Store prices as cents (integers)" -c 90
-deciduous link 20 21 -r "Best practice for money"
-
-deciduous add option "Use decimal.js library" -c 70
-deciduous link 20 22 -r "Adds dependency"
-
-# Choose and implement
-deciduous link 20 21 -r "CHOSEN: Standard practice, no dependencies" -t chosen
-deciduous add action "Converting price storage to cents" -c 85 -f "src/store/cartSlice.ts"
-deciduous link 17 23 -r "Bug fix implementation"</code></pre>
-
-                    <div class="success">
-                        <strong>Future value:</strong> When someone encounters a similar bug, they can search the graph and find this exact debugging journey - the observations, the decision, and the fix.
-                    </div>
+                    <p>The board is for agents (or people) working at the same time. <code>@label</code> addresses, <code>--reply-to</code> answers, <code>--unanswered LABEL</code> is the inbox. It lives in the main worktree's database, shared by every worktree, or on the server when the project has a <code>[remote]</code>; never in <code>graph.json</code>, never exported.</p>
                 </div>
             </div>
 
             <div class="phase">
                 <div class="phase-header" onclick="togglePhase(this)">
                     <div>
-                        <strong>Phase 6: Context Recovery (New Session)</strong>
-                        <span style="color: var(--text-muted); margin-left: 1rem;">Picking up work after context loss</span>
+                        <strong>Phase 6: The next session</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">what /recover reads</span>
                     </div>
                     <span class="arrow">▶</span>
                 </div>
                 <div class="phase-content">
-                    <p><em>The next day, in a fresh Claude session...</em></p>
-
                     <div class="user-message">
-                        Let's continue working on the cart. Where were we?
+                        Let's continue the rate limiting work. Where were we?
                     </div>
 
-                    <div class="claude-action">
-                        I'll query the decision graph to recover context:
-                    </div>
+                    <pre><code>$ deciduous pulse
+=== PULSE ===
 
-                    <pre><code>deciduous nodes</code></pre>
+Summary:
+  Nodes: 9 | Edges: 9
+  Types:  goal(1) option(2) decision(2) action(1) outcome(1) observation(1) revisit(1)
+  Status: completed(2) superseded(1) pending(6)
+  Confidence: high(5) medium(2) low(0) unset(2)
 
-                    <div class="graph-visual">
-ID   Type         Title                                    Status    Confidence
-1    goal         Add shopping cart feature                active    90%
-2    observation  App uses Redux Toolkit                   active    85%
-4    decision     Choose cart state management             active    75%
-5    option       Redux slice with localStorage sync       active    80%
-8    action       Creating cartSlice with reducers         completed 85%
-9    outcome      Cart slice created                       completed 95%
-12   goal         Add backend cart sync                    active    85%
-17   goal         Fix cart total calculation bug           active    75%
-...
-                    </div>
+Active Goals:
+  #1 [goal] Add rate limiting to the public API 90%
+    ├── #2 [option] Token bucket in Redis (pending) 70%
+    ├── #3 [option] Fixed window counter in Postgres (pending) 60%
+    ├── #4 [decision] Token bucket in Redis, over the fixed window (superseded) 85%
+    ├── #5 [action] Implement RateLimiter middleware (completed) 85%
+    ├── #7 [observation] Redis cluster failover drops bucket state; limits reset on every failover (pending)
+    ├── #6 [outcome] cargo test: 41 passed, 0 failed (completed) 95%
+    ├── #8 [revisit] Reconsidering: Token bucket in Redis, over the fixed window (pending)
+    ├── #9 [decision] Fixed window counter in Postgres, 60s windows (pending) 80%
 
-                    <pre><code>deciduous edges</code></pre>
+Recent Activity:
+  2026-10-24  #9   [decision   ] Fixed window counter in Postgres, 60s windows 80%
+  ...
 
-                    <div class="graph-visual">
-1 -> 4 (leads_to) "Architectural decision needed"
-4 -> 5 (chosen) "Consistent with existing Redux architecture"
-1 -> 8 (leads_to) "Implementation"
-8 -> 9 (leads_to) "Complete"
-1 -> 12 (leads_to) "Scope expansion from user"
-...
-                    </div>
-
-                    <div class="claude-action">
-                        Based on the graph, I can see:
-                        <ul style="margin: 0.5rem 0 0 1.5rem;">
-                            <li>Main goal: Shopping cart feature (goal 1)</li>
-                            <li>Decision made: Using Redux (not Context/Zustand)</li>
-                            <li>Completed: Cart slice, localStorage persistence</li>
-                            <li>In progress: Backend sync (goal 12), bug fix (goal 17)</li>
-                            <li>Bug: Floating point precision, fixing with cents storage</li>
-                        </ul>
-                    </div>
+Coverage Gaps (1):
+  #9   [decision] "Fixed window counter in Postgres, 60s windows" - no actions</code></pre>
 
                     <div class="success">
-                        <strong>Full context recovered</strong> - Claude now knows the decisions, the reasoning, what's done, and what's in progress, all from querying the graph.
+                        <strong>The last line is the answer.</strong> A decision was made and nothing has been done about it. <code>deciduous show 9</code> gives the rationale; <code>deciduous show 1</code> gives the original request and the attached spec; <code>deciduous commands</code> gives the recent command log. <code>/recover</code> runs these, plus <code>board read --unanswered</code> and <code>transcript list</code>, before touching code.
                     </div>
                 </div>
             </div>
         </section>
 
         <section id="patterns">
-            <h2>Common Patterns</h2>
+            <h2>Patterns</h2>
 
             <div class="two-column">
                 <div class="card">
-                    <div class="card-title"><span class="node-type node-goal">goal</span> Starting New Work</div>
-                    <pre><code>deciduous add goal "Feature name" \
-  -c 90 \
-  --prompt-stdin << 'EOF'
-[User's exact request here]
+                    <div class="card-title"><span class="node-type node-goal">goal</span> A request</div>
+                    <pre><code>deciduous add goal "Title" -c 90 \
+  --prompt-stdin &lt;&lt; 'EOF'
+[the user's message, word for word]
 EOF</code></pre>
-                    <p>Always capture the verbatim user prompt for context recovery.</p>
+                    <p>A root goal is the only node allowed to have no parent. A follow-up request links under it.</p>
                 </div>
 
                 <div class="card">
-                    <div class="card-title"><span class="node-type node-decision">decision</span> Making Choices</div>
-                    <pre><code>deciduous add decision "What to decide"
-deciduous add option "Choice A"
-deciduous add option "Choice B"
-deciduous link DECISION OPTION_A -t chosen
-deciduous link DECISION OPTION_B -t rejected</code></pre>
-                    <p>Document why you chose A over B.</p>
+                    <div class="card-title"><span class="node-type node-decision">decision</span> A choice</div>
+                    <pre><code>deciduous add option "A"
+deciduous add option "B"
+deciduous link GOAL A -r "possible approach"
+deciduous link GOAL B -r "possible approach"
+deciduous add decision "A, over B"
+deciduous link A DECISION -t chosen -r "why"
+deciduous link B DECISION -t rejected -r "why not"</code></pre>
+                    <p>The decision's title names what it beat.</p>
                 </div>
 
                 <div class="card">
-                    <div class="card-title"><span class="node-type node-action">action</span> Before Coding</div>
-                    <pre><code>deciduous add action "What I'm implementing" \
-  -c 85 \
-  -f "file1.ts,file2.ts"
-deciduous link GOAL ACTION -r "Implementation"</code></pre>
-                    <p>Log BEFORE you write code, not after.</p>
+                    <div class="card-title"><span class="node-type node-action">action</span> Before the edit</div>
+                    <pre><code>deciduous add action "What is about to change" \
+  -c 85 -f "src/a.rs,src/b.rs"
+deciduous link DECISION ACTION -r "implementation"</code></pre>
+                    <p>Files on the action; the shared server's <code>query_nodes file=</code> and <code>show_node related</code> find them later.</p>
                 </div>
 
                 <div class="card">
-                    <div class="card-title"><span class="node-type node-outcome">outcome</span> After Committing</div>
-                    <pre><code>git commit -m "feat: ..."
-deciduous add outcome "What was accomplished" \
-  -c 95 \
-  --commit HEAD
-deciduous link ACTION OUTCOME -r "Complete"</code></pre>
-                    <p>Links the commit hash to the graph.</p>
+                    <div class="card-title"><span class="node-type node-outcome">outcome</span> After the result</div>
+                    <pre><code>deciduous add outcome "212 passed, 0 failed" \
+  -c 95 --commit HEAD
+deciduous link ACTION OUTCOME -r "result"
+deciduous status ACTION completed</code></pre>
+                    <p>The number or the error. <code>--commit</code> stores the full hash.</p>
                 </div>
 
                 <div class="card">
-                    <div class="card-title"><span class="node-type node-observation">observation</span> Discoveries</div>
-                    <pre><code>deciduous add observation "What I found" -c 85
-deciduous link GOAL OBSERVATION -r "Discovery"</code></pre>
-                    <p>Log interesting findings, constraints, or insights.</p>
+                    <div class="card-title"><span class="node-type node-observation">observation</span> A fact that changes the plan</div>
+                    <pre><code>deciduous add observation "Title" \
+  -d "What was seen and what it implies"
+deciduous link GOAL OBS -r "found while ..."</code></pre>
+                    <p>Observations attach anywhere. An observation that overturns a decision is the first step of a pivot.</p>
                 </div>
 
                 <div class="card">
-                    <div class="card-title">Session Recovery</div>
-                    <pre><code>deciduous nodes          # What exists?
-deciduous edges          # How connected?
-deciduous commands       # Recent activity?
-git status               # Current state?</code></pre>
-                    <p>Run these at the start of every session.</p>
+                    <div class="card-title">revisit: a pivot</div>
+                    <pre><code>deciduous archaeology pivot OLD_DECISION \
+  "What was learned" "New approach" \
+  -c 80 -r "Why the old one failed" [--dry-run]</code></pre>
+                    <p>Observation, revisit, new decision, three edges, old node superseded. <code>archaeology supersede ID --cascade</code> marks a whole subtree.</p>
                 </div>
             </div>
 
-            <h3>The Golden Rule</h3>
+            <h3>The rule</h3>
             <div class="warning">
-                <pre><code>BEFORE you code  ->  Log what you're ABOUT to do (action)
-AFTER it works   ->  Log what happened (outcome)
-ALWAYS           ->  Link nodes to their parents immediately</code></pre>
+                <pre><code>BEFORE you change something  -&gt;  action: what is about to change, and in which files
+AFTER it succeeds or fails   -&gt;  outcome: the number or the error
+WHEN you choose              -&gt;  options first, then the decision that names what it beat
+ALWAYS                       -&gt;  link the node to its parent in the same breath</code></pre>
             </div>
+            <p>What not to log: your own reading, searching and planning. The graph records the project's decisions, not the agent's process. "Analyzing the codebase" is not a node; "the existing auth uses bcrypt, reuse it" is an observation.</p>
         </section>
 
         <section id="commands">
             <h2>Command Reference</h2>
+            <p>Every flag below is in <code>deciduous &lt;command&gt; --help</code> on 1.1.0. Anywhere a node is named, a local id, a change_id prefix (the CHANGE column of <code>deciduous nodes</code>) or a server id works.</p>
 
-            <h3>Adding Nodes</h3>
+            <h3>Nodes</h3>
             <div class="command-example">
-                <div class="description">Create a goal (high-level objective)</div>
-                <pre><code>deciduous add goal "Feature title" -c 90 -p "Short prompt"
-deciduous add goal "Feature title" -c 90 --prompt-stdin  # Read from stdin</code></pre>
+                <pre><code>deciduous add &lt;type&gt; "Title"           # goal, option, decision, action, outcome, observation, revisit
+  -d, --description "..."              # longer text (observations want one)
+  -c, --confidence 0-100
+  -p, --prompt "..."  |  --prompt-stdin  # the user's words, verbatim
+  -f, --files "a.rs,b.rs"
+      --commit HEAD|&lt;rev&gt;              # stored as the full hash; an unresolvable rev is refused
+  -b, --branch NAME  |  --no-branch    # branch is auto-detected otherwise
+      --date "YYYY-MM-DD"              # backdate, for archaeology
+
+deciduous status &lt;id&gt; &lt;status&gt;          # pending, active, completed, rejected, superseded, abandoned
+deciduous prompt &lt;id&gt; ["text"]          # set or replace the prompt; stdin when omitted
+deciduous delete &lt;id&gt; [--dry-run]       # the node and every edge on it</code></pre>
             </div>
 
+            <h3>Edges</h3>
             <div class="command-example">
-                <div class="description">Create a decision (choice point)</div>
-                <pre><code>deciduous add decision "What needs to be decided" -c 75</code></pre>
+                <pre><code>deciduous link &lt;from&gt; &lt;to&gt; -r "rationale" [-t leads_to|requires|chosen|rejected|blocks|enables|took_from]
+deciduous unlink &lt;from&gt; &lt;to&gt; [-t TYPE]  # -t is required when two edge types join the same nodes</code></pre>
+                <p><code>took_from</code> records a borrow: from the node you took the idea from, to your node that used it, usually across branches. A duplicate <code>link</code> is refused by name; a self-loop is refused.</p>
             </div>
 
+            <h3>Reading</h3>
             <div class="command-example">
-                <div class="description">Create an option (for a decision)</div>
-                <pre><code>deciduous add option "Possible approach" -c 70</code></pre>
+                <pre><code>deciduous nodes [-b BRANCH] [-t TYPE] [--theme NAME]   # there is no --status filter on the CLI
+deciduous edges
+deciduous show &lt;id&gt; [--json]            # metadata, connections, documents; evidence on imported nodes
+deciduous graph                         # the whole graph as JSON, to stdout
+deciduous pulse [-b BRANCH] [-r N] [--summary] [--json]
+deciduous commands [-l N]               # recent command log
+deciduous archaeology timeline [-l N] [-t TYPE] [-b BRANCH] [--json]
+deciduous narratives pivots [-b BRANCH] [--json]</code></pre>
             </div>
 
+            <h3>Pivots and archaeology</h3>
             <div class="command-example">
-                <div class="description">Create an action (about to implement)</div>
-                <pre><code>deciduous add action "What I'm implementing" -c 85 -f "file1.ts,file2.ts"</code></pre>
+                <pre><code>deciduous archaeology pivot &lt;from&gt; "observation" "new approach" [-c N] [-r "reason"] [--dry-run]
+deciduous archaeology supersede &lt;id&gt; [--cascade] [--dry-run]
+deciduous narratives init [-o PATH] [--force]   # .deciduous/narratives.md from the active goals
+deciduous narratives show [-p PATH]
+deciduous audit --associate-commits [--min-score 50] [--dry-run] [--yes]   # match node titles to commit messages</code></pre>
             </div>
 
+            <h3>Transcripts</h3>
             <div class="command-example">
-                <div class="description">Create an outcome (result of action)</div>
-                <pre><code>deciduous add outcome "What happened" -c 95 --commit HEAD</code></pre>
+                <pre><code>deciduous transcript list [--dir DIR] [--json]              # this project's sessions; "new" or "imported"
+deciduous transcript import &lt;path|session-id&gt;... [--dry-run] [--no-hash] [--json]</code></pre>
+                <p>A session id is any prefix of the file name under <code>~/.claude/projects/&lt;slug&gt;/</code>. Importing twice adds nothing. <code>--no-hash</code> skips hashing the files the actions touched, for a <code>SessionEnd</code> hook that may run mid-edit.</p>
             </div>
 
+            <h3>Documents, themes</h3>
             <div class="command-example">
-                <div class="description">Create an observation (finding/insight)</div>
-                <pre><code>deciduous add observation "What I discovered" -c 80</code></pre>
+                <pre><code>deciduous doc attach &lt;node&gt; &lt;file&gt; [-d "..."] [--ai-describe]
+deciduous doc list [node] [--include-detached] [--json]
+deciduous doc show &lt;doc&gt; [--json]  |  doc describe &lt;doc&gt; ["text"|--ai]  |  doc open &lt;doc&gt;
+deciduous doc detach &lt;doc&gt;         |  doc gc [--dry-run]
+deciduous themes create NAME [-c "#hex"] [-d "..."]  |  themes list  |  themes delete NAME
+deciduous tag add &lt;node&gt; THEME  |  tag remove  |  tag list &lt;node&gt;  |  tag suggest [node] [--apply]  |  tag confirm &lt;node&gt; THEME</code></pre>
             </div>
 
-            <h3>Linking Nodes</h3>
+            <h3>Output</h3>
             <div class="command-example">
-                <div class="description">Create a connection between nodes</div>
-                <pre><code>deciduous link FROM_ID TO_ID -r "Reason for connection"
-deciduous link 4 5 -r "Implementation step" -t leads_to  # Explicit type
-deciduous link 4 5 -t chosen    # Mark option as chosen
-deciduous link 4 6 -t rejected  # Mark option as rejected</code></pre>
+                <pre><code>deciduous serve [-p 3000]               # web viewer; --api runs the multi-graph JSON API daemon instead
+deciduous dot [-o FILE] [-r ROOTS] [-n "1-11"] [-t "Title"] [--rankdir TB|LR|BT|RL] [--png] [--auto]
+deciduous writeup [-t "Title"] [-r ROOTS] [-n "1-11"] [-o FILE] [--png FILE | --auto] [--no-dot] [--no-test-plan]
+deciduous backup [-o FILE]              # copy of the SQLite database</code></pre>
+                <p><code>--png</code> needs Graphviz. <code>--auto</code> names the file after the branch (<code>docs/decision-graph-&lt;branch&gt;.png</code>), and the cleanup workflow <code>init</code> writes removes those images after the PR merges.</p>
             </div>
 
-            <h3>Querying</h3>
+            <h3>Where the graph lives</h3>
             <div class="command-example">
-                <div class="description">List nodes (with filters)</div>
-                <pre><code>deciduous nodes                    # All nodes
-deciduous nodes --type goal        # Only goals
-deciduous nodes --branch main      # Only from main branch
-deciduous nodes --type decision    # Only decisions</code></pre>
+                <pre><code>deciduous remote setup [--local | --database-url URL | --docker-postgres | --docker | --url URL] [--port N]
+deciduous remote status                 # local cache vs server, field by field; exit 1 if anything differs
+deciduous remote pull                   # refresh the local database from the server
+deciduous remote push [--seed] [--repair] [--drop-rejected | --retry-rejected | --drop OP]
+deciduous remote watch [--types T,T] [--branch B] [--edges] [--json] [--url [--claude-code]]
+deciduous remote login [--url URL]  |  remote logout  |  remote init URL [--workspace NAME]  |  remote adopt [ROOT] --url URL [-n]
+
+deciduous sync [--check]                # projects without a [remote]: reconcile .deciduous/graph.json with the database</code></pre>
+                <p>With a <code>[remote]</code>, <code>add</code>, <code>link</code>, <code>status</code> and the rest write locally, append an op to <code>.deciduous/remote-log.jsonl</code>, and send it before the command exits; <code>push</code> is for a backlog or for history that predates the server. Without one, <code>sync</code> after <code>git pull</code> and before <code>git push</code> is how teammates' nodes arrive and yours leave; <code>sync --check</code> exits 1 when anything is pending. <code>sync</code> no longer writes <code>docs/graph-data.json</code> (removed in 1.0.5).</p>
             </div>
 
+            <h3>Agents</h3>
             <div class="command-example">
-                <div class="description">List edges</div>
-                <pre><code>deciduous edges                    # All connections</code></pre>
+                <pre><code>deciduous board post --as LABEL -s "subject" [-m "body" | &lt; stdin] [--reply-to ID] [--branch B] [--json]
+deciduous board read [--since ID] [--from LABEL] [--to LABEL] [--unanswered LABEL] [-q TEXT] [--limit N] [--json]
+deciduous board show ID [--json]
+deciduous mcp                           # the local stdio MCP server, 34 tools</code></pre>
+                <p><code>--as</code> defaults to <code>DECIDUOUS_AGENT_LABEL</code>, which the <code>board-mentions.sh</code> hook also reads to show a session its unanswered messages at start.</p>
             </div>
 
+            <h3>Maintenance</h3>
             <div class="command-example">
-                <div class="description">Export full graph</div>
-                <pre><code>deciduous graph > graph.json       # JSON export</code></pre>
-            </div>
-
-            <h3>Viewing</h3>
-            <div class="command-example">
-                <div class="description">Start viewers</div>
-                <pre><code>deciduous tui                      # Terminal UI
-deciduous serve                    # Web viewer (port 3000)
-deciduous serve --port 8080        # Custom port</code></pre>
-            </div>
-
-            <h3>Exporting</h3>
-            <div class="command-example">
-                <div class="description">Sync for GitHub Pages</div>
-                <pre><code>deciduous sync                     # Exports to docs/</code></pre>
-            </div>
-
-            <div class="command-example">
-                <div class="description">Generate visualizations</div>
-                <pre><code>deciduous dot                      # DOT format to stdout
-deciduous dot --png -o graph.dot   # Generate PNG (needs graphviz)
-deciduous writeup -t "PR Title"    # Generate PR writeup</code></pre>
-            </div>
-
-            <h3>Team Collaboration</h3>
-            <div class="command-example">
-                <div class="description">Export/import patches for teammates</div>
-                <pre><code>deciduous diff export --branch feature-x -o patches/my-work.json
-deciduous diff apply patches/teammate.json
-deciduous diff apply --dry-run patches/teammate.json  # Preview first</code></pre>
-            </div>
-
-            <h3>Parallel Agents</h3>
-            <div class="command-example">
-                <div class="description">Coordinate on the message board, never in a scratch file</div>
-                <pre><code>deciduous board post --as lead -s "port?" -m "@w1 which port"   # Post; @label addresses
-deciduous board post --as w1 -s "re" -m "4000" --reply-to 1   # Answer
-deciduous board read --unanswered w1                          # What is waiting for w1
-deciduous board show 1                                        # One message in full</code></pre>
+                <pre><code>deciduous check-update                  # exit 1 if .deciduous/.version is behind the binary
+deciduous update [--all DIR]            # replace files deciduous wrote; keep files and sections you edited
+deciduous integration                   # what is installed for Claude Code
+deciduous completion zsh|bash|fish|powershell|elvish
+deciduous auto-update on|off            # the once-a-day crates.io check</code></pre>
             </div>
         </section>
 
         <section id="troubleshooting">
             <h2>Troubleshooting</h2>
 
-            <h3>Enforcement Hooks</h3>
-
-            <p>Deciduous includes Claude Code hooks that enforce decision logging. These are installed with <code>deciduous init</code>.</p>
-
             <div class="card">
-                <div class="card-title">Error: "No recent action/goal node found"</div>
-                <p>The Edit/Write hook blocked you because no node was logged in the last 15 minutes.</p>
-                <p><strong>Fix:</strong> Log what you're about to do first:</p>
-                <pre><code>deciduous add action "What I'm about to implement" -c 85
-# Now you can edit files</code></pre>
+                <div class="card-title">Nothing blocked the agent, and it did not log</div>
+                <p>That is by design since 1.0.3. Up to 1.0.2 a hook denied the agent's next tool call until it wrote to the graph, and it could leave a session unable to do anything. The two hooks <code>init</code> installs now (version check, board mentions) never block. The backstop is the transcript: <code>deciduous transcript import &lt;session&gt;</code> puts the session in the graph afterwards, with each node marked <code>proven</code> or <code>inferred</code>.</p>
             </div>
 
             <div class="card">
-                <div class="card-title">Reminder: "Link this commit to the decision graph!"</div>
-                <p>After git commits, the hook reminds you to link the commit.</p>
-                <p><strong>Fix:</strong> Create an outcome linked to the commit:</p>
-                <pre><code>deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-deciduous link ACTION_ID OUTCOME_ID -r "Complete"</code></pre>
-            </div>
-
-            <h3>Common Issues</h3>
-
-            <div class="card">
-                <div class="card-title">Orphan nodes (disconnected from graph)</div>
-                <p>Every node except root goals should be linked to a parent.</p>
-                <p><strong>Fix:</strong> Run <code>deciduous edges</code> to find gaps, then link:</p>
-                <pre><code>deciduous link PARENT_ID ORPHAN_ID -r "Retroactive connection"</code></pre>
+                <div class="card-title">"Warning: Prompt is only N chars. This looks like a summary"</div>
+                <p>The node was created. The warning asks whether the prompt is the user's message or your paraphrase of it; if it is the message, ignore it. <code>deciduous prompt &lt;id&gt;</code> replaces the text later.</p>
             </div>
 
             <div class="card">
-                <div class="card-title">Lost context on what to do next</div>
-                <p>Use the recovery pattern:</p>
-                <pre><code>deciduous nodes    # See what goals exist
-deciduous edges    # See connections and progress
-git status         # See uncommitted work
-deciduous commands # See recent deciduous activity</code></pre>
+                <div class="card-title">A line on stderr names <code>remote setup</code> after every write</div>
+                <p>The project has no server anywhere, so the write stayed in the local database and the agents' MCP tools cannot see it. Run <code>deciduous remote setup</code> (or <code>deciduous init</code>), or set <code>DECIDUOUS_QUIET_LOCAL_ONLY=1</code> for a project meant to stay local.</p>
             </div>
 
             <div class="card">
-                <div class="card-title">Graph not updating on GitHub Pages</div>
-                <p>Make sure to sync and push:</p>
-                <pre><code>deciduous sync     # Export to docs/
-git add docs/
-git commit -m "docs: update decision graph"
-git push</code></pre>
+                <div class="card-title"><code>deciduous remote status</code> exits 1</div>
+                <p>It compares content, not counts. <em>Only here</em> and waiting in the log: <code>deciduous remote push</code>. <em>Only on the server</em>: <code>deciduous remote pull</code>. <em>Different</em> with "edited here since the last pull": <code>remote push --repair</code>. Ops the server refused are listed with the reason; <code>--drop-rejected</code>, <code>--drop &lt;op&gt;</code> or <code>--retry-rejected</code> settle them.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title">A node written by the agent is not in <code>deciduous nodes</code></div>
+                <p>With a <code>[remote]</code>, MCP writes land on the server and reach the local cache only on <code>deciduous remote pull</code>. The agent's tools and the CLI read the same graph after that.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><code>deciduous sync --check</code> exits 1</div>
+                <p>In a project without a <code>[remote]</code>: records are pending in one direction or the other, edges are waiting for an endpoint, or <code>.deciduous/graph.json</code> cannot be read. Run <code>deciduous sync</code>; commit <code>.deciduous/graph.json</code> by path (never <code>git add -A</code>). A file left with conflict markers by a clone without the merge driver is repaired by <code>sync</code>.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Orphans</div>
+                <p>Every node except a root goal should have a parent. <code>deciduous pulse</code> lists coverage gaps; the MCP tools <code>find_orphans</code> (both servers) and, on the shared server, <code>consolidation_report</code> list parentless nodes with suggested parents, never linked for you. Then <code>deciduous link PARENT ORPHAN -r "..."</code>.</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Two <code>deciduous</code> binaries</div>
+                <p><code>which -a deciduous</code>. A Homebrew install and a <code>cargo install</code> can both be on PATH; the first one runs. A slash command file that reaches a machine whose binary predates the subcommand (for example <code>demo-swarm</code>, added in 1.0.4) gets clap's <code>unrecognized subcommand</code>.</p>
             </div>
         </section>
 
             <footer>
                 <p>
                     <a href="./">Home</a> |
+                    <a href="mcp.html">MCP</a> |
+                    <a href="remote.html">Shared Graph</a> |
                     <a href="demo/">Live Graph</a> |
                     <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
                     <a href="https://crates.io/crates/deciduous">crates.io</a>
                 </p>
-                <p>Built with deciduous - decision graph tooling for AI development</p>
+                <p>Built with deciduous. Output on this page is from deciduous 1.1.0 on 2026-10-24.</p>
             </footer>
         </div>
     </main>
