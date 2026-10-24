@@ -60,6 +60,9 @@ pub enum TranscriptError {
     Io(PathBuf, std::io::Error),
     /// The file parsed but held no user prompt.
     Empty(PathBuf),
+    /// No transcript directory: Claude Code has not run in this project, or
+    /// it ran from another path.
+    NoDirectory(PathBuf),
     Db(DbError),
 }
 
@@ -71,6 +74,12 @@ impl std::fmt::Display for TranscriptError {
                 f,
                 "{}: no user prompt in this transcript (a subagent file, or a session that \
                  never got a message); nothing to derive",
+                p.display()
+            ),
+            TranscriptError::NoDirectory(p) => write!(
+                f,
+                "no transcripts at {}: Claude Code has not run in this project directory, or \
+                 it ran from another path (pass --dir)",
                 p.display()
             ),
             TranscriptError::Db(e) => write!(f, "{}", e),
@@ -1677,6 +1686,9 @@ pub struct Listed {
 /// its root goal is already in the graph.
 pub fn list(db: &Database, dir: &Path) -> Result<Vec<Listed>, TranscriptError> {
     let mut out = Vec::new();
+    if !dir.is_dir() {
+        return Err(TranscriptError::NoDirectory(dir.to_path_buf()));
+    }
     let entries = fs::read_dir(dir).map_err(|e| TranscriptError::Io(dir.to_path_buf(), e))?;
     for entry in entries.flatten() {
         let path = entry.path();
