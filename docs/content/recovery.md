@@ -91,9 +91,12 @@ Local ids differ in every checkout. `show`, `link`, `status` and `doc attach` ta
 
 ```text
 Error: No node has a change_id starting with '5ca33b18'. Run 'deciduous sync' if a teammate created it.
+It is not a server id in workspace my-app either.
+
+A node is named by its local id (12, or #12 when digits could also be a change_id prefix), its change_id or a prefix of it (the CHANGE column of `deciduous nodes`, at least 4 hex characters), or, in a project with a [remote], the server's id for it (the `id` MCP tools return) or a prefix of that.
 ```
 
-With a `[remote]` the fix is `deciduous remote pull`, not `sync`. A server UUID does not get you around the pull. Before it, the CLI recognises the UUID and tells you to pull:
+A prefix needs only 4 hex characters. With a `[remote]` the fix is `deciduous remote pull`, not `sync`. A server UUID does not get you around the pull. Before it, the CLI recognises the UUID and tells you to pull:
 
 ```console
 $ deciduous show 14a9f4d8-b37a-...
@@ -110,15 +113,16 @@ Note: '32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb' is the server id 32d05bcb-1b2 = cha
 
 ## The /recover command
 
-`deciduous init` writes `.claude/commands/recover.md`. In a project with a `[remote]`, `deciduous update` replaces it with a version whose first step is `deciduous remote pull` and `deciduous remote status`, then `nodes`, `nodes --branch`, `edges`, `commands`, `doc list`, the board, and `git status` / `git log`. A project set up without a server gets the git-mode version, which ends with `deciduous sync` instead; run `deciduous update` after adding `[remote]` to switch.
+`deciduous init` writes `.claude/commands/recover.md` to match the project. With a `[remote]` already in `.deciduous/config.toml` (after `remote init` or `remote setup`), the first step is `deciduous remote pull` and `deciduous remote status`, then `nodes`, `nodes --branch`, `edges`, `commands`, `doc list`, the board, and `git status` / `git log`. Without one, you get the git-mode version, which ends with `deciduous sync` instead. If you add `[remote]` after `init`, run `deciduous update` to switch.
 
 Parts of the 1.1.0 template do not work as written:
 
-- `deciduous commands` prints `No commands logged.` in 1.1.0, however many writes the checkout made. Fixed after 1.1.0.
-- The orphan audit (`deciduous edges | cut -d'>' -f2 ...`) looks for a `>` the tabular `edges` output does not contain, so it flags every node as an orphan (one `CHECK:` line per node). Use `find_orphans` over MCP.
+- `deciduous commands` prints `No commands logged.` in 1.1.0, however many writes the checkout made. Fixed on main (commit ec3ce7a), not in a release yet; the next release logs commands.
+- The orphan audit (`deciduous edges | cut -d'>' -f2 ...`) looks for a `>` the tabular `edges` output does not contain, so it flags every node as an orphan: one `CHECK:` line per node, plus one for the table's separator line (`CHECK: ------...`). It also pipes through `awk`, `grep`, `sort` and `cut`, which the template's `allowed-tools: Bash(deciduous:*, git:*, cat:*, tail:*)` does not cover, so Claude Code asks permission to run it. Use `find_orphans` over MCP.
 - Step 3, `cat git.log | tail -30`, reads a file nothing creates.
+- Its closing section links to `https://notactuallytreyanastasio.github.io/deciduous/` as the "Live graph" and says `PUSH -> Live graph updates`. That is deciduous's own site, not your project's graph.
 
-The template on the main branch adds a step that runs `deciduous transcript import` for sessions the graph does not have yet; 1.1.0 does not ship it. You can run the import yourself ([Evidence](evidence.md#deriving-the-graph-from-a-transcript)).
+The template on main adds Step 1.6, which runs `deciduous transcript list` and `deciduous transcript import <session-id>` for sessions the graph does not have yet; 1.1.0 does not ship it, and you can run the import yourself ([Evidence](evidence.md#deriving-the-graph-from-a-transcript)). `deciduous commands` answers on main because of the binary, not the template. Everything else in the list above is unchanged on main: the orphan audit, the `git.log` step and the "Live graph" link are all still there. Delete those lines from your copy of `recover.md`. In a project with a `[remote]`, `deciduous update` then treats the file as yours and leaves it untouched, writing the template it would have used to `.deciduous/update-templates/.claude/commands/recover.md` so you can diff it; you will not get later template fixes without merging them by hand.
 
 ## Check the graph against the checkout
 

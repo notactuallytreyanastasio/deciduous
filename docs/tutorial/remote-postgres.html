@@ -19,7 +19,7 @@
 <div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get started</h2><ul><li><a href="index.html">What deciduous is</a></li><li><a href="quickstart.html">Join a server</a></li><li><a href="run-a-server.html" aria-current="page">Run a server</a></li><li><a href="clients.html">Connect your agents</a></li><li><a href="for-agents.html">For agents</a></li></ul></section><section class="nav-group"><h2>Work in the graph</h2><ul><li><a href="workflow.html">Record the reasoning</a></li><li><a href="teams.html">Many agents, one graph</a></li><li><a href="recovery.html">Recover context</a></li><li><a href="evidence.html">Documents and transcripts</a></li><li><a href="history.html">Design history</a></li></ul></section><section class="nav-group"><h2>Operate</h2><ul><li><a href="operating.html">Backups, upgrades, tokens</a></li><li><a href="local.html">Without a shared server</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="concepts.html">Graph concepts</a></li><li><a href="reference.html">CLI reference</a></li><li><a href="mcp.html">MCP tools</a></li><li><a href="architecture.html">Architecture and trust</a></li><li><a href="developer.html">Develop deciduous</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.1.0</span></div></aside>
 <main id="content"><div class="article-meta"><span>Get started</span><a href="../content/run-a-server.md">Read as Markdown</a></div><article><h1 id="run-a-server-for-your-team">Run a server for your team</h1>
 <p>A deciduous server is two containers, the server and PostgreSQL, on one machine behind an HTTPS proxy. You start it once, then give each person a URL and a token. Every developer's CLI and every agent's MCP client writes to it, one workspace per repository.</p>
-<p>This is how the reference install runs: <code>https://bobbby.online/deciduous-mcp</code> is a Hetzner VM where Caddy proxies a path prefix to the server container. The steps below were run against the v1.1.0 release bundle on 2026-11-08, with the output shown.</p>
+<p>This is the shape of the reference install: <code>https://bobbby.online/deciduous-mcp</code> is a Hetzner VM where Caddy proxies a path prefix to the server container. That install runs 1.0.12. The steps below were run on 2026-11-08 against the v1.1.0 release bundle, with the output shown, but not on a Linux VM: they ran under Docker Desktop on macOS, with Caddy in a container serving plain HTTP on <code>:80</code>. The Linux host, Docker Engine, <code>sha256sum</code> and Caddy's HTTPS certificate step were not run.</p>
 <h2 id="what-you-need">What you need</h2>
 <ul>
 <li>A Linux VM you can SSH to, with Docker Engine and Compose v2. If the <code>docker compose</code> plugin is missing, the setup script falls back to <code>docker-compose</code>.</li>
@@ -45,7 +45,7 @@ cd deciduous-mcp-docker
 Credentials are in /opt/deciduous-mcp-docker/.env (DECIDUOUS_MCP_TOKEN).
 Rerun this command to rebuild and upgrade. Your settings and database volume are preserved.
 </code></pre>
-</div><p><code>setup.sh</code> returns only once <code>/ready</code> reports that the database is reachable and migrated. It chooses a random port between 20000 and 32767 so that it never takes a port the machine already uses. To choose the port yourself, set <code>DECIDUOUS_PORT=24555 ./scripts/setup.sh</code> on the first run.</p>
+</div><p><code>setup.sh</code> returns only once <code>/ready</code> reports that the database is reachable and migrated. It picks a random port in 20000-32767 so that installs do not all compete for one fixed port. It does not check that the port is free. If Docker reports the port is already allocated, that port is already saved in <code>.env</code>, and setup ignores <code>DECIDUOUS_PORT</code> from the environment after the first run, so rerunning fails the same way: set <code>DECIDUOUS_PORT</code> in <code>.env</code> to another port and rerun setup. To choose the port yourself on the first run, use <code>DECIDUOUS_PORT=24555 ./scripts/setup.sh</code>.</p>
 <p>Everything that defines the install is in <code>.env</code>, which is created with mode 0600:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>COMPOSE_PROJECT_NAME=deciduous
 DECIDUOUS_SERVER_MODE=docker
@@ -69,26 +69,25 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:24555/mcp      # 401: 
 </div><h2 id="3-put-https-in-front-of-it">3. Put HTTPS in front of it</h2>
 <p>Clients on other machines need HTTPS. Here is a Caddy site on the VM that serves the server at the root of a domain:</p>
 <div class="code-block"><div class="code-toolbar"><span>caddy</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-caddy">deciduous.example.com {
-	reverse_proxy 127.0.0.1:24555 {
-		flush_interval -1
-	}
+	reverse_proxy 127.0.0.1:24555
 }
 </code></pre>
-</div><p>What the proxy must do is pass WebSocket upgrades through, because <code>deciduous remote watch</code> streams events over <code>/events</code>. Caddy does this by default. <code>flush_interval -1</code> is optional in 1.1.0. Earlier versions of this page said it was required for MCP streaming, but the 1.1.0 server does not stream: <code>POST /mcp</code> returns plain JSON with a <code>Content-Length</code>, and <code>GET /mcp</code> is refused with 405 (<code>this server does not offer a server-to-client stream</code>). Behind a Caddy without the setting, <code>initialize</code>, <code>add_node</code> and <code>remote watch</code> all worked. It is kept here because it costs nothing and protects you if a later server streams.</p>
+</div><p>What the proxy must do is pass WebSocket upgrades through, because <code>deciduous remote watch</code> streams events over <code>/events</code>. Caddy does this by default. Earlier versions of this page set <code>flush_interval -1</code> and said MCP streaming needed it. It is not needed. The 1.1.0 server does not stream: <code>POST /mcp</code> returns plain JSON with a <code>Content-Length</code>, and <code>GET /mcp</code> is refused with 405 (<code>this server does not offer a server-to-client stream</code>). And Caddy already flushes immediately, whatever <code>flush_interval</code> says, when a response is <code>text/event-stream</code> or has no known <code>Content-Length</code> (<a href="https://caddyserver.com/docs/caddyfile/directives/reverse_proxy">Caddy's <code>reverse_proxy</code> docs</a>), so a server that did stream would not need it either. Behind a Caddy 2.11 with no <code>flush_interval</code>, <code>remote init</code>, <code>add</code> and <code>remote watch</code> all worked.</p>
 <p>To share a domain with something else, serve the server under a path, as the reference install does. <code>handle_path</code> strips the prefix, so the server still sees <code>/mcp</code> at its own root:</p>
 <div class="code-block"><div class="code-toolbar"><span>caddy</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-caddy">example.com {
 	handle_path /deciduous-mcp/* {
-		reverse_proxy 127.0.0.1:24555 {
-			flush_interval -1
-		}
+		reverse_proxy 127.0.0.1:24555
 	}
 	handle {
 		respond 404
 	}
 }
 </code></pre>
-</div><p>Keep the final <code>handle</code> if nothing else is served on that domain. Without it, Caddy answers every other path with an empty 200. A developer who leaves the prefix off the URL then gets <code>the server's response was not a graph: Failed to read JSON: EOF while parsing</code> instead of the CLI's clear <code>no such endpoint (404). Is the URL right, including any path prefix?</code>. Both behaviours were tested. If the domain already serves something else, that site answers instead, and the error depends on what it returns.</p>
-<p>If Caddy runs in a container, join it to the bundle's Compose network and proxy to <code>server:4000</code>. Port 4000 is the port inside the network; <code>DECIDUOUS_PORT</code> applies only on the host. The path-prefix form was tested exactly this way: health, readiness, CLI writes, an MCP <code>add_node</code>, and <code>remote watch</code> all went through Caddy.</p>
+</div><p>Keep the final <code>handle</code> if nothing else is served on that domain. Without it, Caddy answers every other path with an empty 200. A developer who leaves the prefix off the URL and runs <code>deciduous remote init</code>, the first command a joining developer runs, then gets</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>Error: the server's response was not a claim: Failed to read JSON: EOF while parsing a value at line 1 column 0
+</code></pre>
+</div><p>instead of the CLI's clear <code>no such endpoint (404). Is the URL right, including any path prefix?</code>. <code>remote pull</code> says the same; <code>remote status</code> says <code>not a graph</code> in the same place. Both behaviours were tested. If the domain already serves something else, that site answers instead, and the error depends on what it returns.</p>
+<p>If Caddy runs in a container, join it to the bundle's Compose network and proxy to <code>server:4000</code>. The network is <code>&lt;COMPOSE_PROJECT_NAME&gt;_default</code>, so <code>deciduous_default</code> for a default install: either <code>docker network connect deciduous_default &lt;caddy-container&gt;</code>, or, in Caddy's own compose file, list <code>deciduous_default</code> under the Caddy service's <code>networks:</code> and declare it at the top level with <code>external: true</code>. Port 4000 is the port inside the network; <code>DECIDUOUS_PORT</code> applies only on the host. The path-prefix form was tested this way, over plain HTTP: health, readiness, CLI writes, an MCP <code>add_node</code>, and <code>remote watch</code> all went through Caddy.</p>
 <p>From your laptop:</p>
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/health  # 200
 curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/mcp     # 401
@@ -106,8 +105,9 @@ curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/mcp     #
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">export DATABASE_URL='ecto://deciduous:URL_ENCODED_PASSWORD@db.internal.example.com:5432/deciduous'
 export DECIDUOUS_MCP_TOKEN=&quot;$(openssl rand -hex 32)&quot;
 export DB_SSL=true            # TLS to the database
+export DB_SSL_CA_FILE=/app/certs/postgres-ca.pem   # only for a private CA; see below
 ./scripts/setup.sh --external-database
-unset DATABASE_URL DECIDUOUS_MCP_TOKEN
+unset DATABASE_URL DECIDUOUS_MCP_TOKEN DB_SSL DB_SSL_CA_FILE
 </code></pre>
 </div><p>The server runs the pending migrations before it starts listening, and setup remembers that this install uses an external database. <code>DB_SSL_VERIFY</code> controls how much of the database server's certificate is checked:</p>
 <table>
@@ -136,13 +136,13 @@ unset DATABASE_URL DECIDUOUS_MCP_TOKEN
 </tr>
 </tbody>
 </table>
-<p>For a private CA, put its PEM file at <code>certs/postgres-ca.pem</code> and set <code>DB_SSL_CA_FILE=/app/certs/postgres-ca.pem</code>. The server refuses to start if that file is missing or empty. Each boot logs the mode in effect:</p>
+<p>For a private CA, put its PEM file at <code>certs/postgres-ca.pem</code> before the first run and export <code>DB_SSL_CA_FILE=/app/certs/postgres-ca.pem</code> with the rest, as above. Setup reads the TLS settings from the environment on the first run only and saves them in <code>.env</code>; on later runs it unsets them, so on an existing install edit <code>DB_SSL_CA_FILE</code> (or <code>DB_SSL</code>, <code>DB_SSL_VERIFY</code>) in <code>.env</code> and rerun setup. The server refuses to start if that file is missing or empty. Each boot logs the mode in effect:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>Database TLS: verify-full: chain against DB_SSL_CA_FILE (/app/certs/postgres-ca.pem, 1 certificate(s)), certificate must name db.internal
 </code></pre>
 </div><p>Pages written for deciduous 1.0.4 said that the server never verified the database certificate. That stopped being true when <code>DB_SSL_VERIFY</code> was added. 1.1.0 verifies the chain by default (<code>deciduous_mcp/config/runtime.exs</code>).</p>
 <p>The managed-database path was not run end to end for this page. The settings above are read from <code>runtime.exs</code> and <code>scripts/setup.sh</code>.</p>
 <h2 id="without-docker">Without Docker</h2>
-<p>The release also ships native server executables (<code>deciduous-mcp-linux-amd64</code> and <code>-linux-arm64</code>) with Erlang and Elixir built in. On a VM you can run one under systemd against any PostgreSQL. <code>deciduous_mcp/DEPLOY.md</code> in the repository walks through it, including the unit file. The CLI's <code>remote setup --local</code> installs this same executable, but as a service bound to loopback on a developer's machine. That case is covered in <a href="local.html">Without a shared server</a>.</p>
+<p>The release also ships native server executables (<code>deciduous-mcp-linux-amd64</code> and <code>-linux-arm64</code>) with Erlang and Elixir built in, which run against any PostgreSQL. <code>deciduous_mcp/DEPLOY.md</code> in the repository covers the executable as the CLI installs it: a per-user service on a developer's machine (on Linux a systemd user unit under <code>~/.config/systemd/user</code>, which stops at logout unless lingering is on). It gives no system unit for a VM. The user unit that 1.1.0 writes on Linux also does not start: it puts <code>WorkingDirectory</code> in quotes, which systemd refuses as a fatal error. The fix (PR #330) ships in the next release. Until then, on a VM, use the Docker bundle above. The CLI's <code>remote setup --local</code> case is covered in <a href="local.html">Without a shared server</a>.</p>
 <h2 id="what-one-token-means">What one token means</h2>
 <p>The bearer token is the server's only access control:</p>
 <ul>

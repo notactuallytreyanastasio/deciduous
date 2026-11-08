@@ -23,7 +23,7 @@
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous remote status      # this copy vs the server: waiting writes, rejected writes, rows that differ
 claude mcp get deciduous     # where Claude Code's agent is actually writing
 </code></pre>
-</div><p><code>remote status</code> exits 0 only when it prints <code>In sync</code>; anything waiting, rejected or different exits 1.</p>
+</div><p><code>remote status</code> exits 0 when it prints <code>In sync</code> or <code>Local only</code>; anything waiting, rejected or different exits 1.</p>
 <h2 id="setting-up">Setting up</h2>
 <h3 id="init-stops-with-no-terminal-to-ask"><code>init</code> stops with &quot;no terminal to ask&quot;</h3>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: /home/you/code/my-app has no server configured ([remote] in .deciduous/config.toml), and there is no terminal to ask where its graph should live. Choose one:
@@ -69,7 +69,7 @@ Nothing was stored or written.
 <h3 id="no-such-endpoint-404">&quot;no such endpoint (404)&quot;</h3>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: cannot reach http://127.0.0.1:4000/deciduous-mcp: no such endpoint (404). Is the URL right, including any path prefix?
 </code></pre>
-</div><p>The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (the reference deployment is <code>https://bobbby.online/deciduous-mcp</code>); a server reached directly has none. The base URL is the one where <code>curl &lt;base&gt;/health</code> prints the body <code>ok</code>. An empty 200 does not count.</p>
+</div><p>The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (for example <code>https://deciduous.example.com/deciduous-mcp</code>); a server reached directly has none. The base URL is the one where <code>curl &lt;base&gt;/health</code> prints the body <code>ok</code>. An empty 200 does not count.</p>
 <h3 id="the-servers-response-was-not-a-graph-was-not-a-claim">&quot;the server's response was not a graph&quot; / &quot;was not a claim&quot;</h3>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: reached https://example.com but the server's response was not a graph: Failed to read JSON: EOF while parsing a value at line 1 column 0
 </code></pre>
@@ -85,7 +85,18 @@ Store one (kept outside every repository, mode 0600):
 
 or set DECIDUOUS_MCP_TOKEN for a one-off.
 </code></pre>
-</div><p>Neither <code>DECIDUOUS_MCP_TOKEN</code> nor <code>~/.config/deciduous/credentials</code> holds a token. Note that <code>remote setup --url</code> with a token only in the environment does not store it: the next shell without the variable gets this message. <code>deciduous remote login --url &lt;base&gt;</code> stores it.</p>
+</div><p>Neither <code>DECIDUOUS_MCP_TOKEN</code> nor <code>~/.config/deciduous/credentials</code> holds a token. <code>remote setup --url</code> says the same in one line and exits 1:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url http://127.0.0.1:4000` first
+</code></pre>
+</div><p>Use <code>deciduous remote login --url &lt;base&gt;</code>, as that line says, not the plain <code>deciduous remote login</code> the longer message suggests. With <code>--url</code> a wrong token is refused (<code>... the server rejected the token (401) ... Nothing was stored.</code>); without it, whatever comes in on stdin is stored (<code>Token: stored in ~/.config/deciduous/credentials</code>) unchecked, and the mistake shows up on the next write. Note also that <code>remote setup --url</code> with a token only in the environment does not store it: the next shell without the variable gets this message.</p>
+<h3 id="key-password-not-found-linux-local">&quot;key :password not found&quot; (Linux, <code>--local</code>)</h3>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: cannot connect to you@localhost:5432/deciduous: key :password not found in: [ parameters: [], ... username: &quot;you&quot;, database: &quot;deciduous&quot;, port: 5432, sync_connect: true ]
+</code></pre>
+</div><p><code>remote setup --local</code> against Debian's or Ubuntu's PostgreSQL, which wants a password on <code>127.0.0.1</code> while the CLI sends none. Create a role with a password and pass <code>--database-url</code>; see <a href="local.html#a-server-on-this-machine">Without a shared server</a>.</p>
+<h3 id="bad-unit-file-setting-linux-110">&quot;bad unit file setting&quot; (Linux, 1.1.0)</h3>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: `systemctl --user restart deciduous-server.service` failed: Failed to restart deciduous-server.service: Unit deciduous-server.service has a bad unit file setting.
+</code></pre>
+</div><p>The systemd unit 1.1.0 writes quotes <code>WorkingDirectory</code>, which systemd refuses. Not fixed in any release yet (PR #330 is open). The <code>sed</code> workaround, and the rerun of <code>remote setup --local</code> that has to follow it, are on <a href="local.html#a-server-on-this-machine">Without a shared server</a>.</p>
 <h3 id="invalid-workspace-name">&quot;invalid workspace name&quot;</h3>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: the server returned 422: invalid workspace name &quot;a/b&quot;: it looks like a path; pass the repo root's basename
 </code></pre>
@@ -127,11 +138,12 @@ or, if the two repositories really should write one graph, say so by naming it:
     deciduous remote init http://127.0.0.1:4000 --workspace p5
 </code></pre>
 </div><p><strong>Cause.</strong> The default workspace is the repository's directory name. The server ties a workspace to the root commits of the first repository that writes to it, and refuses one that shares none. Two unrelated projects both called <code>api</code> collide here; two clones or worktrees of one repository never do.</p>
-<p><strong>Fix.</strong> Pick a distinct name with <code>--workspace</code>, then <code>deciduous remote push</code> to send what waited. Naming an existing workspace explicitly is how you say two repositories should share it: <code>remote init</code> then reports <code>claim: adopted</code>.</p>
+<p><strong>Fix.</strong> Pick a distinct name with <code>--workspace</code>. <code>remote init</code> with the new name sends what waited (<code>sent 1 local node(s), 0 edge(s) the server lacked</code>); <code>remote status</code> confirms with <code>In sync</code>. Naming an existing workspace explicitly is how you say two repositories should share it: <code>remote init</code> then reports <code>claim: adopted</code>.</p>
 <p>A repository with no commit yet cannot be tied to anything. <code>remote init</code> warns, and writes wait in the log until the first commit:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">  note: this repository has no commit yet, so the server cannot tie workspace &quot;my-app&quot; to it, and an unrelated repository also called my-app could later claim the workspace with these writes in it. Nothing is sent until the first commit; the writes wait in the log, and the first command after that commit sends them.
 </code></pre>
-</div><h3 id="rejected-writes">Rejected writes</h3>
+</div><p>&quot;The first command&quot; is not quite right: after the first commit, reads (<code>nodes</code>, <code>show</code>) and <code>remote status</code> send nothing, and status still shows <code>Log: 1 write(s) waiting</code>. The next write, or <code>deciduous remote push</code>, sends them.</p>
+<h3 id="rejected-writes">Rejected writes</h3>
 <p><code>remote status</code> lists ops the server refused (as opposed to ops it never received) with the server's reason. They stay in the log until you decide: <code>deciduous remote push --retry-rejected</code> after fixing the cause, <code>--drop-rejected</code> to discard them all, or <code>--drop &lt;op-id prefix&gt;</code> for one. None was provoked for this page; the flags are from <code>remote push --help</code>.</p>
 <h3 id="local-only-no-remote-configured">&quot;Local only: no remote configured&quot;</h3>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote status
@@ -148,7 +160,7 @@ deciduous:
   Scope: User config (available in all your projects)
   Status: ✔ Connected
   Type: http
-  URL: https://bobbby.online/deciduous-mcp/mcp
+  URL: https://deciduous.example.com/deciduous-mcp/mcp
   Headers:
     Authorization: Bearer &lt;token&gt;
 </code></pre>
@@ -171,6 +183,8 @@ Pulled: my-app &lt;- http://127.0.0.1:4000
 <h3 id="no-node-has-a-changeid-starting-with-run-deciduous-sync">&quot;No node has a change_id starting with ... Run 'deciduous sync'&quot;</h3>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: No node has a change_id starting with '3bcdac84'. Run 'deciduous sync' if a teammate created it.
 It is the server id 3bcdac84-4e0 = change_id 11111111-222 (idempotent), which this clone does not have yet. Run `deciduous remote pull` first.
+
+A node is named by its local id (12, or #12 ...), its change_id or a prefix of it ..., or, in a project with a [remote], the server's id for it ... or a prefix of that.
 </code></pre>
 </div><p>The first line is wrong for a project with a server: <code>sync</code> is the no-server command and does nothing for this. The second line is right. An agent created the node over MCP and the local cache has not seen it; <code>deciduous remote pull</code>, then the same <code>link</code> works (<code>Note: '3bcdac84' is the server id ... local #7</code>).</p>
 <h3 id="themes-and-tags-are-missing-on-the-server">Themes and tags are missing on the server</h3>
@@ -208,7 +222,7 @@ It is the server id 3bcdac84-4e0 = change_id 11111111-222 (idempotent), which th
 </tbody>
 </table>
 <h2 id="reporting-a-problem">Reporting a problem</h2>
-<p>Include <code>deciduous --version</code>, the server version (<code>serverInfo.version</code> in the MCP <code>initialize</code> reply), the command, and the error text as printed. Replace tokens with <code>&lt;token&gt;</code>. <code>deciduous remote watch --url</code> prints a URL with the token in its query string; never paste that.</p>
+<p>Include <code>deciduous --version</code>, the server version (<code>serverInfo.version</code> in the MCP <code>initialize</code> reply), the command, and the error text as printed. Replace tokens with <code>&lt;token&gt;</code>. Two outputs this page asks for carry one: <code>claude mcp get deciduous</code> prints <code>Authorization: Bearer</code> followed by the full token (Claude Code 2.1.319), and <code>deciduous remote watch --url</code> prints a URL with the token in its query string. Edit the first as in the sample above; never paste the second.</p>
 </article><nav class="page-turn" aria-label="Previous and next guide"><a href="local.html"><span>Previous</span>Without a shared server</a><a href="concepts.html"><span>Next</span>Graph concepts</a></nav><footer class="article-footer"><a href="../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
 <aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#setting-up">Setting up</a></li><li><a href="#writing">Writing</a></li><li><a href="#cli-and-agent-disagree">CLI and agent disagree</a></li><li><a href="#mcp-over-http">MCP over HTTP</a></li><li><a href="#reporting-a-problem">Reporting a problem</a></li></ul></nav></aside></div>
 <dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>

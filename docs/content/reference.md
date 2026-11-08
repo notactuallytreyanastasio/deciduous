@@ -4,11 +4,17 @@ The `deciduous` commands people actually use, grouped by what you are trying to 
 
 Anywhere a command takes a node, it accepts a local number or a change_id prefix. In a project with a `[remote]` it also accepts a server UUID, once the node is in the local cache.
 
+Any deciduous command run where no `.deciduous` exists in the current directory or above it creates `.deciduous/deciduous.db` in the current directory and exits 0: `deciduous nodes` in an empty directory does this. From then on that directory is a project, and it captures every repository below it that has no `.deciduous` of its own, worktrees included: their writes go to that file, not to their own server. Delete a stray `.deciduous` when you find one.
+
 ## Connect a project to a server
 
 ### `remote setup` (server)
 
 Connect this project to a shared graph server, step by step. In a terminal it asks; flags answer for scripts. Ends by writing `[remote]`, storing the token if needed, and registering Claude Code (only if Claude Code has no `deciduous` server yet).
+
+There is no `--workspace` flag: setup names the workspace after the project's directory and does not claim it for this repository until the first write sends something. If another repository with the same directory name runs `remote init` first, it takes the name, and every write from this project is refused with `belongs to another repository`. To choose the name, or to claim it at once, use `remote init <URL> --workspace my-app` (below).
+
+The Claude Code registration runs `claude mcp add --scope user --transport http deciduous <URL>/mcp --header "Authorization: Bearer <token>"`, so the token is stored in plain text in `~/.claude.json`. If a `deciduous` server is already registered, even one pointing at a different server, setup prints `Claude Code already has a deciduous MCP server` and leaves it; to switch servers, run `claude mcp remove deciduous -s user` first.
 
 | Flag | Meaning |
 | --- | --- |
@@ -51,13 +57,25 @@ The message names `~/.config` even when `XDG_CONFIG_HOME` has moved the file.
 
 ### `remote adopt [ROOT] --url <URL>` (server)
 
-Walk a directory for projects that already have a `.deciduous` and point each at the server. Existing configuration is left alone. `-n, --dry-run` shows what would change, but in 1.1.0 it is not free of side effects: it leaves a `.deciduous/deciduous.db` in the directory it walks. That stray `.deciduous` then captures any repository below it that has no `.deciduous` of its own, including a worktree, which writes to that file instead of its main checkout's server. Delete it after a dry run.
+Walk a directory for projects that already have a `.deciduous` and point each at the server. Existing configuration is left alone. `-n, --dry-run` shows what would change, but in 1.1.0 it is not free of side effects: like any command run outside a project (see the top of this page), it creates `.deciduous/deciduous.db` in ROOT, and then lists ROOT itself as a project to configure, under workspace `scratch`:
+
+```text
+$ deciduous remote adopt --url http://127.0.0.1:4000 -n
+Would configure: 2 projects under .
+
+  scratch  (.)                                 would configure
+  p1                                           would configure
+
+2 would be configured, 0 left alone
+```
+
+Delete `ROOT/.deciduous` after a dry run.
 
 ## Check and repair the connection
 
 ### `remote status` (server)
 
-How far the local copy has drifted from the server: ops waiting and rejected, node and edge counts, and every row that differs, field by field. Exits 0 only on `In sync`.
+How far the local copy has drifted from the server: ops waiting and rejected, node and edge counts, and every row that differs, field by field. Exits 0 on `In sync`, and on `Local only: no remote configured for this project.`; anything waiting, rejected or different exits 1.
 
 ```text
 Remote: http://127.0.0.1:4000
@@ -86,11 +104,13 @@ Send the ops waiting in `.deciduous/remote-log.jsonl`, in order. The server appl
 | `--overwrite-server` | With `--repair`: also send fields the server did change, over the server's value. |
 | `--overwrite` | Replace the server's copy of every row with the local one (the pre-1.0.3 behaviour). Last resort. |
 
-`DECIDUOUS_OPS_TIMEOUT=<seconds>` changes the 120-second limit per request.
+`DECIDUOUS_OPS_TIMEOUT=<seconds>` changes the 120-second limit per request (see [Environment](#environment)).
 
 ### `remote pull` (server)
 
-Refresh the local database from the server: takes the server's side of every difference. Run it before reading with `nodes`, `show` or `serve` if agents have been writing over MCP. No flags.
+Refresh the local database from the server. It first refuses a workspace claimed by an unrelated repository, then sends the writes still waiting in `.deciduous/remote-log.jsonl`; if they cannot be sent it stops with `Nothing was pulled.` Then it takes the server's side of every difference. Run it before reading with `nodes`, `show` or `serve` if agents have been writing over MCP. No flags.
+
+It also writes `.deciduous/graph.json`, `graph.json.lock` and `graph.json.follow.lock`, even in a project with a `[remote]`, where they show up as untracked files. Keep them out of git in a server project.
 
 ### `remote watch` (server)
 
@@ -109,30 +129,35 @@ Watching: my-app
 | `--edges` | Also show edge events. |
 | `--json` | Raw JSON frame per event. |
 | `--url` | Print the socket URL and exit. The URL carries the token in its query string. |
-| `--claude-code` | Print the URL plus a ready-to-paste Monitor tool call for Claude Code, and exit. Also carries the token. |
+| `--claude-code` | Print the URL plus a ready-to-paste Monitor tool call for Claude Code, and exit. Also carries the token. The printed call sets no `timeout_ms`, and a Claude Code monitor ends after its `timeout_ms` (default 5 minutes, at most 30), so the watch has to be started again. |
 
 ## Record decisions
 
 ### `add <TYPE> <TITLE>`
 
-Types: `goal`, `option`, `decision`, `action`, `outcome`, `observation`, `revisit` (`--help` omits `revisit`; it works).
+Types: `goal`, `option`, `decision`, `action`, `outcome`, `observation`, `revisit`. 1.1.0's `--help` omits `revisit`, which works; main's `--help` lists it.
 
 | Flag | Meaning |
 | --- | --- |
 | `-d, --description <TEXT>` | Description. Observations warn without one. |
 | `-c, --confidence <0-100>` | Confidence. |
-| `-p, --prompt <TEXT>` | The user's request, verbatim. Warns when it looks like a summary. |
+| `-p, --prompt <TEXT>` | The user's request, verbatim. Any prompt under 200 characters gets a warning that it "looks like a summary"; the test is length only, and the node is created anyway. |
 | `--prompt-stdin` | Read the prompt from stdin, for multi-line requests. |
 | `-f, --files <a,b>` | Associated files, comma-separated. |
 | `-b, --branch <BRANCH>` / `--no-branch` | Override or skip branch detection. |
 | `--commit <REV>` | HEAD, a branch, a tag, a hash or prefix. Stored as the full hash; a rev git cannot resolve is refused. |
 | `--date <DATE>` | Backdate: RFC 3339, `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`. |
 
-```bash
-deciduous add goal "Bound the retry delay" -c 90 --prompt-stdin <<'EOF'
+```text
+$ deciduous add goal "Bound the retry delay" -c 90 --prompt-stdin <<'EOF'
 Retries should stop after a bounded delay; right now a 429 without Retry-After loops forever.
 EOF
+Warning: Prompt is only 93 chars. This looks like a summary, not a full prompt.
+         Capture the verbatim user message for better context recovery.
+Created node 3 (type: goal, title: Bound the retry delay) [confidence: 90%] [prompt: 93 chars] [branch: main]
 ```
+
+That prompt is verbatim; the warning fires because it is short.
 
 ### `link <FROM> <TO>` / `unlink <FROM> <TO>`
 
@@ -140,7 +165,7 @@ EOF
 
 ### `status <ID> <STATUS>`
 
-`pending`, `active`, `completed`, `rejected`, `superseded`, `abandoned`. (`--help` lists the first four.)
+`pending`, `active`, `completed`, `rejected`, `superseded`, `abandoned`. 1.1.0's `--help` lists only the first four; all six work, and main's `--help` lists all six.
 
 ### `prompt <ID> [PROMPT]`
 
@@ -160,7 +185,7 @@ Delete a node and its edges. `--dry-run` shows what would go.
 | `graph` | none; the whole graph as JSON on stdout |
 | `pulse` | `-b, --branch`, `-r, --recent <N>` (default 10), `--json`, `--summary`. Active state, gaps, health. |
 | `serve` | `-p, --port` (default 3000). The web viewer, on the local database. |
-| `commands` | `-l, --limit` (default 20). Recent CLI writes with exit status. |
+| `commands` | `-l, --limit` (default 20). In 1.1.0 it always prints `No commands logged.`: nothing writes the log. Main records each write as it starts and marks it `(exit 0)` when it finishes; a command that fails stays `(unfinished)`, with no exit code. |
 
 All of these read the local database. Over MCP, agents read the server directly; see [MCP tools](mcp.md).
 
@@ -171,7 +196,7 @@ All of these read the local database. Over MCP, agents read the server directly;
 | `archaeology pivot <FROM_ID> <OBSERVATION> <NEW_APPROACH>` | Creates observation -> revisit -> new decision and marks the old one superseded, in one step. `-c, --confidence`, `-r, --reason`, `--dry-run`. |
 | `archaeology supersede <ID>` | Mark superseded. `--cascade` for every descendant, `--dry-run`. |
 | `archaeology timeline` | Nodes in time order. `-l, --limit` (0 = all), `-t, --node-type`, `-b, --branch`, `--json`. |
-| `narratives init` / `show` / `pivots` | `.deciduous/narratives.md`: seed it from active goals (`-o`, `--force`), print it (`-p`), list revisit chains (`-b`, `--json`). |
+| `narratives init` / `show` / `pivots` | `.deciduous/narratives.md`: seed it with a section per goal that is not superseded or abandoned (`-o`, `--force`), print it (`-p`), list revisit chains (`-b`, `--json`). |
 
 See [Design history](history.md).
 
@@ -223,13 +248,15 @@ See [Without a shared server](local.md#no-server-at-all).
 | Command | Purpose and flags |
 | --- | --- |
 | `init` | Set up the project: `.deciduous/`, assistant files, and the server step. `--claude` (default), `--opencode`, `--windsurf`, `--both`, `--no-auto-update`. Without a terminal and without a `[remote]`, exits 1 after writing its files; `DECIDUOUS_NO_SERVER=1` skips the server step. |
-| `update` | Refresh the assistant integration files deciduous wrote, keeping yours (backups in `.deciduous/update-backups/<time>/`). Leaves `.deciduous/config.toml` alone. In a project on this machine's native server, upgrades that server too. `--all <DIR>` for every project under a directory. |
-| `check-update` | Exit 1 if this project's files are older than the binary. |
+| `update` | Refresh the assistant integration files deciduous wrote, keeping yours (backups in `.deciduous/update-backups/<time>/`). Leaves `.deciduous/config.toml` alone. In a project on this machine's native server, upgrades that server too. `--all <DIR>` for DIR and each project one level below it (not recursive). |
+| `check-update` | Exit 1 when `.deciduous/.version`, relative to the current directory, is missing or older than the binary. Run it from the project root: in a subdirectory it says `Update needed: No version file found`. A project only joined with `remote init` or `remote setup` has no `.version` until `init` or `update` writes the assistant files. |
 | `auto-update on\|off` | The once-a-day crates.io version check. |
 | `integration` | Show Claude Code hooks, commands and skills installed. |
-| `hooks install\|status\|uninstall` | Claude Code hooks from `.deciduous/config.toml`. |
+| `hooks install\|status\|uninstall` | Claude Code hooks from the `[hooks]` lists in `.deciduous/config.toml`, which are empty by default. See the warning below. |
 | `opencode install\|status\|uninstall` | OpenCode plugins, commands and `AGENTS.md`. |
 | `completion <SHELL>` | `bash`, `zsh`, `fish`, `powershell`, `elvish`. |
+
+Do not run `hooks install` or `hooks uninstall` unless you have listed hooks in `config.toml`. Both rewrite the hooks in `.claude/settings.json` from those lists. In a project set up by `init`, `hooks install` left `{"PostToolUse": [], "PreToolUse": []}`, removing the version-check and board-mentions hooks `init` installed and any hooks of your own; `uninstall` also deletes `.claude/hooks/`. `deciduous update` puts the board-mentions hooks back, but not the version-check entry (1.1.0 and main). 1.1.0's `hooks --help` still says "pre-edit blocks, post-commit reminders"; deciduous has shipped no such hooks since 1.0.3, and main's help says so.
 
 ## Other commands
 
@@ -245,7 +272,7 @@ See [Without a shared server](local.md#no-server-at-all).
 | `DECIDUOUS_PORT` | Port for this machine's server the first time `remote setup --local` installs it. |
 | `DECIDUOUS_DB_PATH` | Use this SQLite file instead of finding `.deciduous/deciduous.db` by walking up (Claude Desktop, unusual layouts). |
 | `DECIDUOUS_API_DATA_DIR`, `DECIDUOUS_API_TOKEN` | Fallbacks for `serve --api`'s `--data-dir` and `--token`. |
-| `DECIDUOUS_OPS_TIMEOUT` | Seconds per `remote push` request (default 120). |
+| `DECIDUOUS_OPS_TIMEOUT` | Seconds per `POST /ops` request in `remote push`, `pull` and `init` (default 120). Anything but a positive integer makes those commands fail: `DECIDUOUS_OPS_TIMEOUT="abc" is not a number of seconds above zero`. The send after an ordinary write has a fixed 10-second budget this does not change. |
 | `DECIDUOUS_AGENT_LABEL` | Default `--as` for `board post`. |
 | `DECIDUOUS_QUIET_LOCAL_ONLY` | Silences the "written to ... only; this project has no shared server" note. |
 | `DECIDUOUS_SERVER_BINARY`, `DECIDUOUS_SERVER_BUNDLE` | A local server executable or Docker bundle for `remote setup --local` to install instead of downloading one (unreleased builds). |

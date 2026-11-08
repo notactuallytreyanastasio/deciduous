@@ -35,7 +35,7 @@
                      PostgreSQL (the graph)
 </code></pre>
 </div><ul>
-<li><strong>The server</strong> is PostgreSQL plus the deciduous server, normally on a VM behind a TLS proxy. It exposes authenticated MCP over HTTP at <code>&lt;base&gt;/mcp</code>, and <code>/health</code> and <code>/ready</code> for monitoring. One server holds many repositories, each in its own workspace. A running example is the reference install at <code>https://bobbby.online/deciduous-mcp</code>, on a Hetzner VM behind Caddy.</li>
+<li><strong>The server</strong> is PostgreSQL plus the deciduous server, normally on a VM behind a TLS proxy. It exposes authenticated MCP over HTTP at <code>&lt;base&gt;/mcp</code>, and <code>/health</code> and <code>/ready</code> for monitoring. One server holds many repositories, each in its own workspace.</li>
 <li><strong>Agents</strong> connect to <code>&lt;base&gt;/mcp</code> with a bearer token. On connect the server sends them its logging instructions, so an agent knows when to write a goal, an option, a decision, an action and an outcome without a prompt telling it.</li>
 <li><strong>The CLI</strong> (<code>deciduous</code>) writes to the same server. A project whose <code>.deciduous/config.toml</code> has a <code>[remote]</code> table sends every <code>deciduous add</code> and <code>deciduous link</code> to the server before the command exits. The SQLite file in <code>.deciduous/</code> is this machine's cache of the server, not a second graph. <code>deciduous serve</code> shows that cache, so run <code>deciduous remote pull</code> first to see what agents wrote.</li>
 </ul>

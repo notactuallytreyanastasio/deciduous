@@ -37,7 +37,7 @@ The node can be named by local id, `change_id` prefix, or server UUID (`deciduou
 "documents": [{ "id": "38c69819-818d-4a4f-906c-1e8c6101b889", "filename": "test-output.txt", "mime_type": "text/plain" }]
 ```
 
-and anyone with the token can download it:
+and anyone with the token can download it from `<url>/documents/<id>`, where `<url>` is `url` under `[remote]` in `.deciduous/config.toml`, including any path such as `/deciduous-mcp` on a Docker-bundle install:
 
 ```console
 $ curl -s -i -H "Authorization: Bearer <token>" https://deciduous.example.com/documents/38c69819-818d-4a4f-906c-1e8c6101b889
@@ -49,7 +49,7 @@ test retry ... ok
 4 passed; 0 failed
 ```
 
-Without the token: 401. An unknown id: 404. `get_graph` lists the workspace's documents with size, description and node.
+Without the token: 401. An unknown id: 404. Behind the Docker bundle's Caddy, leaving out the path prefix gets an empty `200` from Caddy, not an error. One file can be at most 64 MiB; the server refuses a larger upload with 413. `get_graph` lists the workspace's documents with size, description and node.
 
 Older pages said `doc attach` was local only and that configuring a remote did not upload. That stopped being true; in 1.1.0 the upload happens before the command exits, like every other CLI write.
 
@@ -60,7 +60,7 @@ What does not work in 1.1.0:
 
 The token grants access to every workspace on the server, documents included ([Architecture](architecture.md)). Do not attach `.env` files, credential stores, connection strings, or output you have not read.
 
-`deciduous doc list`, `doc show`, `doc describe`, `doc open` and `doc gc` operate on this checkout's copy in `.deciduous/documents/`.
+`deciduous doc describe` reaches the server, like `attach` and `detach`: after `doc describe 1 "second description"`, `get_graph` showed the new description. `doc list`, `doc show`, `doc open` and `doc gc` operate on this checkout's copy in `.deciduous/documents/`.
 
 ## Deriving the graph from a transcript
 
@@ -82,9 +82,9 @@ Would import <session title> (6494dc2d, 2 prompts)
   10 files hashed · 3 subagent runs skipped (their transcripts are separate files) · 15 deciduous MCP writes skipped (already in the graph)
 ```
 
-It takes a session id (looked up in this project's directory) or a path to a `.jsonl`. Calls the session already made to deciduous's MCP tools are skipped rather than duplicated. Subagents' transcripts are separate files and are not followed. Actions record a hash of each file they touched; `--no-hash` skips that.
+It takes a session id (looked up in this project's directory) or a path to a `.jsonl`. The import leaves out every deciduous MCP call the session made, reads such as `query_nodes` included, and every shell command that runs `deciduous`, on the assumption that they already wrote to the graph. It does not check. Imported into a different workspace or server than the session wrote to, or after a write that failed, those records are simply missing; the count still says "already in the graph". Subagents' transcripts are separate files and are not followed. Actions record a hash of each file they touched; `--no-hash` skips that.
 
-In a directory Claude Code has never run in, `transcript list` fails with the raw `No such file or directory (os error 2)` for the directory it expected; pass `--dir`, or import by path.
+In a directory Claude Code has never run in, 1.1.0's `transcript list` fails with the raw `No such file or directory (os error 2)` for the directory it expected (the next release says Claude Code has not run there). Pass `--dir` to `list`; `import` has no `--dir`, so give it the `.jsonl` path.
 
 A real import, into a workspace on the server:
 
