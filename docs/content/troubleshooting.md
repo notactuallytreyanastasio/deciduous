@@ -9,7 +9,7 @@ deciduous remote status      # this copy vs the server: waiting writes, rejected
 claude mcp get deciduous     # where Claude Code's agent is actually writing
 ```
 
-`remote status` exits 0 only when it prints `In sync`; anything waiting, rejected or different exits 1.
+`remote status` exits 0 when it prints `In sync` or `Local only`; anything waiting, rejected or different exits 1.
 
 ## Setting up
 
@@ -69,7 +69,7 @@ A name that does not resolve fails the same way, with `Dns Failed: resolve dns n
 Error: cannot reach http://127.0.0.1:4000/deciduous-mcp: no such endpoint (404). Is the URL right, including any path prefix?
 ```
 
-The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (the reference deployment is `https://bobbby.online/deciduous-mcp`); a server reached directly has none. The base URL is the one where `curl <base>/health` prints the body `ok`. An empty 200 does not count.
+The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (for example `https://deciduous.example.com/deciduous-mcp`); a server reached directly has none. The base URL is the one where `curl <base>/health` prints the body `ok`. An empty 200 does not count.
 
 ### "the server's response was not a graph" / "was not a claim"
 
@@ -95,7 +95,29 @@ Store one (kept outside every repository, mode 0600):
 or set DECIDUOUS_MCP_TOKEN for a one-off.
 ```
 
-Neither `DECIDUOUS_MCP_TOKEN` nor `~/.config/deciduous/credentials` holds a token. Note that `remote setup --url` with a token only in the environment does not store it: the next shell without the variable gets this message. `deciduous remote login --url <base>` stores it.
+Neither `DECIDUOUS_MCP_TOKEN` nor `~/.config/deciduous/credentials` holds a token. `remote setup --url` says the same in one line and exits 1:
+
+```text
+Error: no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url http://127.0.0.1:4000` first
+```
+
+Use `deciduous remote login --url <base>`, as that line says, not the plain `deciduous remote login` the longer message suggests. With `--url` a wrong token is refused (`... the server rejected the token (401) ... Nothing was stored.`); without it, whatever comes in on stdin is stored (`Token: stored in ~/.config/deciduous/credentials`) unchecked, and the mistake shows up on the next write. Note also that `remote setup --url` with a token only in the environment does not store it: the next shell without the variable gets this message.
+
+### "key :password not found" (Linux, `--local`)
+
+```text
+Error: cannot connect to you@localhost:5432/deciduous: key :password not found in: [ parameters: [], ... username: "you", database: "deciduous", port: 5432, sync_connect: true ]
+```
+
+`remote setup --local` against Debian's or Ubuntu's PostgreSQL, which wants a password on `127.0.0.1` while the CLI sends none. Create a role with a password and pass `--database-url`; see [Without a shared server](local.md#a-server-on-this-machine).
+
+### "bad unit file setting" (Linux, 1.1.0)
+
+```text
+Error: `systemctl --user restart deciduous-server.service` failed: Failed to restart deciduous-server.service: Unit deciduous-server.service has a bad unit file setting.
+```
+
+The systemd unit 1.1.0 writes quotes `WorkingDirectory`, which systemd refuses. Not fixed in any release yet (PR #330 is open). The `sed` workaround, and the rerun of `remote setup --local` that has to follow it, are on [Without a shared server](local.md#a-server-on-this-machine).
 
 ### "invalid workspace name"
 
@@ -162,13 +184,15 @@ or, if the two repositories really should write one graph, say so by naming it:
 
 **Cause.** The default workspace is the repository's directory name. The server ties a workspace to the root commits of the first repository that writes to it, and refuses one that shares none. Two unrelated projects both called `api` collide here; two clones or worktrees of one repository never do.
 
-**Fix.** Pick a distinct name with `--workspace`, then `deciduous remote push` to send what waited. Naming an existing workspace explicitly is how you say two repositories should share it: `remote init` then reports `claim: adopted`.
+**Fix.** Pick a distinct name with `--workspace`. `remote init` with the new name sends what waited (`sent 1 local node(s), 0 edge(s) the server lacked`); `remote status` confirms with `In sync`. Naming an existing workspace explicitly is how you say two repositories should share it: `remote init` then reports `claim: adopted`.
 
 A repository with no commit yet cannot be tied to anything. `remote init` warns, and writes wait in the log until the first commit:
 
 ```text
   note: this repository has no commit yet, so the server cannot tie workspace "my-app" to it, and an unrelated repository also called my-app could later claim the workspace with these writes in it. Nothing is sent until the first commit; the writes wait in the log, and the first command after that commit sends them.
 ```
+
+"The first command" is not quite right: after the first commit, reads (`nodes`, `show`) and `remote status` send nothing, and status still shows `Log: 1 write(s) waiting`. The next write, or `deciduous remote push`, sends them.
 
 ### Rejected writes
 
@@ -197,7 +221,7 @@ deciduous:
   Scope: User config (available in all your projects)
   Status: ✔ Connected
   Type: http
-  URL: https://bobbby.online/deciduous-mcp/mcp
+  URL: https://deciduous.example.com/deciduous-mcp/mcp
   Headers:
     Authorization: Bearer <token>
 ```
@@ -228,6 +252,8 @@ Third, the workspace. An agent passes `workspace` on each call; a `.mcp.json` ma
 ```text
 Error: No node has a change_id starting with '3bcdac84'. Run 'deciduous sync' if a teammate created it.
 It is the server id 3bcdac84-4e0 = change_id 11111111-222 (idempotent), which this clone does not have yet. Run `deciduous remote pull` first.
+
+A node is named by its local id (12, or #12 ...), its change_id or a prefix of it ..., or, in a project with a [remote], the server's id for it ... or a prefix of that.
 ```
 
 The first line is wrong for a project with a server: `sync` is the no-server command and does nothing for this. The second line is right. An agent created the node over MCP and the local cache has not seen it; `deciduous remote pull`, then the same `link` works (`Note: '3bcdac84' is the server id ... local #7`).
@@ -250,4 +276,4 @@ These are what an MCP client (or `curl`) sees from `<base>/mcp`.
 
 ## Reporting a problem
 
-Include `deciduous --version`, the server version (`serverInfo.version` in the MCP `initialize` reply), the command, and the error text as printed. Replace tokens with `<token>`. `deciduous remote watch --url` prints a URL with the token in its query string; never paste that.
+Include `deciduous --version`, the server version (`serverInfo.version` in the MCP `initialize` reply), the command, and the error text as printed. Replace tokens with `<token>`. Two outputs this page asks for carry one: `claude mcp get deciduous` prints `Authorization: Bearer` followed by the full token (Claude Code 2.1.319), and `deciduous remote watch --url` prints a URL with the token in its query string. Edit the first as in the sample above; never paste the second.
