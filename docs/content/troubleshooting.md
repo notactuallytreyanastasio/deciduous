@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Most problems are one of four things: the CLI and the agent are talking to different servers, the token in use belongs to a different server, the workspace name collides with another repository, or the server was unreachable and writes are waiting. Each entry below starts from the exact text deciduous 1.1.0 prints, captured by provoking it.
+Most problems are one of four things: the CLI and the agent are talking to different servers, the token in use belongs to a different server, the workspace name collides with another repository, or the server was unreachable and writes are waiting. Each entry below starts from the text deciduous 1.1.0 prints. Every entry was captured by provoking it, except where the entry says otherwise.
 
 Two commands answer most questions:
 
@@ -26,7 +26,7 @@ Error: /home/you/code/my-app has no server configured ([remote] in .deciduous/co
 then rerun this command. Tests and CI in a throwaway directory can set DECIDUOUS_NO_SERVER=1.
 ```
 
-**Cause.** `init` was run from a script, an agent's shell, or anything else without a terminal on stdin, in a project with no `[remote]`. It exits 1, but it has already written `.claude/`, `CLAUDE.md`, `.deciduous/`, `.gitignore` and `.gitattributes` before stopping, so the directory looks initialized.
+**Cause.** `init` was run from a script, an agent's shell, or anything else without a terminal on stdin, in a project with no `[remote]`. It exits 1, but it has already written `.claude/`, `CLAUDE.md`, `.deciduous/`, `.gitignore`, `.gitattributes` and `.github/workflows/cleanup-decision-graphs.yml` before stopping, so the directory looks initialized.
 
 **Fix.** Run the `remote setup` form that fits, then `deciduous init` again. To join a team server: `DECIDUOUS_MCP_TOKEN=<token> deciduous remote setup --url https://deciduous.example.com`. `DECIDUOUS_NO_SERVER=1` is for throwaway directories; it gives a project with no server at all (see [Without a shared server](local.md#no-server-at-all)).
 
@@ -38,7 +38,7 @@ Error: reached https://deciduous.example.com but the server rejected the token (
 Nothing was stored or written.
 ```
 
-`remote init` says the same with `Nothing was written; the project is unchanged.` Both exit 1 and change nothing.
+`remote init` words it slightly differently: `Error: the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.` followed by `Nothing was written; the project is unchanged.` Both exit 1 and change nothing.
 
 **Causes**, in the order worth checking:
 
@@ -69,7 +69,15 @@ A name that does not resolve fails the same way, with `Dns Failed: resolve dns n
 Error: cannot reach http://127.0.0.1:4000/deciduous-mcp: no such endpoint (404). Is the URL right, including any path prefix?
 ```
 
-The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (the reference deployment is `https://bobbby.online/deciduous-mcp`); a server reached directly has none. The base URL is whatever `<base>/health` answers `ok` on.
+The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (the reference deployment is `https://bobbby.online/deciduous-mcp`); a server reached directly has none. The base URL is the one where `curl <base>/health` prints the body `ok`. An empty 200 does not count.
+
+### "the server's response was not a graph" / "was not a claim"
+
+```text
+Error: reached https://example.com but the server's response was not a graph: Failed to read JSON: EOF while parsing a value at line 1 column 0
+```
+
+`remote init` prints `the server's response was not a claim: ...` with the same JSON error. This is the same mistake as the 404 above, a missing path prefix, behind a proxy that answers unknown paths with an empty 200 instead of a 404. Caddy does this with only a `handle_path` block. Fix the URL, and give the proxy a catch-all 404 ([Run a server](run-a-server.md#3-put-https-in-front-of-it)).
 
 ### "timed out reading response"
 

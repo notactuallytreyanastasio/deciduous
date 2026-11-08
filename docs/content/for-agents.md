@@ -61,7 +61,7 @@ What can go wrong at this step, by message:
 
 | Message | Cause | What to do |
 | --- | --- | --- |
-| `no token: set DECIDUOUS_MCP_TOKEN or run 'deciduous remote login --url ...' first` | No token on this machine | Ask the user to run `remote login` |
+| ``no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url <base>` first`` | No token on this machine | Ask the user to run `remote login` |
 | `server rejected the token (401) ... Nothing was stored or written.` | Wrong token for this server | Tell the user; nothing changed |
 | `cannot reach <url>: ... timed out reading response` | `/health` took over 15 s | Run it once more, then report it |
 | `Warning: the local write succeeded but could not be sent: ... this repository has no commit yet` | The server ties a workspace to the repository's root commit | After the user's first commit, `deciduous remote push` |
@@ -137,7 +137,7 @@ The server sends you these rules when you connect. They are the rules; the rest 
 
 ### Writing from the CLI instead
 
-In a project with `[remote]`, `deciduous add` and `deciduous link` write to the server before the command exits, so a shell is a fallback when MCP is not available. CLI node references are local ids or change_id prefixes, not server UUIDs:
+In a project with `[remote]`, `deciduous add` and `deciduous link` write to the server before the command exits, so a shell is a fallback when MCP is not available. CLI node references are local ids, change_id prefixes, or server UUIDs (a UUID resolves only once the node is in the local cache; run `deciduous remote pull` first if an MCP tool made it):
 
 ```sh
 deciduous add goal "Add rate limiting to the public API" -c 90 -p "<the user's message, verbatim>"

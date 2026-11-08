@@ -155,7 +155,7 @@ close_thread({
 })
 ```
 
-`success: true` writes a `completed` outcome under the parent; `success: false` writes a `rejected` one. Each `lessons_learned` entry becomes an observation under the outcome; each `next_steps` entry becomes a new goal. `goal_node_id` marks that goal `completed`, so pass it only when the whole goal is done, not when your part is.
+`success: true` writes a `completed` outcome under the parent; `success: false` writes a `rejected` one. Each `lessons_learned` entry becomes an observation under the outcome; each `next_steps` entry becomes a new goal. `next_steps` entries must be objects (`{"title": "...", "description": "..."}`); unlike `lessons_learned`, a plain string is refused with `next_steps[0] must be an object ... nothing was written`. `goal_node_id` marks that goal `completed`, so pass it only when the whole goal is done, not when your part is.
 
 CLI:
 

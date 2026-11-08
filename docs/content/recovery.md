@@ -93,7 +93,15 @@ Local ids differ in every checkout. `show`, `link`, `status` and `doc attach` ta
 Error: No node has a change_id starting with '5ca33b18'. Run 'deciduous sync' if a teammate created it.
 ```
 
-With a `[remote]` the fix is `deciduous remote pull`, not `sync`. A server UUID is looked up on the server and reports which local node it is:
+With a `[remote]` the fix is `deciduous remote pull`, not `sync`. A server UUID does not get you around the pull. Before it, the CLI recognises the UUID and tells you to pull:
+
+```console
+$ deciduous show 14a9f4d8-b37a-...
+Error: No node has a change_id starting with '14a9f4d8-b37a-...'. Run 'deciduous sync' if a teammate created it.
+It is the server id 14a9f4d8-b37 = change_id 3e460153-12b (Validate create-item requests), which this clone does not have yet. Run `deciduous remote pull` first.
+```
+
+After the pull it resolves to the local node:
 
 ```console
 $ deciduous show 32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb
@@ -107,7 +115,7 @@ Note: '32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb' is the server id 32d05bcb-1b2 = cha
 Parts of the 1.1.0 template do not work as written:
 
 - `deciduous commands` prints `No commands logged.` in 1.1.0, however many writes the checkout made. Fixed after 1.1.0.
-- The orphan audit (`deciduous edges | cut -d'>' -f2 ...`) looks for a `>` the tabular `edges` output does not contain, so it prints nothing useful. Use `find_orphans` over MCP.
+- The orphan audit (`deciduous edges | cut -d'>' -f2 ...`) looks for a `>` the tabular `edges` output does not contain, so it flags every node as an orphan (one `CHECK:` line per node). Use `find_orphans` over MCP.
 - Step 3, `cat git.log | tail -30`, reads a file nothing creates.
 
 The template on the main branch adds a step that runs `deciduous transcript import` for sessions the graph does not have yet; 1.1.0 does not ship it. You can run the import yourself ([Evidence](evidence.md#deriving-the-graph-from-a-transcript)).

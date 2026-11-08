@@ -29,7 +29,7 @@ The graph lives in PostgreSQL behind one server process. Agents reach that serve
 | `.deciduous/config.toml` | Each clone, committed | `[remote] url` and `workspace`. Never a token. |
 | `~/.config/deciduous/credentials` | Each machine | The one stored token. |
 
-The server's HTTP routes: `/health` (unauthenticated, process liveness), `/ready` (database and migrations), `/mcp`, `/ops`, `/export`, `/import`, `/claim`, `/locate`, `PUT /blob/:hash`, `/documents/:id`, `/messages`, `/events`. Everything except `/health` requires the token.
+The server's HTTP routes: `/health` (unauthenticated, process liveness), `/ready` (database and migrations), `/mcp`, `/ops`, `/export`, `/import`, `/claim`, `/locate`, `PUT /blob/:hash`, `/documents/:id`, `/messages`, `/events`. Everything except `/health` and `/ready` requires the token.
 
 ## Two write paths, one store
 
@@ -94,7 +94,7 @@ Set by `DB_SSL` and `DB_SSL_VERIFY` in the server's environment or settings file
 
 The chain is checked against the system CA store, or against `DB_SSL_CA_FILE` (a PEM file) for a private CA. A missing or empty CA file stops the server at boot instead of failing every connection later. Each boot logs the mode in effect; this machine's native server, on a local PostgreSQL, logs `Database TLS: off (DB_SSL unset or false)`.
 
-Earlier versions of these docs said the server used `verify_none` whenever `DB_SSL=true`. That was true of 1.0.1 only. Since then, `true` alone means full verification, and unverified TLS has to be asked for by name. A 1.0.1 deployment upgrading with a private CA needs `DB_SSL_CA_FILE`; one whose certificate does not name the address it connects to needs `DB_SSL_VERIFY=ca`.
+Earlier versions of these docs said the server used `verify_none` whenever `DB_SSL=true`. That was true of 1.0.0 and 1.0.1. Since then, `true` alone means full verification, and unverified TLS has to be asked for by name. A 1.0.1 deployment upgrading with a private CA needs `DB_SSL_CA_FILE`; one whose certificate does not name the address it connects to needs `DB_SSL_VERIFY=ca`.
 
 ## Source map
 

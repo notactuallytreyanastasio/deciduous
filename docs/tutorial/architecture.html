@@ -75,7 +75,7 @@
 </tr>
 </tbody>
 </table>
-<p>The server's HTTP routes: <code>/health</code> (unauthenticated, process liveness), <code>/ready</code> (database and migrations), <code>/mcp</code>, <code>/ops</code>, <code>/export</code>, <code>/import</code>, <code>/claim</code>, <code>/locate</code>, <code>PUT /blob/:hash</code>, <code>/documents/:id</code>, <code>/messages</code>, <code>/events</code>. Everything except <code>/health</code> requires the token.</p>
+<p>The server's HTTP routes: <code>/health</code> (unauthenticated, process liveness), <code>/ready</code> (database and migrations), <code>/mcp</code>, <code>/ops</code>, <code>/export</code>, <code>/import</code>, <code>/claim</code>, <code>/locate</code>, <code>PUT /blob/:hash</code>, <code>/documents/:id</code>, <code>/messages</code>, <code>/events</code>. Everything except <code>/health</code> and <code>/ready</code> requires the token.</p>
 <h2 id="two-write-paths-one-store">Two write paths, one store</h2>
 <p>An agent's MCP write is a transaction in PostgreSQL. When the tool returns, every other agent can read it.</p>
 <p>A CLI write (<code>deciduous add</code>, <code>link</code>, <code>status</code>, and <code>deciduous mcp</code> over stdio in a project with a <code>[remote]</code>) goes through three steps:</p>
@@ -152,7 +152,7 @@ Differs: `deciduous remote pull` takes the server's side.
 </tbody>
 </table>
 <p>The chain is checked against the system CA store, or against <code>DB_SSL_CA_FILE</code> (a PEM file) for a private CA. A missing or empty CA file stops the server at boot instead of failing every connection later. Each boot logs the mode in effect; this machine's native server, on a local PostgreSQL, logs <code>Database TLS: off (DB_SSL unset or false)</code>.</p>
-<p>Earlier versions of these docs said the server used <code>verify_none</code> whenever <code>DB_SSL=true</code>. That was true of 1.0.1 only. Since then, <code>true</code> alone means full verification, and unverified TLS has to be asked for by name. A 1.0.1 deployment upgrading with a private CA needs <code>DB_SSL_CA_FILE</code>; one whose certificate does not name the address it connects to needs <code>DB_SSL_VERIFY=ca</code>.</p>
+<p>Earlier versions of these docs said the server used <code>verify_none</code> whenever <code>DB_SSL=true</code>. That was true of 1.0.0 and 1.0.1. Since then, <code>true</code> alone means full verification, and unverified TLS has to be asked for by name. A 1.0.1 deployment upgrading with a private CA needs <code>DB_SSL_CA_FILE</code>; one whose certificate does not name the address it connects to needs <code>DB_SSL_VERIFY=ca</code>.</p>
 <h2 id="source-map">Source map</h2>
 <table>
 <thead>

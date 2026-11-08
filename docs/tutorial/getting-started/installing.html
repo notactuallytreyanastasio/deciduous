@@ -32,7 +32,7 @@ deciduous 1.1.0
 </code></pre>
 </div><p>If <code>which -a</code> lists two paths, the first one runs. Remove the stale one rather than installing a third.</p>
 <h2 id="2-get-the-token">2. Get the token</h2>
-<p>Ask the person who runs the server. They read it from the server's settings file, the <code>DECIDUOUS_MCP_TOKEN='...'</code> line in it: <code>.env</code> in the extracted Docker bundle, or <code>~/.config/deciduous/server/.env</code> for a server the CLI installed. It should reach you through your team's secret manager, not chat.</p>
+<p>Ask the person who runs the server. They read it from the server's settings file: the value of the <code>DECIDUOUS_MCP_TOKEN</code> line, without the single quotes <code>setup.sh</code> puts around it (a token pasted with its quotes gets a 401): <code>.env</code> in the extracted Docker bundle, or <code>~/.config/deciduous/server/.env</code> for a server the CLI installed. It should reach you through your team's secret manager, not chat.</p>
 <p>Store it with <code>remote login</code>. It reads one line from stdin, so the token stays out of shell history and the process list, and checks it against the server before writing anything. Pipe it in from wherever you keep it (<code>pbpaste</code>, your secret manager's CLI); if you paste it at the prompt instead, the terminal shows it as you paste.</p>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">$ pbpaste | deciduous remote login --url https://deciduous.example.com
 Token (read from stdin, not saved to shell history): Token: stored in /Users/you/.config/deciduous/credentials
@@ -46,7 +46,7 @@ Nothing was stored.
 </div><p>(The message names <code>DECIDUOUS_MCP_TOKEN</code> even when the token came from stdin.)</p>
 <p><strong>One token per machine.</strong> The credentials file holds a single token, not one per URL. Logging in to a second server replaces the first server's token, and every repository on this machine then sends the new one. If you work against two servers, set <code>DECIDUOUS_MCP_TOKEN</code> in the environment for one of them; the CLI reads that variable before the file.</p>
 <h2 id="3-point-the-repository-at-the-server">3. Point the repository at the server</h2>
-<p>The repository needs at least one commit first. The server ties a workspace to the repository's root commit, so that an unrelated project that happens to share the directory name cannot write into your graph. In a repository with no commit, CLI writes are kept in <code>.deciduous/remote-log.jsonl</code> and <code>deciduous remote push</code> sends them after the first commit.</p>
+<p>Make the repository's first commit before you write anything. <code>remote setup</code> itself works in a repository with no commit, but the server ties a workspace to the repository's root commit, so that an unrelated project that happens to share the directory name cannot write into your graph. In a repository with no commit, CLI writes are kept in <code>.deciduous/remote-log.jsonl</code> and <code>deciduous remote push</code> sends them after the first commit.</p>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">$ cd my-app
 $ deciduous remote setup --url https://deciduous.example.com
 deciduous remote setup
@@ -66,7 +66,7 @@ url = &quot;https://deciduous.example.com&quot;
 workspace = &quot;my-app&quot;
 </code></pre>
 </div><p>The workspace is the repository directory's name. Every clone and worktree of the repository should use the same one, so commit this file. To choose a different name, <code>deciduous remote init https://deciduous.example.com --workspace &lt;name&gt;</code>. <code>remote setup</code> has no <code>--workspace</code> flag.</p>
-<p>Without a stored token it stops before writing anything: <code>Error: no token: set DECIDUOUS_MCP_TOKEN or run 'deciduous remote login --url ...' first</code>. A token given only through <code>DECIDUOUS_MCP_TOKEN</code> works for setup but is not stored by it.</p>
+<p>Without a stored token it stops before writing anything: <code>Error: no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url https://deciduous.example.com` first</code>. A token given only through <code>DECIDUOUS_MCP_TOKEN</code> works for setup but is not stored by it.</p>
 <p>If setup fails with <code>cannot reach &lt;url&gt;: ... timed out reading response</code>, the server's <code>/health</code> took longer than the CLI's 15 seconds. Run it again; if it keeps happening, tell whoever runs the server.</p>
 <h2 id="4-install-the-agent-integration">4. Install the agent integration</h2>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">$ deciduous init
@@ -89,7 +89,7 @@ Shared graph server
   3) This machine, in Docker: a new PostgreSQL and the server in containers
   4) A server someone else runs: you need its URL and token
 </code></pre>
-</div><p>Choose 4 to join your team's server; it asks for the URL and then the token. The choices are the same as these flags: 1 is <code>remote setup --local</code>, 2 is <code>--database-url &lt;url&gt;</code>, 3 is <code>--docker-postgres</code>, 4 is <code>--url &lt;url&gt;</code>. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.</p>
+</div><p>Type 4 to join your team's server; it asks for the URL and then the token. <strong>Do not just press Enter.</strong> The default is 1: it downloads the server executable, creates and migrates a <code>deciduous</code> database on localhost:5432, and installs a background service on your machine, which is not what someone joining a team wants. End-of-input picks the default too, so do not pipe <code>init</code> an empty answer. The choices are the same as these flags: 1 is <code>remote setup --local</code>, 2 is <code>--database-url &lt;url&gt;</code>, 3 is <code>--docker-postgres</code>, 4 is <code>--url &lt;url&gt;</code>. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.</p>
 <p>Without a terminal (a script, CI, an agent's shell), <code>init</code> writes its files and then stops:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>Error: /Users/you/code/my-app has no server configured ([remote] in .deciduous/config.toml), and there is no terminal to ask where its graph should live. Choose one:
 
@@ -103,7 +103,7 @@ then rerun this command. Tests and CI in a throwaway directory can set DECIDUOUS
 </div><p>It exits 1. Run step 3, then <code>init</code> again; files that already exist are skipped.</p>
 <p><code>init</code> 1.1.0 also sets up the no-server git mode even when <code>[remote]</code> is there: <code>.deciduous/graph.json</code>, a <code>!.deciduous/graph.json</code> line in <code>.gitignore</code> that tracks it, a <code>.gitattributes</code> line and a git merge driver. With a server, the graph is on the server and <code>graph.json</code> is only a local copy that the CLI rewrites on every write; committed, it would conflict between every two developers for nothing. Delete the <code>!.deciduous/graph.json</code> line from <code>.gitignore</code> and leave <code>.gitattributes</code> out of your commits. (<code>deciduous update</code> knows this and skips those files in a project with <code>[remote]</code>; <code>init</code> does not, and running <code>init</code> again puts the line back.)</p>
 <h2 id="5-make-sure-claude-code-talks-to-the-same-server">5. Make sure Claude Code talks to the same server</h2>
-<p><code>remote setup</code> registers the server with Claude Code (user scope, every repository) only when Claude Code has no server called <code>deciduous</code> yet. If it already has one, setup prints <code>Unchanged Claude Code already has a deciduous MCP server</code> and leaves it alone, <strong>even when that one points at a different server.</strong> Your CLI writes then go to one graph and your agent's to another, and nothing warns you.</p>
+<p><code>remote setup</code> registers the server with Claude Code (user scope, every repository) only when Claude Code has no server called <code>deciduous</code> yet. If it already has one, setup prints <code>Unchanged Claude Code already has a deciduous MCP server</code> and leaves it alone, <strong>even when that one points at a different server.</strong> Your CLI writes then go to one graph and your agent's to another, and nothing warns you. Setup's last line still says to restart Claude Code so it picks up the server; restarting picks up the old registration.</p>
 <p>Check it:</p>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">$ claude mcp get deciduous
 deciduous:
@@ -113,6 +113,8 @@ deciduous:
   URL: https://old-server.example.com/deciduous-mcp/mcp
   Headers:
     Authorization: Bearer &lt;token&gt;
+
+To remove this server, run: claude mcp remove deciduous -s user
 </code></pre>
 </div><p>This is the mismatch the step exists for, and it happened while this page was being written: the project pointed at one server and Claude Code at another. The <code>URL</code> must be your <code>[remote] url</code> followed by <code>/mcp</code>. If it is not, replace the registration:</p>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">claude mcp remove deciduous -s user
@@ -160,6 +162,7 @@ Pulled: my-app &lt;- https://deciduous.example.com
   imported 1 new node(s), updated 0, removed 0; imported 1 edge(s), removed 0
 
 $ deciduous nodes
+2 nodes:
 ID    CHANGE    TYPE         STATUS     TITLE
 ------------------------------------------------------------------------------
 1     b1710c03  goal         pending    Add rate limiting to the public API
@@ -175,7 +178,7 @@ Watching: my-app
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">git add .deciduous/config.toml .gitignore CLAUDE.md .claude/
 git commit -m &quot;chore: connect to the team's deciduous server&quot;
 </code></pre>
-</div><p>With the <code>graph.json</code> line gone from <code>.gitignore</code> (step 4), <code>git status</code> stays clean after CLI writes; the SQLite cache and <code>graph.json</code> are both ignored.</p>
+</div><p>With the <code>graph.json</code> line gone from <code>.gitignore</code> (step 4), CLI writes no longer change <code>git status</code>: the SQLite cache and <code>graph.json</code> are both ignored. What stays in <code>git status</code> is what <code>init</code> wrote and you chose not to commit: <code>?? .gitattributes</code> and, unless you committed it, <code>?? .github/</code>. Delete them if you do not want them listed.</p>
 <p><code>init</code> also wrote <code>.github/workflows/cleanup-decision-graphs.yml</code>, which deletes the graph images <code>deciduous dot --auto</code> puts in PRs; commit it only if you use that. Stage files by name, never <code>git add -A</code>.</p>
 <p>A teammate who clones the repository runs steps 1, 2 and 5, then <code>deciduous remote pull</code> to fill their local copy. The committed <code>[remote]</code> already names the server and workspace, and the committed integration files mean they do not need <code>init</code>.</p>
 <p>Next: <a href="../workflow.html">the workflow</a> for how a piece of work becomes goal, options, decision, actions and outcomes, and <a href="../teams.html">teams</a> for several agents on one workspace. When something here does not match what you see, <a href="../troubleshooting.html">troubleshooting</a>.</p>

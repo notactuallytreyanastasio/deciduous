@@ -41,7 +41,7 @@ The output above was observed on a machine that already had a server. The steps 
 | `--database-url <url>` | the same user service | the PostgreSQL you name |
 | `--docker` | a container from the release's `deciduous-mcp-docker.tar.gz` | the PostgreSQL from the first two rows; `localhost` is rewritten to `host.docker.internal` |
 | `--docker-postgres` | a container (implies `--docker`) | a new PostgreSQL 17 container |
-| `--port <port>` | any of the above | used only on first setup; asked otherwise, with a free port in 20000-32767 suggested |
+| `--port <port>` | any of the above | used only on first setup. Without it, `DECIDUOUS_PORT` from the environment is used; failing that, a terminal asks (suggesting a free port in 20000-32767), and without a terminal a free port is chosen and printed (`Chose port N`) |
 
 With no flags and a terminal, `remote setup` asks the same questions as a menu. Without a terminal and without `--local` or `--url`, it stops and prints the four scripted forms.
 
@@ -49,7 +49,7 @@ The native install, in order:
 
 1. Downloads `deciduous-mcp-<os>-<arch>` for the CLI's own version, checks it against the release's `checksums.txt`, and installs it as `~/.config/deciduous/server/bin/deciduous-mcp`.
 2. Picks the bearer token. If the machine already has one (`DECIDUOUS_MCP_TOKEN`, else `~/.config/deciduous/credentials`) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.
-3. Runs the executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`: it connects, creates the database if missing (the role needs `CREATEDB`), migrates, and exits. A refusal comes back in PostgreSQL's words (`role "x" does not exist`, `password authentication failed`). If nothing listens on 5432 at all, setup says so and prints `brew install postgresql@17 && brew services start postgresql@17` / `sudo apt install postgresql`.
+3. Runs the executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`: it connects, creates the database if missing (the role needs `CREATEDB`), migrates, and exits. A refusal comes back in PostgreSQL's words (`role "x" does not exist`, `password authentication failed`). If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing `brew install postgresql@17 && brew services start postgresql@17` / `sudo apt install postgresql`.
 4. Writes `~/.config/deciduous/server/.env`, mode 600. This machine's file has these keys (values other than the secrets shown):
 
    ```text
@@ -66,8 +66,25 @@ The native install, in order:
    DECIDUOUS_PREPARE_DATABASE=true
    ```
 
-5. Installs a user service that starts at login and restarts on exit: a LaunchAgent `dev.deciduous.server` at `~/Library/LaunchAgents/dev.deciduous.server.plist` on macOS, a systemd user unit `deciduous-server.service` on Linux. The service definition carries only paths; the token and database URL stay in `.env`, which the server reads itself through `DECIDUOUS_ENV_FILE`. Output goes to `~/.config/deciduous/server/logs/server.log`. On Linux, user services stop at logout unless you run `loginctl enable-linger $USER`.
+5. Installs a user service that starts at login and restarts on exit (**on Linux this fails in 1.1.0**; see below): a LaunchAgent `dev.deciduous.server` at `~/Library/LaunchAgents/dev.deciduous.server.plist` on macOS, a systemd user unit `deciduous-server.service` on Linux. The service definition carries only paths; the token and database URL stay in `.env`, which the server reads itself through `DECIDUOUS_ENV_FILE`. Output goes to `~/.config/deciduous/server/logs/server.log`. On Linux, user services stop at logout unless you run `loginctl enable-linger $USER`.
 6. Waits for `/ready`, then stores the token in `~/.config/deciduous/credentials` if it differs from the one there, writes `[remote]`, and registers with Claude Code as above.
+
+**Linux: the service does not start in 1.1.0.** The unit file the CLI writes puts `WorkingDirectory` in double quotes, and systemd refuses the whole unit (checked with `systemd-analyze verify` on systemd 252):
+
+```text
+/home/you/.config/systemd/user/deciduous-server.service:8: WorkingDirectory= path is not absolute: "/home/you/.config/deciduous/server"
+deciduous-server.service: Unit configuration has fatal error, unit will not be started.
+Unit deciduous-server.service has a bad unit file setting.
+```
+
+Until that is fixed, remove the quotes from that one line, then start the service:
+
+```bash
+sed -i 's/^WorkingDirectory="\(.*\)"$/WorkingDirectory=\1/' ~/.config/systemd/user/deciduous-server.service
+systemctl --user daemon-reload && systemctl --user restart deciduous-server.service
+```
+
+Checked on debian:12: before the edit `systemd-analyze verify` refuses the unit, after it the unit verifies clean. The quoted `ExecStart=` and `Environment=` lines are fine. macOS (launchd) is not affected.
 
 The server binds `127.0.0.1` because `DECIDUOUS_BIND_ADDRESS` says so; a server started by hand without that setting listens on every interface. Every start re-runs the migrations (`DECIDUOUS_PREPARE_DATABASE=true`), and `deciduous update` in a project that writes to this server replaces an older executable and restarts the service. Docker installs are not upgraded by `update`.
 
@@ -113,7 +130,7 @@ Claude Code has the same shape of problem: one user-scope `deciduous` entry. For
 
 ## No server at all
 
-`deciduous init` will not finish without a server. In a terminal it asks; without one it prints the four `remote setup` forms and exits 1. To opt out, say so:
+`deciduous init` does not complete without a server. In a terminal it asks; without one it writes its files (`.claude/`, `CLAUDE.md`, `.gitignore`, `.github/` and the rest), then prints the four `remote setup` forms and exits 1. To opt out, say so:
 
 ```text
 $ DECIDUOUS_NO_SERVER=1 deciduous init
