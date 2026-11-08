@@ -1,108 +1,240 @@
-# Record the reasoning while the work happens
+# Record the work as goal, options, decision, action, outcome
 
-A useful shared graph lets another agent answer two questions: what should I build on, and what has already been checked? Write enough to answer them while the context is fresh.
+A useful graph answers two questions for whoever comes next: what was asked for, and what has already been tried. Write each node at the moment it happens, on the server everyone shares: an agent through the server's MCP tools, a person through the `deciduous` CLI in a repository whose `.deciduous/config.toml` has a `[remote]`. Both land in the same workspace, with the same `change_id` on every node, so either side can link to what the other wrote.
 
-## Start from the shared goal
+```text
+goal -> option(s) -> decision -> action -> outcome
+                                      \-> observation (anywhere)
+```
 
-Read the goal's original request, then inspect the decisions and recent outcomes beneath it. Use `check_activity` to find current branch work. If a goal already covers your task, continue it instead of creating a second root with the same title.
+The examples use workspace `my-app`. Everything shown was run against a 1.1.0 server; ids are the ones it returned.
 
-For new work, create a `goal` with the user's exact request in `prompt`. Keep credentials out of captured prompts; if the request contains a secret, redact the secret and say that you did so.
+## The goal: the request, verbatim
 
-MCP examples use tool names directly. Replace ID placeholders with returned server UUIDs:
+Put the user's exact words in `prompt`. A summary loses what the next session needs to know.
+
+MCP:
 
 ```javascript
 add_node({
-  workspace: "example-app", branch: "agent-api",
+  workspace: "my-app", branch: "agent-api",
   node_type: "goal", status: "active",
-  title: "Bound retries for failed requests",
-  prompt: "Stop retrying forever when the upstream API is down."
+  title: "Validate create-item requests",
+  prompt: "Add request validation and tests for the create-item endpoint."
 })
 ```
 
-## Consider options before choosing
+```json
+{ "id": "32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb", "change_id": "5ca33b18-c27e-4723-9610-3874a592fb7a",
+  "created": true, "status": "active", "message": "Node created successfully" }
+```
 
-Record the viable options and the constraint that decides between them. A short rationale with a specific failure mode is more useful than "best practice."
+CLI (the branch is detected from git; `--prompt-stdin` takes a multi-line message from a heredoc):
+
+```console
+$ deciduous add goal "Bound retries for failed requests" -c 90 -p "Stop retrying forever when the upstream API is down."
+Warning: Prompt is only 52 chars. This looks like a summary, not a full prompt.
+Created node 1 (type: goal, title: Bound retries for failed requests) [confidence: 90%] [prompt: 52 chars] [branch: main]
+```
+
+The warning fires on any prompt under some length; it does not block the write. Nodes default to `pending`. `add_node` takes `status: "active"`; the CLI needs a second command, `deciduous status 1 active`.
+
+Keep credentials out of prompts. Whoever holds the server token can read every prompt in every workspace (see [Architecture](architecture.md)).
+
+## Options and the decision
+
+The decision is only written once an option is actually chosen. Its title should say what it beat.
+
+MCP has one call that writes the decision, its options and the edges in a single transaction:
 
 ```javascript
 log_decision({
-  workspace: "example-app", branch: "agent-api",
-  parent_node_id: "GOAL_ID",
-  title: "Bound the retry budget",
-  rationale: "A 30-second deadline bounds total wait even when individual attempts are slow.",
-  chosen_option: {title: "Use an overall deadline"},
-  rejected_options: [{
-    title: "Use only an attempt count",
-    reason: "A slow attempt can exceed the user's wait budget."
-  }]
+  workspace: "my-app", branch: "agent-api",
+  parent_node_id: "32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb",
+  title: "Validate at the HTTP boundary, not after the write",
+  rationale: "Reject malformed requests before they reach the service layer.",
+  chosen_option: {title: "Validate at the HTTP boundary", description: "Return 422 with stable field error codes."},
+  rejected_options: [{title: "Validate after the database write",
+                      reason: "The service would receive invalid input and rely on rollback."}]
 })
 ```
 
-`log_decision` returns `decision_id`, a chosen option, and any rejected options. Its edges run from the decision to the options. For finer control, use `add_node` and `add_edge`; each call returns an ID to connect. See [Concepts](concepts.md) for node and edge meanings.
+```json
+{ "decision_id": "d63d2ce0-d91f-406e-9c4f-7253ee438c59",
+  "chosen":   {"id": "894c65c3-...", "title": "Validate at the HTTP boundary"},
+  "rejected": [{"id": "1644a09f-...", "title": "Validate after the database write"}] }
+```
 
-These convenience helpers perform several writes. If one fails, inspect the graph before retrying; do not assume the whole call rolled back or create a duplicate chain.
+Know the shape it writes, because it is not the canonical flow: the edges run goal -> decision, then decision -> option (`chosen`) and decision -> option (`rejected`), with each `reason` as the edge rationale. The decision is created `completed`, the chosen option `completed`, the rejected one `rejected`.
 
-## Record the action before editing
+`capture_conversation_turn` does the same for options inside a larger step. Pass the options as objects and mark the winner, or every option is recorded as rejected:
 
-Create an `action` with the files you expect to change. Link it to the decision that authorized the approach:
+```javascript
+options_considered: [{title: "Codes in a shared enum", chosen: true}, {title: "Codes as string literals"}],
+decision: {title: "Shared enum over string literals", rationale: "Tests import the same enum"}
+```
+
+With `options_considered: ["RFC 7807 problem+json", "Ad-hoc {error: string}"]` (plain strings) both options came back with `"chosen": null` and both got a `rejected` edge from the decision, including the one that was picked.
+
+The CLI writes one node per command and links them by hand, so it writes the flow in the canonical direction, option -> decision:
+
+```console
+$ deciduous add option "Cap the attempt count" -c 70
+Created node 2 (type: option, title: Cap the attempt count) [confidence: 70%] [branch: main]
+$ deciduous add option "Use an overall deadline" -c 80
+Created node 3 (type: option, title: Use an overall deadline) [confidence: 80%] [branch: main]
+$ deciduous link 1 2 -r "possible approach"
+$ deciduous link 1 3 -r "possible approach"
+$ deciduous add decision "Use an overall deadline, not an attempt cap" -c 80 -d "A slow attempt can exceed the wait budget under an attempt cap."
+Created node 4 (type: decision, ...)
+$ deciduous link 3 4 -t chosen -r "bounds total wait even when attempts are slow"
+Created edge 3 (3 -> 4 via chosen)
+$ deciduous link 2 4 -t rejected -r "a slow attempt can exceed the budget"
+Created edge 4 (2 -> 4 via rejected)
+```
+
+The numbers are local ids, valid only in this checkout's cache. To refer to a node someone else wrote, use the 8-character `CHANGE` column from `deciduous nodes` or the server's UUID; `link`, `status`, `show` and `doc attach` accept all three.
+
+## The action: before you edit
+
+MCP: `parent_id` creates the node and its incoming edge in one transaction.
 
 ```javascript
 add_node({
-  workspace: "example-app", branch: "agent-api",
+  workspace: "my-app", branch: "agent-api",
   node_type: "action", status: "active",
-  title: "Apply the deadline to the retry loop",
-  description: "Carry the remaining budget into each attempt and stop before scheduling another delay.",
-  files: ["src/retry.ts", "tests/retry.test.ts"]
-})
-add_edge({
-  workspace: "example-app", branch: "agent-api",
-  from_node_id: "DECISION_ID", to_node_id: "ACTION_ID",
-  rationale: "Implement the deadline chosen for bounded waiting"
+  title: "Implement request validation at the route boundary",
+  files: ["src/http/items.ts"],
+  parent_id: "d63d2ce0-d91f-406e-9c4f-7253ee438c59",
+  rationale: "Implement the selected boundary"
 })
 ```
 
-A teammate should be able to read this action and decide whether its file scope overlaps their work. The graph's branch lock does not lock those files.
+Do not send `add_node` and an `add_edge` that needs its id in the same batch. The id does not exist yet, and the server says so:
 
-## Publish findings that can change another agent's plan
+```text
+from_node_id is not a node id: "PLACEHOLDER". To link a node you are creating now, pass parent_id
+to add_node instead; an id must come from a previous answer, not be written ahead of it
+```
 
-Use `log_observation` for a measured result, a constraint found in code, or a failed assumption. Supply `related_to` to connect it to the relevant work. Add `took_from` and `why` when you reuse another agent's finding.
+A non-goal written without `parent_id` is accepted, and the reply carries `suggested_parents`: up to five ranked guesses with the signals behind each (same branch, type fit, text similarity, open status). Nothing is linked for you.
+
+CLI:
+
+```console
+$ deciduous add action "Apply a 30s deadline to the retry loop" -c 85 -f "src/retry.rs,tests/retry.rs"
+$ deciduous link 4 5 -r "implement the chosen option"
+```
+
+`--commit` takes `HEAD`, a branch, a tag or a hash prefix and stores the full hash; a rev git cannot resolve is refused. The server cannot see your checkout, so over MCP pass the real hash in `commit`; it stores whatever string you send.
+
+## Observations: what changes the plan
 
 ```javascript
 log_observation({
-  workspace: "example-app", branch: "agent-api",
-  related_to: "ACTION_ID",
-  title: "The client library already exposes an abort signal",
-  description: "src/client.ts accepts AbortSignal. The retry loop can share one deadline controller instead of adding a second timeout implementation."
+  workspace: "my-app", branch: "agent-tests",
+  title: "Reuse the RFC 7807 shape in fixtures",
+  related_to: "32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb",
+  took_from: "183e9e9a-153a-4141-9fb2-8312fe486012",
+  why: "The API side already emits problem+json; fixtures that match it keep the tests honest."
 })
 ```
 
-An observation can be useful before implementation is finished. Keep its confidence proportional to the evidence; distinguish an inspected API from a behavior you tested.
+`related_to` and `took_from` take a server UUID or a full `change_id`. An 8-character prefix is refused over MCP (`took_from is not a node id: "9ad1b0b7"`), although the CLI accepts one. `took_from` draws a `took_from` edge from the source node to the new observation, with `why` as its rationale; [Teams](teams.md#borrowing-across-branches-tookfrom) covers it.
 
-## Close work with a result
-
-Report test commands, results, and gaps. Include the actual commit SHA in a node's `commit` field when there is a commit. The remote server stores the value you supply; it cannot resolve your local `HEAD`.
+## The outcome: the number or the error
 
 ```javascript
 close_thread({
-  workspace: "example-app", branch: "agent-api",
-  parent_node_id: "ACTION_ID",
-  title: "Retry deadline passes the timeout cases",
-  description: "npm test -- tests/retry.test.ts passed. A stalled attempt is cancelled at the deadline; no next attempt starts. Load testing remains outside this change.",
-  success: true
+  workspace: "my-app", branch: "agent-api",
+  parent_node_id: "de6ccf4c-877b-406d-a41a-5474d8c764ec",
+  title: "Invalid requests return 422 with field codes",
+  description: "npm test -- tests/items.test.ts: 8 passed.",
+  success: true,
+  lessons_learned: ["The router already parses JSON before handlers run"]
 })
 ```
 
-Pass `goal_node_id` only when the whole goal is complete, including other agents' work and integration checks. `success: false` creates a rejected outcome; record what failed and what needs reconsideration.
+`success: true` writes a `completed` outcome under the parent; `success: false` writes a `rejected` one. Each `lessons_learned` entry becomes an observation under the outcome; each `next_steps` entry becomes a new goal. `goal_node_id` marks that goal `completed`, so pass it only when the whole goal is done, not when your part is.
 
-Use `find_orphans({workspace: "example-app"})` before handoff. Connect missing non-goal nodes to their real cause, not to an unrelated root to make the warning disappear.
+CLI:
 
-## Preserve a changed decision
+```console
+$ deciduous add outcome "Retry loop stops at the deadline" -c 90 -d "cargo test retry: 4 passed"
+$ deciduous link 5 6 -r "test result"
+$ deciduous status 6 completed
+```
 
-If evidence invalidates the approach, add an observation explaining the failure and a `revisit` connected to the old decision. Record the new options and choice, then mark the old decision `superseded` with `update_node`. Keep the old reasoning so the next agent can see why it was rejected.
+`deciduous status` accepts `pending, active, completed, rejected, superseded, abandoned`. Its 1.1.0 `--help` lists only the first four.
 
-`update_node`'s top-level `branch` controls its write lock. It does not replace `metadata.branch`. Supplying `metadata` replaces that map, so read the current metadata and preserve its other keys if you need to change it.
+## One step, one call
 
-## Keep exports separate from team writes
+`capture_conversation_turn` writes a step's goal, observations, options, decision, action and outcome together, all or nothing, linked to each other and to `parent_node_id`:
 
-The shared MCP server is the team's normal write path. Pull its node and edge records into a local cache for CLI exports and the viewer. `deciduous sync` reconciles the local graph with Git records; it does not fetch the Postgres server.
+```javascript
+capture_conversation_turn({
+  workspace: "my-app", branch: "agent-api",
+  parent_node_id: "32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb",
+  summary: "Chose the error format and wrote it",
+  observations: ["Clients already parse RFC 7807 problem documents"],
+  options_considered: [{title: "RFC 7807 problem+json", chosen: true}, {title: "Ad-hoc {error: string}"}],
+  decision: "Use RFC 7807 problem+json over an ad-hoc error object",
+  action: "Emit problem+json from the validation middleware",
+  outcome: "Validation errors render as problem+json; 3 snapshot tests pass"
+})
+```
 
-A graph can contain prompts, internal paths, and customer details. Review exported content before putting it in a public repository, static site, or PR. [Evidence](evidence.md) covers attachment and export limits.
+It wrote parent -> observation, parent -> decision, decision -> each option, decision -> action -> outcome.
+
+## Retries and typos
+
+A tool refuses an argument it does not have and names the ones it does, and nothing is written:
+
+```text
+add_node has no argument "parent" (did you mean parent_id?). Its arguments are: branch, change_id,
+commit, confidence, description, edge_type, files, node_type, parent_id, prompt, rationale, status,
+title, workspace; nothing was written
+```
+
+To make a retried `add_node` safe, give it a `change_id` (any UUID). The second call with the same one returns the first node, `"created": false`, and does not duplicate the edge:
+
+```json
+{ "id": "c2bc238e-...", "created": false,
+  "message": "Node already exists with change_id 11111111-2222-4333-8444-555555555555; nothing new was created (linked under parent_id)" }
+```
+
+## Changing a node
+
+`update_node` changes title, description, status or metadata. `metadata` is merged: keys you send are set, a key sent as `null` is removed, the rest are kept. Sending `{"commit": "0123abc"}` to an action with `branch` and `files` left all three in place. (Older docs said it replaced the map. It does not.)
+
+When an approach is abandoned, do not edit the old decision into the new one. Record why and pivot; [History](history.md) shows both the one-command CLI pivot and the MCP calls.
+
+## Before you stop
+
+```javascript
+find_orphans({workspace: "my-app"})
+```
+
+```json
+{ "count": 1, "orphans": [{ "id": "e0ff0733-...", "node_type": "observation", "title": "Orphan probe" }] }
+```
+
+Link each orphan to its real cause, not to whichever root makes the list empty. `suggest_parents: true` adds ranked guesses for the first 25.
+
+From the CLI, `deciduous remote status` is the check: it exits 0 and prints `In sync` when every write reached the server, and exits 1 listing what differs otherwise. Writes are sent before each command exits, so it normally says:
+
+```console
+$ deciduous remote status
+Remote: https://deciduous.example.com
+Workspace: my-app
+Log: 0 write(s) waiting, 0 rejected  (.../.deciduous/remote-log.jsonl)
+
+                 local    server
+  nodes              6         6
+  edges              6         6
+
+In sync: no writes waiting, and every node, edge and document matches field by field.
+Themes and tags are not sent to the server, so they are not compared.
+```
+
+Nodes an agent wrote over MCP show up as `Only on the server` until you run `deciduous remote pull`; that is a stale cache, not lost work. [Recovery](recovery.md) covers reading the graph back.

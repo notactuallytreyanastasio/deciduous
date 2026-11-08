@@ -2,11 +2,11 @@
 <html lang="en" data-docs-generated="true">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Solo and offline use · Deciduous docs</title>
-<meta name="description" content="The Rust CLI can keep a graph in .deciduous/deciduous.db without a running server. Use this for an independent offline project or a local copy you want to inspect. For agents that must read one anothe">
-<link rel="canonical" href="https://deciduous.dev/tutorial/solo.html">
+<title>Without a shared server · Deciduous docs</title>
+<meta name="description" content="There are two fallbacks for when nobody runs a server you can join. deciduous remote setup --local runs the same server on your own machine as a background service, so the CLI and your agents work exa">
+<link rel="canonical" href="https://deciduous.dev/tutorial/local.html">
 <meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
-<meta property="og:title" content="Solo and offline use · Deciduous docs"><meta property="og:description" content="The Rust CLI can keep a graph in .deciduous/deciduous.db without a running server. Use this for an independent offline project or a local copy you want to inspect. For agents that must read one anothe"><meta property="og:url" content="https://deciduous.dev/tutorial/solo.html">
+<meta property="og:title" content="Without a shared server · Deciduous docs"><meta property="og:description" content="There are two fallbacks for when nobody runs a server you can join. deciduous remote setup --local runs the same server on your own machine as a background service, so the CLI and your agents work exa"><meta property="og:url" content="https://deciduous.dev/tutorial/local.html">
 <meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
 <meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,110 +16,192 @@
 <body data-search-index="search-index.json">
 <a class="skip-link" href="#content">Skip to content</a>
 <header class="docs-header"><a class="brand" href="../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
-<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="index.html">Shared memory</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="local-postgres.html">Local Postgres setup</a></li><li><a href="clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="teams.html">Two agents, one graph</a></li><li><a href="workflow.html">Record the reasoning</a></li><li><a href="recovery.html">Recover context</a></li><li><a href="evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="remote-postgres.html">Remote hosting</a></li><li><a href="upgrading.html">Upgrade and migrate</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="concepts.html">Graph concepts</a></li><li><a href="reference.html">CLI and API</a></li><li><a href="mcp.html">MCP tools</a></li><li><a href="architecture.html">Architecture and trust</a></li><li><a href="developer.html">Develop Deciduous</a></li><li><a href="solo.html" aria-current="page">Solo and offline use</a></li><li><a href="history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
-<main id="content"><div class="article-meta"><span>Reference</span><a href="../content/solo.md">Read as Markdown</a></div><article><h1 id="solo-and-offline-use">Solo and offline use</h1>
-<p>The Rust CLI can keep a graph in <code>.deciduous/deciduous.db</code> without a running server. Use this for an independent offline project or a local copy you want to inspect. For agents that must read one another's current decisions, use <a href="local-postgres.html">shared Postgres</a> and HTTP MCP instead.</p>
-<h2 id="start-a-local-graph">Start a local graph</h2>
-<p>Install the current CLI and initialize the repository:</p>
-<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">brew tap notactuallytreyanastasio/tap
-brew install deciduous
-deciduous init
-deciduous add goal &quot;Make retries bounded&quot; -p &quot;Make retries stop after a bounded delay.&quot;
-deciduous nodes
-deciduous serve
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get started</h2><ul><li><a href="index.html">What deciduous is</a></li><li><a href="quickstart.html">Join a server</a></li><li><a href="run-a-server.html">Run a server</a></li><li><a href="clients.html">Connect your agents</a></li><li><a href="for-agents.html">For agents</a></li></ul></section><section class="nav-group"><h2>Work in the graph</h2><ul><li><a href="workflow.html">Record the reasoning</a></li><li><a href="teams.html">Many agents, one graph</a></li><li><a href="recovery.html">Recover context</a></li><li><a href="evidence.html">Documents and transcripts</a></li><li><a href="history.html">Design history</a></li></ul></section><section class="nav-group"><h2>Operate</h2><ul><li><a href="operating.html">Backups, upgrades, tokens</a></li><li><a href="local.html" aria-current="page">Without a shared server</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="concepts.html">Graph concepts</a></li><li><a href="reference.html">CLI reference</a></li><li><a href="mcp.html">MCP tools</a></li><li><a href="architecture.html">Architecture and trust</a></li><li><a href="developer.html">Develop deciduous</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Operate</span><a href="../content/local.md">Read as Markdown</a></div><article><h1 id="without-a-shared-server">Without a shared server</h1>
+<p>There are two fallbacks for when nobody runs a server you can join. <code>deciduous remote setup --local</code> runs the same server on your own machine as a background service, so the CLI and your agents work exactly as they would against a team server, with one person writing. <code>DECIDUOUS_NO_SERVER=1 deciduous init</code> skips the server entirely and shares the graph through a git-tracked <code>.deciduous/graph.json</code>. Use the first if you might join a team later; use the second only when a running service is not an option.</p>
+<h2 id="a-server-on-this-machine">A server on this machine</h2>
+<p><code>remote setup --local</code> looks for a server this machine already has, and installs one if there is none. On a machine that has one, it reuses it and changes nothing about it:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote setup --local
+deciduous remote setup
+Every project writes its decision graph to a shared server. This connects /home/you/code/my-app
+to one: a server on this machine, or one someone else runs.
+
+   Found local server at http://127.0.0.1:4000
+   Wrote .deciduous/config.toml [remote] url = http://127.0.0.1:4000
+   Connected http://127.0.0.1:4000 holds 0 nodes, 0 edges in workspace my-app
+   Unchanged Claude Code already has a deciduous MCP server
+
+Done: this project writes to http://127.0.0.1:4000. Restart Claude Code so it picks up the server;
+it sends the logging instructions when it connects.
 </code></pre>
-</div><p><code>init</code> creates local state and agent integration files. Review generated instructions before using them; a local CLI workflow and a shared-server workflow have different write destinations. Keep the SQLite database out of Git.</p>
-<p>Use <code>deciduous add --help</code>, <code>link --help</code>, and other command help from your installed version for details. Local node references can use an integer ID or a supported <code>change_id</code> prefix. Server MCP tools generally require the server's full UUID instead.</p>
-<h2 id="feature-boundaries">Feature boundaries</h2>
+</div><p>&quot;This machine has a server&quot; means <code>~/.config/deciduous/server/.env</code> exists. That settings file is authoritative once written: every later <code>--local</code>, in every project, points at the server it describes. The flags that choose how a new server is built do not replace an existing one. <code>--docker</code> on a machine with a native server is refused:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: this machine's server is already set up to run as a background service (/Users/you/.config/deciduous/server/.env), and it is kept that way. To replace it, stop it and move that file away first; its database is not touched.
+</code></pre>
+</div><p>and <code>--database-url</code> against the same native server is accepted but ignored, with one line saying so: <code>Using the server already set up in ~/.config/deciduous/server/.env; its database and port stand</code>.</p>
+<p>The <code>Unchanged Claude Code already has a deciduous MCP server</code> line deserves a second look. <code>remote setup</code> registers its server with Claude Code at user scope only when no <code>deciduous</code> server is registered there. If one is, it is left alone even when it points somewhere else, and the &quot;Restart Claude Code&quot; advice below it will not fix that. Check with <code>claude mcp get deciduous</code>; the <a href="clients.html">Claude Code section of Connect your agents</a> has the fix.</p>
+<h3 id="what-a-fresh-install-does">What a fresh install does</h3>
+<p>The output above was observed on a machine that already had a server. The steps below are what <code>src/server.rs</code>, <code>src/local_server.rs</code> and <code>deciduous_mcp/DEPLOY.md</code> say happens on a machine without one; they were read, not run.</p>
 <table>
 <thead>
 <tr>
-<th>Capability</th>
-<th>Shared HTTP MCP / Postgres</th>
-<th>Local Rust CLI / stdio MCP</th>
+<th>Flag</th>
+<th>Server runs as</th>
+<th>Database</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Read and write decisions</td>
-<td>Shared tools such as <code>add_node</code>, <code>query_nodes</code>, <code>add_edge</code></td>
-<td>Local commands and a separate stdio tool set</td>
+<td><code>--local</code> (nothing else)</td>
+<td>the release's single-file <code>deciduous-mcp</code> executable, as a user service</td>
+<td>PostgreSQL on <code>localhost:5432</code> as <code>$USER</code>, no password, database <code>deciduous</code></td>
 </tr>
 <tr>
-<td>Workspace-wide cross-branch reads</td>
-<td>Yes, without copying between agent machines</td>
-<td>Reads the local database's current contents</td>
+<td><code>--database-url &lt;url&gt;</code></td>
+<td>the same user service</td>
+<td>the PostgreSQL you name</td>
 </tr>
 <tr>
-<td>Activity and branch leases</td>
-<td><code>check_activity</code>, short MCP write leases</td>
-<td>No equivalent shared-service coordination</td>
+<td><code>--docker</code></td>
+<td>a container from the release's <code>deciduous-mcp-docker.tar.gz</code></td>
+<td>the PostgreSQL from the first two rows; <code>localhost</code> is rewritten to <code>host.docker.internal</code></td>
 </tr>
 <tr>
-<td>Live writes</td>
-<td><code>/events</code> and <code>remote watch</code></td>
-<td>Local viewer reads local data; not the remote event stream</td>
+<td><code>--docker-postgres</code></td>
+<td>a container (implies <code>--docker</code>)</td>
+<td>a new PostgreSQL 17 container</td>
 </tr>
 <tr>
-<td>Borrowing provenance</td>
-<td><code>took_from</code> edges; <code>log_observation</code> helper</td>
-<td><code>deciduous link ... -t took_from</code> in the local graph</td>
-</tr>
-<tr>
-<td>Documents</td>
-<td>Stored metadata and uploaded bytes; HTTP import/upload/read endpoints</td>
-<td><code>doc</code> commands and stdio attachment tools</td>
-</tr>
-<tr>
-<td>Themes and assignments</td>
-<td>Schema/export support, but no registered theme-editing MCP tools</td>
-<td>Theme/tag commands and stdio tools</td>
-</tr>
-<tr>
-<td>DOT images and PR writeups</td>
-<td>No registered export-DOT or writeup tools</td>
-<td><code>dot</code>, <code>writeup</code>, and corresponding stdio tools</td>
-</tr>
-<tr>
-<td>Explicit local conversation sessions</td>
-<td>Not the HTTP MCP session model</td>
-<td>Local stdio session tools and <code>.deciduous/active_session</code></td>
-</tr>
-<tr>
-<td>Offline edits</td>
-<td>No automatic queue for the shared server</td>
-<td>Available locally; later transfer needs review</td>
-</tr>
-<tr>
-<td>Git graph synchronization</td>
-<td>Not the Postgres write path</td>
-<td><code>.deciduous/graph.json</code> and <code>deciduous sync</code></td>
+<td><code>--port &lt;port&gt;</code></td>
+<td>any of the above</td>
+<td>used only on first setup; asked otherwise, with a free port in 20000-32767 suggested</td>
 </tr>
 </tbody>
 </table>
-<p>The shared server and local stdio MCP do not promise feature parity. Discover the tools on the connection you are using. An imported field appearing in a graph snapshot does not imply that a dedicated shared tool can edit it.</p>
-<h2 id="inspect-a-local-copy-of-the-shared-graph">Inspect a local copy of the shared graph</h2>
-<p>After configuring the CLI remote, you can pull nodes and edges and open the local viewer:</p>
-<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">deciduous remote status
-deciduous remote pull
-deciduous serve
+<p>With no flags and a terminal, <code>remote setup</code> asks the same questions as a menu. Without a terminal and without <code>--local</code> or <code>--url</code>, it stops and prints the four scripted forms.</p>
+<p>The native install, in order:</p>
+<ol>
+<li>
+<p>Downloads <code>deciduous-mcp-&lt;os&gt;-&lt;arch&gt;</code> for the CLI's own version, checks it against the release's <code>checksums.txt</code>, and installs it as <code>~/.config/deciduous/server/bin/deciduous-mcp</code>.</p>
+</li>
+<li>
+<p>Picks the bearer token. If the machine already has one (<code>DECIDUOUS_MCP_TOKEN</code>, else <code>~/.config/deciduous/credentials</code>) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.</p>
+</li>
+<li>
+<p>Runs the executable once with <code>DECIDUOUS_MCP_COMMAND=prepare-database</code>: it connects, creates the database if missing (the role needs <code>CREATEDB</code>), migrates, and exits. A refusal comes back in PostgreSQL's words (<code>role &quot;x&quot; does not exist</code>, <code>password authentication failed</code>). If nothing listens on 5432 at all, setup says so and prints <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> / <code>sudo apt install postgresql</code>.</p>
+</li>
+<li>
+<p>Writes <code>~/.config/deciduous/server/.env</code>, mode 600. This machine's file has these keys (values other than the secrets shown):</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">DECIDUOUS_SERVER_MODE=native
+DECIDUOUS_SERVER_VERSION=1.1.0
+DECIDUOUS_BIND_ADDRESS=127.0.0.1
+DECIDUOUS_PORT=4000
+DECIDUOUS_MCP_TOKEN='&lt;token&gt;'
+DATABASE_URL='&lt;ecto url&gt;'
+DB_SSL=false
+DB_SSL_VERIFY=full
+DB_SSL_CA_FILE=
+POOL_SIZE=10
+DECIDUOUS_PREPARE_DATABASE=true
 </code></pre>
-</div><p>This is a partial local copy. Pull does not download attachment bytes or reproduce all server deletions, and it does not keep running in the background. The local viewer is therefore not proof of the server's current state. Query the HTTP tools for an authoritative team read.</p>
-<p>Treat the copy as inspection data. A local <code>add</code>, <code>link</code>, or status update still writes to SQLite. Do not bulk-push those local changes into a busy workspace to make them visible; the import path can replace newer server fields. Record new shared work through HTTP MCP.</p>
-<h2 id="optional-git-based-collaboration">Optional Git-based collaboration</h2>
-<p>For a team that chooses the local/Git model instead of a shared service, <code>.deciduous/graph.json</code> holds the records exchanged through Git. Local mutations write the record store, and <code>deciduous sync</code> reconciles it with SQLite.</p>
-<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">git pull
-deciduous sync
-deciduous sync --check
-git status --short
+</div></li>
+<li>
+<p>Installs a user service that starts at login and restarts on exit: a LaunchAgent <code>dev.deciduous.server</code> at <code>~/Library/LaunchAgents/dev.deciduous.server.plist</code> on macOS, a systemd user unit <code>deciduous-server.service</code> on Linux. The service definition carries only paths; the token and database URL stay in <code>.env</code>, which the server reads itself through <code>DECIDUOUS_ENV_FILE</code>. Output goes to <code>~/.config/deciduous/server/logs/server.log</code>. On Linux, user services stop at logout unless you run <code>loginctl enable-linger $USER</code>.</p>
+</li>
+<li>
+<p>Waits for <code>/ready</code>, then stores the token in <code>~/.config/deciduous/credentials</code> if it differs from the one there, writes <code>[remote]</code>, and registers with Claude Code as above.</p>
+</li>
+</ol>
+<p>The server binds <code>127.0.0.1</code> because <code>DECIDUOUS_BIND_ADDRESS</code> says so; a server started by hand without that setting listens on every interface. Every start re-runs the migrations (<code>DECIDUOUS_PREPARE_DATABASE=true</code>), and <code>deciduous update</code> in a project that writes to this server replaces an older executable and restarts the service. Docker installs are not upgraded by <code>update</code>.</p>
+<p>A database URL may carry <code>?sslmode=</code>. The CLI maps it onto the server's TLS settings: <code>require</code> → <code>DB_SSL=true DB_SSL_VERIFY=none</code>, <code>verify-ca</code> → <code>ca</code>, <code>verify-full</code> → <code>full</code>. <code>disable</code>, <code>allow</code> and <code>prefer</code> all turn TLS off; <code>prefer</code> does not mean &quot;try TLS&quot; here. Any other query parameter is refused rather than dropped. The meaning of each mode is on <a href="architecture.html#tls-to-postgresql">Architecture</a>.</p>
+<p>The first log lines after a start say what the server is doing. From this machine's <code>server.log</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">[info] Database TLS: off (DB_SSL unset or false)
+[info] Events.Listener: listening on graph_events
+[info] Running DeciduousMcp.Web.Router with Bandit 1.13.1 at 127.0.0.1:4000 (http)
 </code></pre>
-</div><p>Review the graph file before staging it by name. It can contain user prompts, paths, descriptions, and metadata. Keep private records out of a public repository. <code>sync --check</code> uses a nonzero exit status to report pending reconciliation; read its output before treating that as a command failure.</p>
-<p>Local numeric IDs differ between machines. Use change IDs for durable references. The merge driver and reconciliation use record timestamps, so inspect conflicts involving concurrent edits to the same reasoning. Document bytes and local session/command records are not a complete part of this Git exchange.</p>
-<p>Git-based synchronization does not contact the shared Postgres server. Avoid running the two collaboration models as if they were one automatic replication system.</p>
-<h2 id="move-to-the-shared-service">Move to the shared service</h2>
-<p>Keep a backup of the local database and document files, choose a workspace name the whole team will use, and follow <a href="upgrading.html">upgrading and migration</a>. The supplied procedure checks the target and handles content uploads separately from graph metadata.</p>
-<p>After migration, connect agents to the shared HTTP MCP endpoint and replace local-write instructions in their project guidance. Retain the old database as a migration backup. Do not delete it merely because the new workspace has matching node counts.</p>
-</article><nav class="page-turn" aria-label="Previous and next guide"><a href="developer.html"><span>Previous</span>Develop Deciduous</a><a href="history.html"><span>Next</span>Explore design history</a></nav><footer class="article-footer"><a href="../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
-<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#start-a-local-graph">Start a local graph</a></li><li><a href="#feature-boundaries">Feature boundaries</a></li><li><a href="#inspect-a-local-copy-of-the-shared-graph">Inspect a local copy of the shared graph</a></li><li><a href="#optional-git-based-collaboration">Optional Git-based collaboration</a></li><li><a href="#move-to-the-shared-service">Move to the shared service</a></li></ul></nav></aside></div>
+</div><p>To remove a native install (from <code>DEPLOY.md</code>; the database is left in PostgreSQL):</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">launchctl bootout gui/$(id -u)/dev.deciduous.server      # macOS
+rm ~/Library/LaunchAgents/dev.deciduous.server.plist
+systemctl --user disable --now deciduous-server.service  # Linux
+rm -r ~/.config/deciduous/server
+</code></pre>
+</div><h3 id="one-token-per-machine">One token per machine</h3>
+<p>The CLI keeps exactly one stored token, in <code>~/.config/deciduous/credentials</code>, not one per server URL. If you write to a local server for some projects and to a team server for others, only one of them can use the stored token. Two things replace it without asking:</p>
+<ul>
+<li><code>deciduous remote login --url https://deciduous.example.com</code> stores the team token over the local one.</li>
+<li><code>deciduous remote setup --local</code> stores the local server's token over whatever is there, whenever they differ.</li>
+</ul>
+<p>The other server's projects then fail on every write. The write itself still succeeds locally and the command exits 0; the op waits in the log:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Created node 6 (type: observation, title: written with the other server's token) [branch: main]
+Warning: the local write succeeded but the server refused it: the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.
+1 write(s) wait in /home/you/code/my-app/.deciduous/remote-log.jsonl, and every later write will be refused the same way until that is fixed. `deciduous remote status` lists them.
+</code></pre>
+</div><p><code>DECIDUOUS_MCP_TOKEN</code> is read before the stored file, so the working arrangement is: store the token you use most, and export the other one in the environment of the projects that need it (a per-directory env tool such as direnv, or a wrapper script). Once the right token is in place, <code>deciduous remote push</code> sends what waited.</p>
+<p>The ordering also matters the first time. A brand-new local server adopts whatever token the machine already holds (step 2 above), so installing a local server after <code>remote login</code> to a team server gives the local server the team's token. Both then accept the same secret, and rotating the team token later breaks the local server's projects too. Run <code>remote setup --local</code> with <code>DECIDUOUS_MCP_TOKEN</code> unset and the credentials file empty if you want the two kept apart. (This ordering was read from <code>machine_token()</code> in <code>src/server.rs</code>, not run.)</p>
+<p>Claude Code has the same shape of problem: one user-scope <code>deciduous</code> entry. For a second server, add a project-scoped <code>.mcp.json</code> in the repositories that use it; see <a href="clients.html">Connect your agents</a>.</p>
+<h2 id="no-server-at-all">No server at all</h2>
+<p><code>deciduous init</code> will not finish without a server. In a terminal it asks; without one it prints the four <code>remote setup</code> forms and exits 1. To opt out, say so:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ DECIDUOUS_NO_SERVER=1 deciduous init
+   Creating .gitignore (track .deciduous/graph.json, ignore the database)
+   Creating .gitattributes (merge the graph file record by record, fold it in PR diffs)
+   Configured git merge driver for graph records
+   Creating .deciduous/graph.json (run `deciduous sync` to fill it, then commit it)
+   ...
+   Skipped shared graph server (DECIDUOUS_NO_SERVER is set)
+</code></pre>
+</div><p>The ignore rules keep the database private and track two files:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"># .gitignore
+.deciduous/*
+!.deciduous/config.toml
+!.deciduous/graph.json
+
+# .gitattributes
+.deciduous/graph.json merge=deciduous linguist-generated=true
+</code></pre>
+</div><p>and the merge driver goes into <code>.git/config</code>, which git never shares:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">merge.deciduous.name deciduous decision graph record
+merge.deciduous.driver deciduous merge-record %O %A %B
+</code></pre>
+</div><p>Every write goes to the local database and is mirrored into <code>graph.json</code> at once. Each write also says where it went, so nobody mistakes this mode for a shared one:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Note: written to /home/you/code/my-app/.deciduous/deciduous.db only; this project has no shared server. `deciduous remote setup` connects one.
+</code></pre>
+</div><h3 id="two-clones-one-graph">Two clones, one graph</h3>
+<p>This was run with a bare origin and two clones, <code>a</code> and <code>b</code>. In <code>a</code>: add a goal, <code>deciduous sync</code>, commit <code>.gitignore .gitattributes .deciduous/config.toml .deciduous/graph.json</code> by name, push. A fresh clone <code>b</code> sees the goal immediately (the database follows <code>graph.json</code> on the next command), but its <code>.git/config</code> has no merge driver until something registers it. <code>deciduous sync</code> does:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous sync
+Configured git merge driver for the graph file (this clone)
+Synced /home/you/code/b/.deciduous/graph.json (1 nodes, 0 edges, 0 themes, 0 tags on disk)
+  Database and records already agree
+</code></pre>
+</div><p>Then both clones changed the graph at once. <code>a</code> added an option, linked it, and set the goal <code>active</code>; <code>b</code> added a different option, linked it, and replaced the goal's prompt. Both committed; <code>a</code> pushed; <code>b</code> pulled:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ git pull --no-edit origin HEAD
+Merge made by the 'ort' strategy.
+ .deciduous/graph.json | 24 +++++++++++++++++++++++-
+$ deciduous nodes
+ID    CHANGE    TYPE         STATUS     TITLE
+1     94e4b9f7  goal         active     Shared goal
+3     d04a258b  option       pending    Option from A
+2     01ed84dd  option       pending    Option from B
+</code></pre>
+</div><p>No conflict markers, both new options and both edges, and node 1 carries <code>a</code>'s status and <code>b</code>'s prompt. The driver merges record by record, and a record both sides changed field by field, breaking ties on <code>updated_at</code>. Deletes are tombstones, so a delete reaches clones that already had the node. A file that does end up with conflict markers (merged in a clone with no driver registered) is repaired by the next <code>deciduous sync</code>.</p>
+<p>The routine:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">git pull
+deciduous sync          # takes in what the pull brought, registers the driver if missing
+deciduous sync --check  # before pushing: reports what sync would change, writes nothing
+git add .deciduous/graph.json
+</code></pre>
+</div><p><code>sync --help</code> says <code>--check</code> exits 1 when anything is pending. In the one pending case provoked here (the database edited behind the file), it printed <code>Changes would: 1 nodes set back to graph.json's version</code> and exited 0, so read its output rather than relying on the exit status in a hook. Ordinary writes are mirrored into the file as they happen, so in day-to-day use there is rarely anything pending.</p>
+<p>Numeric ids are per clone (<code>b</code> numbered &quot;Option from B&quot; 2, <code>a</code> numbered &quot;Option from A&quot; 2). Refer to nodes across machines by change_id prefix: <code>deciduous link 94e4b9f7 01ed84dd</code>.</p>
+<p>What this mode does not have: agents writing over MCP (there is no HTTP server; <code>deciduous mcp</code> over stdio works against the local database, see <a href="mcp.html">MCP tools</a>), <code>check_activity</code>, live <code>remote watch</code>, and anything faster than a git push. <code>graph.json</code> also carries every prompt and description you write, so treat it like any other committed file.</p>
+<h3 id="moving-to-a-server-later">Moving to a server later</h3>
+<p>Point the project at a server with <code>deciduous remote init https://deciduous.example.com --workspace my-app</code> (or <code>remote setup --url</code>, or <code>--local</code>). The history written before the project had a remote goes up with it. From a clone of the two-clone repository above, pointed at an empty workspace:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote init http://127.0.0.1:4000 --workspace docsref-seed2
+Remote: http://127.0.0.1:4000
+  workspace: docsref-seed2
+  claim: claimed (by this repository's root commit)
+  server holds 0 nodes, 0 edges, 0 documents
+  sent 2 local node(s), 1 edge(s) the server lacked
+</code></pre>
+</div><p><code>deciduous remote status</code> then says In sync. If it ever lists rows as &quot;only here&quot; that no op covers, <code>deciduous remote push --seed</code> sends them; it adds what the server lacks and never changes a row the server already has. <a href="operating.html">Operating a server</a> covers the other push flags. Once a project has a <code>[remote]</code>, <code>deciduous sync</code> is no longer the step that shares anything.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="operating.html"><span>Previous</span>Backups, upgrades, tokens</a><a href="troubleshooting.html"><span>Next</span>Troubleshooting</a></nav><footer class="article-footer"><a href="../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#a-server-on-this-machine">A server on this machine</a></li><li><a href="#no-server-at-all">No server at all</a></li></ul></nav></aside></div>
 <dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
 </body></html>
