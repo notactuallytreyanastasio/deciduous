@@ -7,7 +7,7 @@ Deciduous records why the code is the way it is: what was asked, the approaches 
 ```
  Claude Code, OpenCode, any MCP client          deciduous CLI
    (agents, one per worktree/branch)        (add, link, remote status,
-                │                              pull, watch, serve)
+                │                              pull, watch)
                 │ HTTPS, bearer token                 │ HTTPS, same token
                 │ <base>/mcp                          │ <base>/ops, /export, ...
                 ▼                                     ▼
@@ -22,7 +22,7 @@ Deciduous records why the code is the way it is: what was asked, the approaches 
 
 - **The server** is PostgreSQL plus the deciduous server, normally on a VM behind a TLS proxy. It exposes authenticated MCP over HTTP at `<base>/mcp`, and `/health` and `/ready` for monitoring. One server holds many repositories, each in its own workspace. A running example is the reference install at `https://bobbby.online/deciduous-mcp`, on a Hetzner VM behind Caddy.
 - **Agents** connect to `<base>/mcp` with a bearer token. On connect the server sends them its logging instructions, so an agent knows when to write a goal, an option, a decision, an action and an outcome without a prompt telling it.
-- **The CLI** (`deciduous`) writes to the same server. A project whose `.deciduous/config.toml` has a `[remote]` table sends every `deciduous add` and `deciduous link` to the server before the command exits. The SQLite file in `.deciduous/` is this machine's cache of the server, not a second graph.
+- **The CLI** (`deciduous`) writes to the same server. A project whose `.deciduous/config.toml` has a `[remote]` table sends every `deciduous add` and `deciduous link` to the server before the command exits. The SQLite file in `.deciduous/` is this machine's cache of the server, not a second graph. `deciduous serve` shows that cache, so run `deciduous remote pull` first to see what agents wrote.
 
 One token per server, not per person or per workspace. Anyone holding it can read and write every workspace on that server. Run separate servers for groups that must not see each other's graphs. [Architecture](architecture.md) covers the trust boundary in full.
 

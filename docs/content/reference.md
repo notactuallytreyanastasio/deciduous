@@ -2,7 +2,7 @@
 
 The `deciduous` commands people actually use, grouped by what you are trying to do, with flags as `deciduous <command> --help` prints them in 1.1.0. In a project with a `[remote]`, every write command writes the local database, queues an op in `.deciduous/remote-log.jsonl`, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by `remote pull`. Commands marked **server** need a `[remote]`; commands marked **no server** only matter without one.
 
-Anywhere a command takes a node, it accepts a local number, a change_id prefix, or a server UUID.
+Anywhere a command takes a node, it accepts a local number or a change_id prefix. In a project with a `[remote]` it also accepts a server UUID, once the node is in the local cache.
 
 ## Connect a project to a server
 
@@ -47,9 +47,11 @@ Remote: http://127.0.0.1:4000
 Written to .deciduous/config.toml. The token stays in ~/.config/deciduous/credentials (or DECIDUOUS_MCP_TOKEN), never here.
 ```
 
+The message names `~/.config` even when `XDG_CONFIG_HOME` has moved the file.
+
 ### `remote adopt [ROOT] --url <URL>` (server)
 
-Walk a directory for projects that already have a `.deciduous` and point each at the server. Existing configuration is left alone. `-n, --dry-run` shows what would change.
+Walk a directory for projects that already have a `.deciduous` and point each at the server. Existing configuration is left alone. `-n, --dry-run` shows what would change, but in 1.1.0 it is not free of side effects: it leaves a `.deciduous/deciduous.db` in the directory it walks. That stray `.deciduous` then captures any repository below it that has no `.deciduous` of its own, including a worktree, which writes to that file instead of its main checkout's server. Delete it after a dry run.
 
 ## Check and repair the connection
 
@@ -189,9 +191,9 @@ See [Documents and transcripts](evidence.md).
 
 ## Coordinate agents
 
-`board post --subject <S> [-m <BODY>]` (body from stdin if omitted), `--as <LABEL>` (default `$DECIDUOUS_AGENT_LABEL`), `--reply-to <ID>`, `--branch`, `--json`. `@label` in the subject or body addresses someone.
+`board post -s, --subject <S> [-m <BODY>]` (body from stdin if omitted), `--as <LABEL>` (default `$DECIDUOUS_AGENT_LABEL`), `--reply-to <ID>`, `--branch`, `--json`. `@label` in the subject or body addresses someone.
 
-`board read`: `--unanswered <LABEL>` (what is waiting on you), `--to`, `--from`, `--since <ID>`, `-q, --query`, `--limit` (default 50, max 200), `--json`. `board show <ID>`.
+`board read`: `--unanswered <LABEL>` (what is waiting on you), `--to`, `--from`, `--since <ID>`, `-q, --query`, `--limit` (default 50, max 200), `--json`. `board show <ID> [--json]`.
 
 With a `[remote]` the board lives on the server, per workspace; without one, in the main worktree's database. Messages are not graph nodes and are never exported. See [Many agents, one graph](teams.md).
 
@@ -239,7 +241,10 @@ See [Without a shared server](local.md#no-server-at-all).
 | --- | --- |
 | `DECIDUOUS_MCP_TOKEN` | Token for the server. Read before the stored token. |
 | `XDG_CONFIG_HOME` | Moves `~/.config/deciduous/` (credentials, and this machine's server settings). |
-| `DECIDUOUS_NO_SERVER` | `1` makes `init` and `update` skip the server step. |
+| `DECIDUOUS_NO_SERVER` | Any value other than empty or `0` makes `init` and `update` skip the server step. |
+| `DECIDUOUS_PORT` | Port for this machine's server the first time `remote setup --local` installs it. |
+| `DECIDUOUS_DB_PATH` | Use this SQLite file instead of finding `.deciduous/deciduous.db` by walking up (Claude Desktop, unusual layouts). |
+| `DECIDUOUS_API_DATA_DIR`, `DECIDUOUS_API_TOKEN` | Fallbacks for `serve --api`'s `--data-dir` and `--token`. |
 | `DECIDUOUS_OPS_TIMEOUT` | Seconds per `remote push` request (default 120). |
 | `DECIDUOUS_AGENT_LABEL` | Default `--as` for `board post`. |
 | `DECIDUOUS_QUIET_LOCAL_ONLY` | Silences the "written to ... only; this project has no shared server" note. |

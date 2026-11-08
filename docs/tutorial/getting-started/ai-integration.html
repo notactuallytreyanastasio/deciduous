@@ -123,6 +123,7 @@ deciduous:
 <li><code>POST</code> JSON-RPC to <code>&lt;base&gt;/mcp</code> with <code>Authorization: Bearer &lt;token&gt;</code>.</li>
 <li>Send <code>Accept: application/json, text/event-stream</code>.</li>
 <li>Keep the <code>mcp-session-id</code> header from the <code>initialize</code> response and send it on every later request.</li>
+<li>Send <code>notifications/initialized</code> after <code>initialize</code>, before any other call. Skip it and the next request fails with <code>Session not found</code> and a message saying the session expired or the server restarted, which it did not.</li>
 </ul>
 <p>This is the handshake, done by hand:</p>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">$ curl -s -D - https://deciduous.example.com/mcp \

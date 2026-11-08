@@ -68,7 +68,7 @@ deciduous init
 </thead>
 <tbody>
 <tr>
-<td><code>no token: set DECIDUOUS_MCP_TOKEN or run 'deciduous remote login --url ...' first</code></td>
+<td><code>no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url &lt;base&gt;` first</code></td>
 <td>No token on this machine</td>
 <td>Ask the user to run <code>remote login</code></td>
 </tr>
@@ -140,7 +140,7 @@ Differs: `deciduous remote pull` takes the server's side.
 <p><strong>When a line of work ends:</strong> <code>close_thread</code> writes the closing outcome and can mark the goal completed; then <code>find_orphans</code> and link anything it lists except root goals. Tell the user which nodes you added.</p>
 <p><strong>Another session writing your branch does not block you.</strong> Agents in parallel coordinate on the message board (<code>post_message</code>, <code>read_messages</code>, <code>reply_to</code>), never in a scratch file. <a href="teams.html">Teams</a> has the details.</p>
 <h3 id="writing-from-the-cli-instead">Writing from the CLI instead</h3>
-<p>In a project with <code>[remote]</code>, <code>deciduous add</code> and <code>deciduous link</code> write to the server before the command exits, so a shell is a fallback when MCP is not available. CLI node references are local ids or change_id prefixes, not server UUIDs:</p>
+<p>In a project with <code>[remote]</code>, <code>deciduous add</code> and <code>deciduous link</code> write to the server before the command exits, so a shell is a fallback when MCP is not available. CLI node references are local ids, change_id prefixes, or server UUIDs (a UUID resolves only once the node is in the local cache; run <code>deciduous remote pull</code> first if an MCP tool made it):</p>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">deciduous add goal &quot;Add rate limiting to the public API&quot; -c 90 -p &quot;&lt;the user's message, verbatim&gt;&quot;
 deciduous link b1710c03 2 -r &quot;possible approach&quot;
 </code></pre>

@@ -106,6 +106,7 @@ The server speaks Streamable HTTP. A client must:
 - `POST` JSON-RPC to `<base>/mcp` with `Authorization: Bearer <token>`.
 - Send `Accept: application/json, text/event-stream`.
 - Keep the `mcp-session-id` header from the `initialize` response and send it on every later request.
+- Send `notifications/initialized` after `initialize`, before any other call. Skip it and the next request fails with `Session not found` and a message saying the session expired or the server restarted, which it did not.
 
 This is the handshake, done by hand:
 

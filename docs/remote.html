@@ -47,13 +47,13 @@ Rerun this command to rebuild and upgrade. Your settings and database volume are
 </code></pre>
 </div><p><code>setup.sh</code> returns only once <code>/ready</code> reports that the database is reachable and migrated. It chooses a random port between 20000 and 32767 so that it never takes a port the machine already uses. To choose the port yourself, set <code>DECIDUOUS_PORT=24555 ./scripts/setup.sh</code> on the first run.</p>
 <p>Everything that defines the install is in <code>.env</code>, which is created with mode 0600:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>COMPOSE_PROJECT_NAME=deciduous-mcp
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>COMPOSE_PROJECT_NAME=deciduous
 DECIDUOUS_SERVER_MODE=docker
 DECIDUOUS_DATABASE_MODE=local
 DECIDUOUS_BIND_ADDRESS=127.0.0.1
 DECIDUOUS_PORT=24555
-DECIDUOUS_MCP_TOKEN=&lt;64 hex digits&gt;
-POSTGRES_PASSWORD=&lt;64 hex digits&gt;
+DECIDUOUS_MCP_TOKEN='&lt;64 hex digits&gt;'
+POSTGRES_PASSWORD='&lt;64 hex digits&gt;'
 DATABASE_URL='ecto://deciduous:&lt;password&gt;@db:5432/deciduous'
 DB_SSL=false
 DB_SSL_VERIFY=full
@@ -74,7 +74,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:24555/mcp      # 401: 
 	}
 }
 </code></pre>
-</div><p><code>flush_interval -1</code> is required. MCP responses are streamed (Server-Sent Events). If the proxy buffers them, the client waits for a response the server has already written, and agents appear to hang. Any proxy you use needs the same setting, and it must also pass WebSocket upgrades through, because <code>deciduous remote watch</code> streams events over <code>/events</code>.</p>
+</div><p>What the proxy must do is pass WebSocket upgrades through, because <code>deciduous remote watch</code> streams events over <code>/events</code>. Caddy does this by default. <code>flush_interval -1</code> is optional in 1.1.0. Earlier versions of this page said it was required for MCP streaming, but the 1.1.0 server does not stream: <code>POST /mcp</code> returns plain JSON with a <code>Content-Length</code>, and <code>GET /mcp</code> is refused with 405 (<code>this server does not offer a server-to-client stream</code>). Behind a Caddy without the setting, <code>initialize</code>, <code>add_node</code> and <code>remote watch</code> all worked. It is kept here because it costs nothing and protects you if a later server streams.</p>
 <p>To share a domain with something else, serve the server under a path, as the reference install does. <code>handle_path</code> strips the prefix, so the server still sees <code>/mcp</code> at its own root:</p>
 <div class="code-block"><div class="code-toolbar"><span>caddy</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-caddy">example.com {
 	handle_path /deciduous-mcp/* {
@@ -82,14 +82,18 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:24555/mcp      # 401: 
 			flush_interval -1
 		}
 	}
+	handle {
+		respond 404
+	}
 }
 </code></pre>
-</div><p>If Caddy runs in a container, join it to the bundle's Compose network and proxy to <code>server:4000</code>. Port 4000 is the port inside the network; <code>DECIDUOUS_PORT</code> applies only on the host. The path-prefix form was tested exactly this way: health, readiness, CLI writes, an MCP <code>add_node</code>, and <code>remote watch</code> all went through Caddy.</p>
+</div><p>Keep the final <code>handle</code> if nothing else is served on that domain. Without it, Caddy answers every other path with an empty 200. A developer who leaves the prefix off the URL then gets <code>the server's response was not a graph: Failed to read JSON: EOF while parsing</code> instead of the CLI's clear <code>no such endpoint (404). Is the URL right, including any path prefix?</code>. Both behaviours were tested. If the domain already serves something else, that site answers instead, and the error depends on what it returns.</p>
+<p>If Caddy runs in a container, join it to the bundle's Compose network and proxy to <code>server:4000</code>. Port 4000 is the port inside the network; <code>DECIDUOUS_PORT</code> applies only on the host. The path-prefix form was tested exactly this way: health, readiness, CLI writes, an MCP <code>add_node</code>, and <code>remote watch</code> all went through Caddy.</p>
 <p>From your laptop:</p>
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/health  # 200
 curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/mcp     # 401
 </code></pre>
-</div><p><code>/health</code> is public on purpose, so that proxies and uptime checks can use it without a token. Every other route requires the token.</p>
+</div><p><code>/health</code> and <code>/ready</code> are public on purpose, so that proxies and uptime checks can use them without a token. Every other route requires the token.</p>
 <h2 id="4-hand-out-the-url-and-the-token">4. Hand out the URL and the token</h2>
 <p>Each person needs two things:</p>
 <ul>

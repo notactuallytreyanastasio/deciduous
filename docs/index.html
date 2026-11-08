@@ -307,6 +307,7 @@
         <div class="session-content">
           <div class="session-step" style="--delay: 0s">
             <div class="step-content code">deciduous add goal "Add rate limiting to the public API" -c 90 -p "Add rate limiting to the public API. Per-token, 100 req/min, 429 with Retry-After."</div>
+            <div class="step-output">Warning: Prompt is only 82 chars. This looks like a summary, not a full prompt.</div>
             <div class="step-output">Created node 1 (type: goal, title: Add rate limiting to the public API) [confidence: 90%] [prompt: 82 chars] [branch: main]</div>
           </div>
           <div class="session-step" style="--delay: 1.2s">
@@ -453,8 +454,7 @@ deciduous link 5 6 -r "result"</div>
             over another is a judgement about prose, and that pass belongs to an agent reading the
             imported graph. Subagent transcripts are counted and skipped. Only Claude Code's format is
             read. The web viewer does not yet show evidence kind or file hashes; <code>show</code> does.
-            <a href="transcripts.md">docs/transcripts.md</a> has the derivation table and a
-            <code>SessionEnd</code> hook that imports at the end of every session.
+            <a href="tutorial/evidence.html">Documents and transcripts</a> has what an import makes, from a real run.
           </p>
         </div>
 
@@ -463,49 +463,53 @@ deciduous link 5 6 -r "result"</div>
         <!-- ============================================================ -->
         <div class="feature-section" id="where">
           <span class="feature-badge popular">Since 1.0.11</span>
-          <h2>Where the Graph Lives: <code>init</code> Asks</h2>
+          <h2>Where the Graph Lives: a Server Your Team Runs</h2>
           <p class="feature-desc">
-            Agents write through an HTTP MCP server, so a project with no server is a project whose
-            agents have nowhere to write. <code>deciduous init</code> writes the slash commands, skills
-            and a <code>CLAUDE.md</code> section, and then, if <code>.deciduous/config.toml</code> has no
-            <code>[remote]</code>, asks where the graph should live:
+            The graph lives in PostgreSQL behind the deciduous server, on a machine your team runs, behind
+            HTTPS. One server holds every repository's graph, one workspace each. Whoever runs it hands out
+            a base URL and a token; everyone else joins with three commands, and their agents write to the
+            same workspace through MCP:
           </p>
           <div class="quickstart-terminal">
             <div class="session-header">
               <span class="session-dot red"></span>
               <span class="session-dot yellow"></span>
               <span class="session-dot green"></span>
-              <span class="session-title">deciduous init &mdash; the server step</span>
+              <span class="session-title">joining a team server</span>
             </div>
             <div class="quickstart-content">
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">pbpaste | deciduous remote login --url https://deciduous.example.com</span></div>
+              <div class="qs-output">Token: stored in /Users/you/.config/deciduous/credentials</div>
+              <div class="qs-output">&nbsp;&nbsp;mode 0600, outside every repository</div>
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous remote setup --url https://deciduous.example.com</span></div>
+              <div class="qs-output">&nbsp;&nbsp;&nbsp;Wrote .deciduous/config.toml [remote] url = https://deciduous.example.com</div>
+              <div class="qs-output">&nbsp;&nbsp;&nbsp;Connected https://deciduous.example.com holds 0 nodes, 0 edges in workspace my-app</div>
               <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous init</span></div>
-              <div class="qs-output">&nbsp;&nbsp;&nbsp;This project has no server yet ([remote] in .deciduous/config.toml).</div>
-              <div class="qs-output">&nbsp;</div>
-              <div class="qs-output">Where should this project's graph live?</div>
-              <div class="qs-output">&nbsp;</div>
-              <div class="qs-output">&nbsp;&nbsp;1) This machine: the deciduous server as a background service, using PostgreSQL on</div>
-              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;localhost:5432 as you (answering now)</div>
-              <div class="qs-output">&nbsp;&nbsp;2) This machine: the server as a background service, using a PostgreSQL you name</div>
-              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(any host, port, user, password)</div>
-              <div class="qs-output">&nbsp;&nbsp;3) This machine, in Docker: a new PostgreSQL and the server in containers</div>
-              <div class="qs-output">&nbsp;&nbsp;4) A server someone else runs: you need its URL and token</div>
-              <div class="qs-output">&nbsp;</div>
-              <div class="qs-output">Choose 1-4 [1]:</div>
+              <div class="qs-output">&nbsp;&nbsp;&nbsp;Connected https://deciduous.example.com holds 0 nodes, 0 edges in workspace my-app</div>
             </div>
           </div>
           <p class="feature-desc" style="margin-top: 14px;">
-            Choice 1 is the default: the release's server executable (one file with Erlang and Elixir
-            inside, checked against the release's checksums) installed under
-            <code>~/.config/deciduous/server/</code> as a user service, a launchd LaunchAgent on macOS or a
-            systemd user unit on Linux, listening on 127.0.0.1 only, against the PostgreSQL already on
-            <code>localhost:5432</code>. It creates its database and migrates before it listens. Every
-            later project on the machine finds it in about a second. If nothing answers on 5432 the menu
-            says so and names the package to install. Then it stores the token in
-            <code>~/.config/deciduous/credentials</code> (mode 0600), writes <code>[remote]</code>, and
-            registers the server with Claude Code at user scope. In a script there is no terminal, so
-            <code>deciduous remote setup --local</code>, <code>--database-url</code>,
-            <code>--docker-postgres</code> or <code>--url</code> gives the answer;
-            <code>DECIDUOUS_NO_SERVER=1</code> skips the step for tests.
+            Running the server is the release's Docker bundle on a VM: <code>./scripts/setup.sh</code> builds
+            the server, starts PostgreSQL 17 beside it on <code>127.0.0.1</code>, and waits until the database
+            answers; a proxy such as Caddy adds TLS. The token is the only access control: anyone holding it
+            reads and writes every workspace on that server.
+            <a href="tutorial/run-a-server.html">Run a server</a> has every step, run against v1.1.0.
+          </p>
+          <p class="feature-desc">
+            <strong>Two things to check when you join.</strong> <code>remote setup</code> registers the server
+            with Claude Code only when no <code>deciduous</code> server is registered yet, and leaves an existing
+            one alone even when it points elsewhere; <code>claude mcp get deciduous</code> should show your base
+            URL followed by <code>/mcp</code>. And a machine stores one token, not one per server.
+            <a href="tutorial/quickstart.html">The quickstart</a> walks through both.
+          </p>
+          <p class="feature-desc">
+            <strong>Without a team server.</strong> If <code>.deciduous/config.toml</code> has no
+            <code>[remote]</code>, <code>deciduous init</code> asks where the graph should live, and its default
+            (choice 1, or just pressing Enter) installs the same server on your own machine, as a launchd or
+            systemd user service against the PostgreSQL on <code>localhost:5432</code>. Type 4 to join a server
+            someone else runs. <code>DECIDUOUS_NO_SERVER=1</code> skips servers entirely and keeps the graph in a
+            git-tracked <code>.deciduous/graph.json</code>.
+            <a href="tutorial/local.html">Without a shared server</a> covers both.
           </p>
           <p class="feature-desc">
             <strong>What the local files are for now.</strong> <code>.deciduous/deciduous.db</code> is a
@@ -518,7 +522,8 @@ deciduous link 5 6 -r "result"</div>
             <code>deciduous sync</code> reconciles it with the local database in both directions, and the
             <code>deciduous merge-record</code> git merge driver merges concurrent edits record by record.
             With a <code>[remote]</code> the graph lives on the server and <code>update</code> leaves
-            <code>graph.json</code>, <code>.gitignore</code> and <code>.gitattributes</code> alone.
+            <code>graph.json</code>, <code>.gitignore</code> and <code>.gitattributes</code> alone; <code>init</code>
+            1.1.0 still creates them, so do not commit them in a project with a server.
           </p>
           <div class="buttons">
             <a href="remote.html" class="btn btn-primary">The shared graph server</a>
@@ -541,7 +546,7 @@ deciduous link 5 6 -r "result"</div>
           </p>
           <p class="feature-desc">
             <strong>The shared server</strong> (<code>deciduous_mcp/</code>, Elixir and PostgreSQL) is
-            the one <code>deciduous init</code> registers with Claude Code: 21 tools over HTTP, every
+            the one your team runs, which <code>remote setup</code> registers with Claude Code when none is registered yet: 21 tools over HTTP, every
             call scoped by <code>workspace</code>, every write carrying <code>branch</code>. It has what
             several agents need and the local one does not: <code>capture_conversation_turn</code> (one
             step in one call), <code>ask_graph</code>, <code>check_activity</code>,
@@ -554,11 +559,11 @@ deciduous link 5 6 -r "result"</div>
               <span class="session-dot red"></span>
               <span class="session-dot yellow"></span>
               <span class="session-dot green"></span>
-              <span class="session-title">what init registers (and the line to run by hand)</span>
+              <span class="session-title">the registration, by hand</span>
             </div>
             <div class="quickstart-content">
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">claude mcp add --scope user --transport http deciduous http://127.0.0.1:&lt;port&gt;/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</span></div>
-              <div class="qs-success">&nbsp;&nbsp;&nbsp;Registered Claude Code: deciduous MCP at http://127.0.0.1:&lt;port&gt;/mcp (user scope; restart Claude Code)</div>
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">claude mcp add --scope user --transport http deciduous https://deciduous.example.com/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</span></div>
+              <div class="qs-output">Added HTTP MCP server deciduous with URL: https://deciduous.example.com/mcp to user config</div>
             </div>
           </div>
           <div style="margin-top: 12px; font-size: 0.9rem;">
@@ -667,7 +672,7 @@ deciduous link 5 6 -r "result"</div>
               <div class="qs-output">Summary:</div>
               <div class="qs-output">&nbsp;&nbsp;Nodes: 9 | Edges: 9</div>
               <div class="qs-output">&nbsp;&nbsp;Types:&nbsp;&nbsp;goal(1) option(2) decision(2) action(1) outcome(1) observation(1) revisit(1)</div>
-              <div class="qs-output">&nbsp;&nbsp;Status: completed(2) superseded(1) pending(6)</div>
+              <div class="qs-output">&nbsp;&nbsp;Status: superseded(1) pending(8)</div>
               <div class="qs-output">&nbsp;&nbsp;Confidence: high(5) medium(2) low(0) unset(2)</div>
               <div class="qs-output">&nbsp;</div>
               <div class="qs-output">Active Goals:</div>
@@ -675,9 +680,9 @@ deciduous link 5 6 -r "result"</div>
               <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #2 [option] Token bucket in Redis (pending) 70%</div>
               <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #3 [option] Fixed window counter in Postgres (pending) 60%</div>
               <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #4 [decision] Token bucket in Redis, over the fixed window (superseded) 85%</div>
-              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #5 [action] Implement RateLimiter middleware (completed) 85%</div>
+              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #5 [action] Implement RateLimiter middleware (pending) 85%</div>
               <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #7 [observation] Redis cluster failover drops bucket state; limits reset on every failover (pending)</div>
-              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #6 [outcome] cargo test: 41 passed, 0 failed (completed) 95%</div>
+              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #6 [outcome] cargo test: 41 passed, 0 failed (pending) 95%</div>
               <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #8 [revisit] Reconsidering: Token bucket in Redis, over the fixed window (pending)</div>
               <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #9 [decision] Fixed window counter in Postgres, 60s windows (pending) 80%</div>
               <div class="qs-output">&nbsp;</div>
@@ -820,11 +825,12 @@ deciduous link 5 6 -r "result"</div>
           says which one is on your PATH, and <code>which -a deciduous</code> says whether there is a second.
         </p>
         <p class="install-alt">
-          If the graph will live on this machine (the default), you need a PostgreSQL on
-          <code>localhost:5432</code>: the one you have, or <code>brew install postgresql@17 &amp;&amp; brew
-          services start postgresql@17</code>, or your distribution's package. Docker is optional; it is
-          choice 3 in the menu. Then <code>cd your-project &amp;&amp; deciduous init</code>, answer where the
-          graph lives, commit the project files it wrote, and restart Claude Code. Upgrading later is
+          To join your team's server, get its URL and token from whoever runs it, then in your project:
+          <code>deciduous remote login --url &lt;url&gt;</code> (token on stdin),
+          <code>deciduous remote setup --url &lt;url&gt;</code>, <code>deciduous init</code>, commit the files it
+          wrote, and restart Claude Code (<a href="tutorial/quickstart.html">the quickstart</a>). With no team
+          server, <code>deciduous init</code> offers to run one on this machine against the PostgreSQL on
+          <code>localhost:5432</code> (<a href="tutorial/local.html">Without a shared server</a>). Upgrading later is
           <code>brew upgrade deciduous</code> or the same <code>cargo install</code> line, then
           <code>deciduous update</code> in each project (<code>deciduous update --all ~/code</code> for many);
           since 1.0.12 <code>update</code> keeps every section and command file you edited.
@@ -903,7 +909,7 @@ deciduous link 5 6 -r "result"</div>
             <div class="quickstart-info">
               <h3>Import the transcript</h3>
               <p>
-                At the end of a session, or from a <code>SessionEnd</code> hook,
+                At the end of a session,
                 <code>deciduous transcript import &lt;session-id&gt;</code> adds what the agent did not
                 log, with evidence on every node. <code>deciduous transcript list</code> says which
                 sessions are <code>new</code>. Then <code>/recover</code> at the start of the next one.
@@ -956,7 +962,7 @@ deciduous link 5 6 -r "result"</div>
       <!-- ============================================================ -->
       <section>
         <h2>What <code>init</code> Installs</h2>
-        <p>Slash commands (<code>/recover</code>) and skills, for Claude Code. The CLI itself is documented in <a href="guide.html">the guide</a>.</p>
+        <p>Slash commands (<code>/recover</code>) and skills, for Claude Code. The CLI itself is documented in <a href="tutorial/reference.html">the CLI reference</a>.</p>
 
         <table class="cmd-table">
           <thead>
@@ -1035,7 +1041,7 @@ deciduous link 5 6 -r "result"</div>
       <!-- Tutorial + Story -->
       <section>
         <div class="story-link" style="margin-bottom: 15px;">
-          <p>New to deciduous? The tutorial walks through building a graph from scratch. <a href="tutorial/introduction/what-is-deciduous.html">Start the tutorial &rarr;</a> The <a href="guide.html">guide</a> is the CLI walkthrough, every command checked against 1.1.0.</p>
+          <p>New to deciduous? <a href="tutorial/quickstart.html">Join a server &rarr;</a> takes you from install to your first node on your team's server, every command checked against 1.1.0. The <a href="tutorial/reference.html">CLI reference</a> lists every command by task.</p>
         </div>
         <div class="story-link">
           <p>Deciduous was built with itself. The exported graph (2026-09-04) holds 1,465 nodes of its own history, from a December 2025 audio-forensics side project to the shared server and the transcript import. <a href="story.html">Read the story &rarr;</a></p>

@@ -100,7 +100,7 @@ Created node 37 (type: decision, ...) [commit: 4c3ba126...] [branch: main] [date
 </code></pre>
 </div><p>It reads the local cache; <code>remote pull</code> first. <code>-t</code> filters by type, <code>-l</code> limits to the most recent N, <code>--json</code> for scripts.</p>
 <h2 id="narratives">Narratives</h2>
-<p>A narrative is the prose version: how one part of the system got the way it is, with its pivots. <code>deciduous narratives init</code> writes <code>.deciduous/narratives.md</code> with one section per active goal to fill in:</p>
+<p>A narrative is the prose version: how one part of the system got the way it is, with its pivots. <code>deciduous narratives init</code> writes <code>.deciduous/narratives.md</code> with one section per goal that is not superseded or abandoned (pending and completed goals included) to fill in:</p>
 <div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous narratives init
 Created .../.deciduous/narratives.md with 2 goal section(s)
 $ deciduous narratives show
