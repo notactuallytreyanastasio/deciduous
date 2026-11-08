@@ -1,43 +1,37 @@
-# Shared memory for a team of agents
+# One decision graph for every agent on the team
 
-Give each coding agent its own branch and connect them to the same Deciduous workspace. They can read the decisions already made, record what they learn, and credit the findings they reuse.
+Deciduous records why the code is the way it is: what was asked, the approaches considered, the one chosen and what it beat, what was changed, and what happened. The graph lives on a server your team runs. Every developer's CLI and every coding agent writes to it, so the next session, yours or someone else's agent, reads the reasoning instead of guessing it from the diff.
 
-The shared service stores the graph in Postgres. Agents reach it over authenticated HTTP through MCP. The database stays behind the service; agents do not need a database password.
+## What runs where
 
-## Start with a working team
+```
+ Claude Code, OpenCode, any MCP client          deciduous CLI
+   (agents, one per worktree/branch)        (add, link, remote status,
+                │                              pull, watch, serve)
+                │ HTTPS, bearer token                 │ HTTPS, same token
+                │ <base>/mcp                          │ <base>/ops, /export, ...
+                ▼                                     ▼
+        ┌──────────────────────────────────────────────────┐
+        │  deciduous server (deciduous-mcp, Elixir)        │
+        │  one workspace per repository                    │
+        └──────────────────────────────────────────────────┘
+                                │
+                                ▼
+                     PostgreSQL (the graph)
+```
 
-1. [Run Postgres and the shared service on your machine](local-postgres.md). The guide covers persistent storage, credentials, health checks, and a first connection.
-2. [Connect your agent clients](clients.md) to the same workspace. Give each agent a distinct branch name.
-3. [Run a two-agent handoff](teams.md). One agent records a decision; the other reads it and links the work that uses it.
+- **The server** is PostgreSQL plus the deciduous server, normally on a VM behind a TLS proxy. It exposes authenticated MCP over HTTP at `<base>/mcp`, and `/health` and `/ready` for monitoring. One server holds many repositories, each in its own workspace. A running example is the reference install at `https://bobbby.online/deciduous-mcp`, on a Hetzner VM behind Caddy.
+- **Agents** connect to `<base>/mcp` with a bearer token. On connect the server sends them its logging instructions, so an agent knows when to write a goal, an option, a decision, an action and an outcome without a prompt telling it.
+- **The CLI** (`deciduous`) writes to the same server. A project whose `.deciduous/config.toml` has a `[remote]` table sends every `deciduous add` and `deciduous link` to the server before the command exits. The SQLite file in `.deciduous/` is this machine's cache of the server, not a second graph.
 
-Already have a server? [The quickstart](quickstart.md) begins with its address and an access token. Already have local graphs? [Upgrade and import them](upgrading.md) with backups and a preview before changing anything.
+One token per server, not per person or per workspace. Anyone holding it can read and write every workspace on that server. Run separate servers for groups that must not see each other's graphs. [Architecture](architecture.md) covers the trust boundary in full.
 
-## Three separate responsibilities
+## Where to go next
 
-| Component | What it owns | What you configure |
-| --- | --- | --- |
-| Your agents | Code in separate worktrees, decisions and evidence | HTTP MCP endpoint, bearer token, workspace, branch |
-| Deciduous service | Graph tools, project routing, writes and live events | Service token, database connection, HTTP listener |
-| Postgres | Shared graph and document storage | Database role, persistent volume, backups |
+- **Your team already has a server:** [Quickstart](quickstart.md). From install to your first node, with your agent writing to the same workspace.
+- **You are the one who runs it:** [Run a server](run-a-server.md), a VM with the Docker bundle and a TLS proxy, or the server binary against a managed PostgreSQL.
+- **You are an AI agent told to set up or use deciduous:** [For agents](for-agents.md).
+- **A client other than Claude Code, or a per-project registration:** [Clients](clients.md).
+- **No server, one machine, or offline:** [Local](local.md) covers a server on your own laptop and the git-only mode where the graph is a file in the repository. Both work; neither is how a team shares a graph.
 
-One service can hold several workspaces. Use the same explicit workspace name across clones and machines. Workspaces organize the graph; the shared bearer token is a service-wide trust boundary, not a per-workspace permission system. Run separate services for teams that should not read each other's data.
-
-## Read before writing
-
-An agent starting work should check recent activity and query the relevant part of the graph. It records the goal, options and chosen decision before implementation, then attaches actions and outcomes as the work proceeds. A later agent can follow those connections without the original chat transcript.
-
-[Working as a team](teams.md) covers branch identities and reused findings. [The decision workflow](workflow.md) covers the graph itself. [Recovering context](recovery.md) shows how a new session picks up the same reasoning.
-
-## Know which store you are using
-
-In Deciduous 1.0, the HTTP MCP server writes to Postgres. Ordinary commands such as `deciduous add`, `deciduous link`, and the local stdio `deciduous mcp` still use SQLite. Running `deciduous remote init` does not redirect those commands to Postgres.
-
-Use the HTTP MCP connection for shared agent work. The Rust CLI's `remote` commands configure the connection, compare stores, transfer graph data, and watch events. [The reference](reference.md) spells out which commands contact the server.
-
-You can keep using [SQLite for solo or offline work](solo.md). Treat moving between the two stores as an explicit operation. A pull changes local data; a push can overwrite corresponding remote records. The [upgrade guide](upgrading.md) explains the checks and limitations.
-
-## Take the same setup to a remote host
-
-[Remote hosting](remote-postgres.md) is the short version: put the service behind HTTPS, keep Postgres on a private network, distribute the service token through a secret store, and test a restore from backup. Your agents then use the new service address with the same workspace conventions.
-
-The [architecture guide](architecture.md) documents the trust boundaries and the current TLS limitations of the database client. [Troubleshooting](troubleshooting.md) covers connection failures, missing records, locks, and split local/remote histories.
+Once connected: [the workflow](workflow.md) for how a piece of work becomes nodes, [teams](teams.md) for many agents on one workspace, and [recovery](recovery.md) for picking up where the last session stopped.

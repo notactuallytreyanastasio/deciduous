@@ -2,11 +2,11 @@
 <html lang="en" data-docs-generated="true">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Shared graph reference · Deciduous docs</title>
-<meta name="description" content="Use the HTTP MCP server for an agent team&#39;s day-to-day graph reads and writes. The server stores the shared graph in Postgres. The Rust CLI manages local tools and explicit transfers between that serv">
+<title>CLI reference · Deciduous docs</title>
+<meta name="description" content="The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project with a [remote], every write command writes the loca">
 <link rel="canonical" href="https://deciduous.dev/tutorial/reference.html">
 <meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
-<meta property="og:title" content="Shared graph reference · Deciduous docs"><meta property="og:description" content="Use the HTTP MCP server for an agent team&#39;s day-to-day graph reads and writes. The server stores the shared graph in Postgres. The Rust CLI manages local tools and explicit transfers between that serv"><meta property="og:url" content="https://deciduous.dev/tutorial/reference.html">
+<meta property="og:title" content="CLI reference · Deciduous docs"><meta property="og:description" content="The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project with a [remote], every write command writes the loca"><meta property="og:url" content="https://deciduous.dev/tutorial/reference.html">
 <meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
 <meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,353 +16,474 @@
 <body data-search-index="../search-index.json">
 <a class="skip-link" href="#content">Skip to content</a>
 <header class="docs-header"><a class="brand" href="../../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
-<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="../index.html">Shared memory</a></li><li><a href="../quickstart.html">Quickstart</a></li><li><a href="../local-postgres.html">Local Postgres setup</a></li><li><a href="../clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="../teams.html">Two agents, one graph</a></li><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="../remote-postgres.html">Remote hosting</a></li><li><a href="../upgrading.html">Upgrade and migrate</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html">Graph concepts</a></li><li><a href="../reference.html" aria-current="page">CLI and API</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop Deciduous</a></li><li><a href="../solo.html">Solo and offline use</a></li><li><a href="../history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
-<main id="content"><div class="article-meta"><span>Reference</span><a href="../../content/reference.md">Read as Markdown</a></div><article><h1 id="shared-graph-reference">Shared graph reference</h1>
-<p>Use the HTTP MCP server for an agent team's day-to-day graph reads and writes. The server stores the shared graph in Postgres. The Rust CLI manages local tools and explicit transfers between that server and a local SQLite database.</p>
-<p>This reference describes Deciduous 1.0. Start with <a href="../local-postgres.html">local Postgres setup</a>, then <a href="../clients.html">connect your agents</a>. The <a href="../mcp.html">MCP guide</a> explains the transport and tool differences.</p>
-<h2 id="which-command-reaches-which-database">Which command reaches which database</h2>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get started</h2><ul><li><a href="../index.html">What deciduous is</a></li><li><a href="../quickstart.html">Join a server</a></li><li><a href="../run-a-server.html">Run a server</a></li><li><a href="../clients.html">Connect your agents</a></li><li><a href="../for-agents.html">For agents</a></li></ul></section><section class="nav-group"><h2>Work in the graph</h2><ul><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../teams.html">Many agents, one graph</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html">Documents and transcripts</a></li><li><a href="../history.html">Design history</a></li></ul></section><section class="nav-group"><h2>Operate</h2><ul><li><a href="../operating.html">Backups, upgrades, tokens</a></li><li><a href="../local.html">Without a shared server</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html">Graph concepts</a></li><li><a href="../reference.html" aria-current="page">CLI reference</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop deciduous</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Reference</span><a href="../../content/reference.md">Read as Markdown</a></div><article><h1 id="cli-reference">CLI reference</h1>
+<p>The <code>deciduous</code> commands people actually use, grouped by what you are trying to do, with flags as <code>deciduous &lt;command&gt; --help</code> prints them in 1.1.0. In a project with a <code>[remote]</code>, every write command writes the local database, queues an op in <code>.deciduous/remote-log.jsonl</code>, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by <code>remote pull</code>. Commands marked <strong>server</strong> need a <code>[remote]</code>; commands marked <strong>no server</strong> only matter without one.</p>
+<p>Anywhere a command takes a node, it accepts a local number, a change_id prefix, or a server UUID.</p>
+<h2 id="connect-a-project-to-a-server">Connect a project to a server</h2>
+<h3 id="remote-setup-server"><code>remote setup</code> (server)</h3>
+<p>Connect this project to a shared graph server, step by step. In a terminal it asks; flags answer for scripts. Ends by writing <code>[remote]</code>, storing the token if needed, and registering Claude Code (only if Claude Code has no <code>deciduous</code> server yet).</p>
 <table>
 <thead>
 <tr>
-<th>Interface</th>
-<th>Storage it reads or writes</th>
-<th>Intended use</th>
+<th>Flag</th>
+<th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>HTTP MCP at <code>/mcp</code></td>
-<td>Shared Postgres</td>
-<td>Team reasoning, cross-branch reads, borrowing, handoffs</td>
+<td><code>--url &lt;URL&gt;</code></td>
+<td>Use the server at this URL (token from <code>DECIDUOUS_MCP_TOKEN</code> or the stored one). The usual choice.</td>
 </tr>
 <tr>
-<td><code>deciduous remote status</code>, <code>push</code>, <code>pull</code>, <code>watch</code></td>
-<td>The configured HTTP server; some commands also use local SQLite</td>
-<td>Check connectivity, migrate history, refresh a local graph, watch writes</td>
+<td><code>--local</code></td>
+<td>Use this machine's server; set it up if there is none. See <a href="../local.html">Without a shared server</a>.</td>
 </tr>
 <tr>
-<td><code>deciduous add</code>, <code>link</code>, <code>nodes</code>, <code>show</code>, <code>status</code>, <code>graph</code></td>
-<td>Local SQLite</td>
-<td>Offline work or inspection of a pulled copy</td>
+<td><code>--port &lt;PORT&gt;</code></td>
+<td>Port for this machine's server, first setup only.</td>
 </tr>
 <tr>
-<td><code>deciduous mcp</code></td>
-<td>Local SQLite over stdio</td>
-<td>Optional local-only MCP integration</td>
+<td><code>--database-url &lt;URL&gt;</code></td>
+<td>PostgreSQL for this machine's server; <code>?sslmode=require|verify-ca|verify-full</code> for TLS. The environment's <code>DATABASE_URL</code> is never used unless passed here.</td>
 </tr>
 <tr>
-<td><code>deciduous serve</code></td>
-<td>Local SQLite</td>
-<td>Local graph viewer</td>
+<td><code>--docker</code></td>
+<td>Run this machine's server in Docker.</td>
 </tr>
 <tr>
-<td><code>deciduous serve --api</code></td>
-<td>Per-graph SQLite stores</td>
-<td>Separate Rust HTTP API; not the Postgres service</td>
-</tr>
-<tr>
-<td><code>deciduous sync</code></td>
-<td>Local SQLite and <code>.deciduous/graph.json</code></td>
-<td>Optional Git-based sharing, not remote Postgres synchronization</td>
+<td><code>--docker-postgres</code></td>
+<td>Also run a new PostgreSQL in Docker (implies <code>--docker</code>).</td>
 </tr>
 </tbody>
 </table>
-<p>Configuring <code>[remote]</code> does not reroute ordinary CLI commands or <code>deciduous mcp</code>. A successful local <code>deciduous add</code> is not evidence that your teammates can see the node.</p>
-<h2 id="setup-commands-in-newer-source-builds">Setup commands in newer source builds</h2>
-<p>The onboarding change in the current source checkout adds <code>deciduous setup</code>. It is not included in the published <code>v1.0.0</code> binary. Check whether your build supports it with <code>deciduous setup --help</code>.</p>
-<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">deciduous setup
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ DECIDUOUS_MCP_TOKEN=&lt;token&gt; deciduous remote setup --url https://deciduous.example.com
 </code></pre>
-</div><p>With no flags, this prints the shared Postgres setup and upgrade guide to stdout. It does not open a local graph, write configuration, generate credentials, or start a service.</p>
-<p>To generate a standalone database project instead:</p>
-<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">deciduous setup --postgres --output ./deciduous-postgres --port 55432
+</div><p>A token given only through the environment is checked but not stored.</p>
+<h3 id="remote-login-remote-logout"><code>remote login</code> / <code>remote logout</code></h3>
+<p><code>login [--url &lt;URL&gt;]</code> reads a token from stdin and stores it in <code>~/.config/deciduous/credentials</code> (mode 0600; <code>$XDG_CONFIG_HOME/deciduous/credentials</code> if that is set). With <code>--url</code> it checks the token against that server first and stores nothing if the server refuses it. <code>logout</code> deletes the stored token. There is one stored token per machine; see <a href="../local.html#one-token-per-machine">One token per machine</a>.</p>
+<h3 id="remote-init-server"><code>remote init &lt;URL&gt;</code> (server)</h3>
+<p>Point this project at a server without the wizard: checks <code>/health</code> and the token, claims the workspace for this repository, sends any local history the server lacks, writes <code>[remote]</code>. Does not touch Claude Code.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--workspace &lt;NAME&gt;</code></td>
+<td>Workspace name. Defaults to the git repository's root directory name. Naming an existing workspace explicitly lets this repository share it.</td>
+</tr>
+</tbody>
+</table>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote init http://127.0.0.1:4000 --workspace my-app
+Remote: http://127.0.0.1:4000
+  workspace: my-app
+  claim: claimed (by this repository's root commit)
+  server holds 0 nodes, 0 edges, 0 documents
+
+Written to .deciduous/config.toml. The token stays in ~/.config/deciduous/credentials (or DECIDUOUS_MCP_TOKEN), never here.
 </code></pre>
-</div><p>This creates <code>Dockerfile</code>, <code>compose.yaml</code>, <code>README.md</code>, <code>.gitignore</code>, and a private <code>.env</code> in a new directory. It refuses existing output paths and a symlink parent. The parent must already exist. Omit <code>--output</code> and <code>--port</code> to use <code>./deciduous-postgres</code> and port <code>55432</code>.</p>
-<p>Generation does not start Docker or alter a database. The generated Compose project runs Postgres only, with loopback access and a persistent named volume. It does not include the MCP service; agents still need that separate service.</p>
-<p>For released <code>v1.0.0</code> installations, use the current Python helper from the <a href="../local-postgres.html#generate-just-postgres">Postgres-only setup guide</a>. Both generators use the same templates. Follow the generated README before starting containers or connecting an app.</p>
-<h2 id="workspace-and-branch-arguments">Workspace and branch arguments</h2>
-<p>Use one stable workspace name for the repository, such as <code>example-app</code>, across machines and worktrees. Pass the actual Git branch on writes, such as <code>agent-api</code> or <code>agent-tests</code>.</p>
-<p>Scoped HTTP tools resolve the workspace in this order:</p>
-<ol>
-<li>The <code>X-Deciduous-Workspace</code> request header, if present.</li>
-<li>The tool's <code>workspace</code> argument.</li>
-<li><code>scratch</code>, if neither is present.</li>
-</ol>
-<p>Names are trimmed and lowercased. Path separators and names longer than 128 characters are rejected. Unknown names are created, so a typo can create a second workspace.</p>
-<p><code>query_nodes</code>, <code>get_graph</code>, <code>find_orphans</code>, and <code>ask_graph</code> accept <code>workspace: &quot;*&quot;</code> for cross-project reads when the client is not pinned. <code>check_activity</code> requires one workspace. Scoped writes reject <code>&quot;*&quot;</code>.</p>
-<p>The header is a routing safeguard, not an access-control boundary. The shared bearer token grants access to the service's data. <code>list_workspaces</code> and ID-based reads are not confined by a workspace header. See <a href="../architecture.html#security-boundaries">security boundaries</a>.</p>
-<h2 id="shared-http-mcp-tools">Shared HTTP MCP tools</h2>
-<p>The server registers 18 tools. Discover their current schemas with your MCP client's <code>tools/list</code>; the local stdio server exposes a different set.</p>
-<h3 id="read-and-recover">Read and recover</h3>
-<table>
-<thead>
-<tr>
-<th>Tool</th>
-<th>Arguments</th>
-<th>Result</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>list_workspaces</code></td>
-<td>None</td>
-<td>Workspace names and live node/edge counts</td>
-</tr>
-<tr>
-<td><code>check_activity</code></td>
-<td><code>workspace</code>; optional <code>branches</code> from 0 to 200, default 20</td>
-<td>Active write leases and the newest created node on each returned branch</td>
-</tr>
-<tr>
-<td><code>query_nodes</code></td>
-<td><code>workspace</code>; optional <code>type</code>, <code>status</code>, <code>branch</code>, <code>search</code>, <code>limit</code></td>
-<td>Matching live node summaries, newest first; default limit 100</td>
-</tr>
-<tr>
-<td><code>show_node</code></td>
-<td><code>node_id</code></td>
-<td>Full node metadata, descriptions, incoming/outgoing edges, documents, themes</td>
-</tr>
-<tr>
-<td><code>get_graph</code></td>
-<td><code>workspace</code>; optional <code>branch</code></td>
-<td>Graph snapshot with nodes, edges, document metadata, themes, and node-theme links</td>
-</tr>
-<tr>
-<td><code>find_orphans</code></td>
-<td><code>workspace</code></td>
-<td>Non-goal nodes with no incoming edge</td>
-</tr>
-<tr>
-<td><code>get_ancestors</code></td>
-<td><code>node_id</code></td>
-<td>Walk incoming edges, including the starting node</td>
-</tr>
-<tr>
-<td><code>get_descendants</code></td>
-<td><code>node_id</code></td>
-<td>Walk outgoing edges, including the starting node</td>
-</tr>
-<tr>
-<td><code>ask_graph</code></td>
-<td><code>question</code>, <code>workspace</code>; optional <code>scope</code>, <code>include_context</code></td>
-<td>Heuristic search results and optional connected-node context</td>
-</tr>
-</tbody>
-</table>
-<p><code>query_nodes.search</code> matches titles and descriptions. The MCP schema does not expose an offset. Narrow the filters or use <code>get_graph</code> when you need the complete workspace. A branch-filtered graph omits edges whose other endpoint is outside the returned branch; read the workspace graph to inspect cross-branch borrowing.</p>
-<p>The traversal tools currently stop after a budget of 50 visited nodes. They are useful for context recovery, not an exhaustive export of an arbitrarily large graph.</p>
-<p><code>ask_graph</code> uses text matching and inferred type/status filters. It does not call a language model, produce a verified answer, or perform semantic vector search. Its <code>scope</code> values are <code>all</code>, <code>active</code>, <code>decisions</code>, <code>goals</code>, <code>observations</code>, and <code>recent</code>. Read the returned records before drawing a conclusion.</p>
-<h3 id="write-and-connect">Write and connect</h3>
-<table>
-<thead>
-<tr>
-<th>Tool</th>
-<th>Required arguments</th>
-<th>Useful optional arguments</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>add_node</code></td>
-<td><code>node_type</code>, <code>title</code></td>
-<td><code>workspace</code>, <code>branch</code>, <code>description</code>, <code>status</code>, <code>confidence</code>, <code>commit</code>, <code>prompt</code>, <code>files</code></td>
-</tr>
-<tr>
-<td><code>add_edge</code></td>
-<td><code>from_node_id</code>, <code>to_node_id</code></td>
-<td><code>workspace</code>, <code>branch</code>, <code>edge_type</code>, <code>rationale</code></td>
-</tr>
-<tr>
-<td><code>update_node</code></td>
-<td><code>node_id</code></td>
-<td><code>title</code>, <code>description</code>, <code>status</code>, <code>metadata</code>, <code>branch</code></td>
-</tr>
-<tr>
-<td><code>delete_node</code></td>
-<td><code>node_id</code></td>
-<td><code>branch</code></td>
-</tr>
-<tr>
-<td><code>delete_edge</code></td>
-<td><code>from_node_id</code>, <code>to_node_id</code></td>
-<td><code>edge_type</code>, <code>branch</code></td>
-</tr>
-</tbody>
-</table>
-<p><code>add_node</code> returns both <code>id</code> and <code>change_id</code>. Use the returned server UUID <code>id</code> in ordinary node and edge tools. Local integer IDs and local change-ID prefixes are not interchangeable with server IDs.</p>
-<p><code>update_node.metadata</code> replaces the metadata map. Read it first and preserve fields you still need. Its top-level <code>branch</code> selects the write lease; changing the node's recorded branch requires <code>metadata.branch</code>.</p>
-<p><code>delete_node</code> sets a deletion timestamp. <code>delete_edge</code> removes the edge row. Prefer <code>superseded</code> or <code>abandoned</code> for a decision that remains useful history. A routine export is not a backup of deleted records.</p>
-<h3 id="capture-helpers">Capture helpers</h3>
-<table>
-<thead>
-<tr>
-<th>Tool</th>
-<th>Required arguments</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>log_observation</code></td>
-<td><code>title</code></td>
-<td>Add an observation, optionally connected through <code>related_to</code> and <code>took_from</code>; also accepts <code>description</code>, <code>why</code>, <code>tags</code>, <code>workspace</code>, <code>branch</code></td>
-</tr>
-<tr>
-<td><code>log_decision</code></td>
-<td><code>title</code>, <code>chosen_option</code></td>
-<td>Add a decision with a chosen option and optional rejected options, rationale, parent, confidence, workspace, branch</td>
-</tr>
-<tr>
-<td><code>capture_conversation_turn</code></td>
-<td><code>summary</code></td>
-<td>Add supplied goal, observations, options, decision, action, and outcome structures; optional parent, workspace, branch, confidence</td>
-</tr>
-<tr>
-<td><code>close_thread</code></td>
-<td><code>title</code></td>
-<td>Add an outcome; optional parent, goal to complete, lessons, follow-up goals, success, workspace, branch</td>
-</tr>
-</tbody>
-</table>
-<p><code>log_observation.related_to</code> and <code>took_from</code> accept a full server node UUID or full <code>change_id</code> in the same workspace. <code>why</code> becomes the borrowing edge's rationale. The observation and its edges are written in one transaction.</p>
-<p>The other capture helpers perform multiple writes. Their current implementations do not wrap the entire operation in one transaction. After an error, inspect the graph for partial results before retrying. None of these helpers is a general idempotency endpoint.</p>
-<p><code>log_decision</code> draws <code>chosen</code> and <code>rejected</code> edges from the decision to its option nodes. Use the lower-level tools if your team requires a different connection pattern. <code>close_thread</code> does not finish an MCP session or release a lease through a separate unlock operation.</p>
-<h2 id="vocabulary">Vocabulary</h2>
-<table>
-<thead>
-<tr>
-<th>Node type</th>
-<th>Record</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>goal</code></td>
-<td>The requested result and relevant user prompt</td>
-</tr>
-<tr>
-<td><code>option</code></td>
-<td>An approach worth considering</td>
-</tr>
-<tr>
-<td><code>decision</code></td>
-<td>The choice and its rationale</td>
-</tr>
-<tr>
-<td><code>action</code></td>
-<td>Work planned or performed, with evidence</td>
-</tr>
-<tr>
-<td><code>outcome</code></td>
-<td>What happened after the action</td>
-</tr>
-<tr>
-<td><code>observation</code></td>
-<td>A fact learned during the work</td>
-</tr>
-<tr>
-<td><code>revisit</code></td>
-<td>A decision being reconsidered</td>
-</tr>
-</tbody>
-</table>
-<p>Normal tool statuses are <code>pending</code>, <code>active</code>, <code>completed</code>, <code>rejected</code>, <code>superseded</code>, and <code>abandoned</code>. Imports also preserve legacy <code>feedback</code> nodes and <code>done</code> statuses; new work should use the documented vocabulary above. Confidence is an optional value from 0 to 100, not a measured probability.</p>
-<p>Edge types are <code>leads_to</code>, <code>chosen</code>, <code>rejected</code>, <code>requires</code>, <code>blocks</code>, <code>enables</code>, and <code>took_from</code>. Both endpoints must exist in the same workspace. They may be on different branches. A <code>took_from</code> edge runs from the source idea to the node that reused it.</p>
-<h2 id="cli-remote-commands">CLI remote commands</h2>
-<p>Use the service's base URL for the CLI, without <code>/mcp</code>:</p>
-<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">deciduous remote login --url http://127.0.0.1:4000
-deciduous remote init http://127.0.0.1:4000 --workspace example-app
-deciduous remote status
-deciduous remote watch
+</div><h3 id="remote-adopt-root-url-server"><code>remote adopt [ROOT] --url &lt;URL&gt;</code> (server)</h3>
+<p>Walk a directory for projects that already have a <code>.deciduous</code> and point each at the server. Existing configuration is left alone. <code>-n, --dry-run</code> shows what would change.</p>
+<h2 id="check-and-repair-the-connection">Check and repair the connection</h2>
+<h3 id="remote-status-server"><code>remote status</code> (server)</h3>
+<p>How far the local copy has drifted from the server: ops waiting and rejected, node and edge counts, and every row that differs, field by field. Exits 0 only on <code>In sync</code>.</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Remote: http://127.0.0.1:4000
+Workspace: my-app
+Log: 0 write(s) waiting, 0 rejected  (/home/you/code/my-app/.deciduous/remote-log.jsonl)
+
+                 local    server
+  nodes              2         2
+  edges              1         1
+
+In sync: no writes waiting, and every node, edge and document matches field by field.
+Themes and tags are not sent to the server, so they are not compared.
 </code></pre>
-</div><p>Run repository commands from an initialized project. <code>login</code> reads the token from standard input and keeps it outside the repository. A non-empty <code>DECIDUOUS_MCP_TOKEN</code> environment value takes precedence over the stored credential.</p>
+</div><h3 id="remote-push-server"><code>remote push</code> (server)</h3>
+<p>Send the ops waiting in <code>.deciduous/remote-log.jsonl</code>, in order. The server applies each at most once, so pushing twice is safe. Normally unnecessary: every write sends what is waiting.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--retry-rejected</code></td>
+<td>Send rejected ops again, after fixing the cause.</td>
+</tr>
+<tr>
+<td><code>--drop-rejected</code></td>
+<td>Discard the ops the server rejected (read why with <code>remote status</code> first).</td>
+</tr>
+<tr>
+<td><code>--drop &lt;OP_ID&gt;</code></td>
+<td>Discard one op, waiting or rejected, by the start of its id.</td>
+</tr>
+<tr>
+<td><code>--seed</code></td>
+<td>Also send nodes, edges and documents the server lacks that no op covers. Never changes a row the server has.</td>
+</tr>
+<tr>
+<td><code>--repair</code></td>
+<td>Also send what this copy changed and never logged, for nodes <code>status</code> lists as Different, field by field where the server has not changed the field since the last pull.</td>
+</tr>
+<tr>
+<td><code>--overwrite-server</code></td>
+<td>With <code>--repair</code>: also send fields the server did change, over the server's value.</td>
+</tr>
+<tr>
+<td><code>--overwrite</code></td>
+<td>Replace the server's copy of every row with the local one (the pre-1.0.3 behaviour). Last resort.</td>
+</tr>
+</tbody>
+</table>
+<p><code>DECIDUOUS_OPS_TIMEOUT=&lt;seconds&gt;</code> changes the 120-second limit per request.</p>
+<h3 id="remote-pull-server"><code>remote pull</code> (server)</h3>
+<p>Refresh the local database from the server: takes the server's side of every difference. Run it before reading with <code>nodes</code>, <code>show</code> or <code>serve</code> if agents have been writing over MCP. No flags.</p>
+<h3 id="remote-watch-server"><code>remote watch</code> (server)</h3>
+<p>Stream this workspace's writes, one line per node event, reconnecting with backoff.</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote watch
+Watching: my-app
+13:38:02  main      outcome     &quot;watched outcome&quot;
+</code></pre>
+</div><table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--types &lt;TYPES&gt;</code></td>
+<td>Only these node types, comma-separated.</td>
+</tr>
+<tr>
+<td><code>--branch &lt;BRANCH&gt;</code></td>
+<td>Only this branch; repeat for several.</td>
+</tr>
+<tr>
+<td><code>--edges</code></td>
+<td>Also show edge events.</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Raw JSON frame per event.</td>
+</tr>
+<tr>
+<td><code>--url</code></td>
+<td>Print the socket URL and exit. The URL carries the token in its query string.</td>
+</tr>
+<tr>
+<td><code>--claude-code</code></td>
+<td>Print the URL plus a ready-to-paste Monitor tool call for Claude Code, and exit. Also carries the token.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="record-decisions">Record decisions</h2>
+<h3 id="add"><code>add &lt;TYPE&gt; &lt;TITLE&gt;</code></h3>
+<p>Types: <code>goal</code>, <code>option</code>, <code>decision</code>, <code>action</code>, <code>outcome</code>, <code>observation</code>, <code>revisit</code> (<code>--help</code> omits <code>revisit</code>; it works).</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-d, --description &lt;TEXT&gt;</code></td>
+<td>Description. Observations warn without one.</td>
+</tr>
+<tr>
+<td><code>-c, --confidence &lt;0-100&gt;</code></td>
+<td>Confidence.</td>
+</tr>
+<tr>
+<td><code>-p, --prompt &lt;TEXT&gt;</code></td>
+<td>The user's request, verbatim. Warns when it looks like a summary.</td>
+</tr>
+<tr>
+<td><code>--prompt-stdin</code></td>
+<td>Read the prompt from stdin, for multi-line requests.</td>
+</tr>
+<tr>
+<td><code>-f, --files &lt;a,b&gt;</code></td>
+<td>Associated files, comma-separated.</td>
+</tr>
+<tr>
+<td><code>-b, --branch &lt;BRANCH&gt;</code> / <code>--no-branch</code></td>
+<td>Override or skip branch detection.</td>
+</tr>
+<tr>
+<td><code>--commit &lt;REV&gt;</code></td>
+<td>HEAD, a branch, a tag, a hash or prefix. Stored as the full hash; a rev git cannot resolve is refused.</td>
+</tr>
+<tr>
+<td><code>--date &lt;DATE&gt;</code></td>
+<td>Backdate: RFC 3339, <code>YYYY-MM-DD</code> or <code>YYYY-MM-DD HH:MM:SS</code>.</td>
+</tr>
+</tbody>
+</table>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous add goal &quot;Bound the retry delay&quot; -c 90 --prompt-stdin &lt;&lt;'EOF'
+Retries should stop after a bounded delay; right now a 429 without Retry-After loops forever.
+EOF
+</code></pre>
+</div><h3 id="link-unlink"><code>link &lt;FROM&gt; &lt;TO&gt;</code> / <code>unlink &lt;FROM&gt; &lt;TO&gt;</code></h3>
+<p><code>link -r, --rationale &lt;TEXT&gt;</code>, <code>-t, --edge-type &lt;TYPE&gt;</code> (default <code>leads_to</code>; also <code>requires</code>, <code>chosen</code>, <code>rejected</code>, <code>blocks</code>, <code>enables</code>, <code>took_from</code>). <code>unlink -t, --type &lt;TYPE&gt;</code> removes only the edge of that type, required when two nodes are joined by more than one.</p>
+<h3 id="status"><code>status &lt;ID&gt; &lt;STATUS&gt;</code></h3>
+<p><code>pending</code>, <code>active</code>, <code>completed</code>, <code>rejected</code>, <code>superseded</code>, <code>abandoned</code>. (<code>--help</code> lists the first four.)</p>
+<h3 id="prompt-prompt"><code>prompt &lt;ID&gt; [PROMPT]</code></h3>
+<p>Set or replace a node's prompt; reads stdin when the text is omitted.</p>
+<h3 id="delete"><code>delete &lt;ID&gt;</code></h3>
+<p>Delete a node and its edges. <code>--dry-run</code> shows what would go.</p>
+<h2 id="read-the-graph">Read the graph</h2>
 <table>
 <thead>
 <tr>
 <th>Command</th>
-<th>Behavior</th>
+<th>Flags</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>remote login [--url URL]</code></td>
-<td>Store a token; optional URL verifies it first</td>
+<td><code>nodes</code></td>
+<td><code>-b, --branch</code>, <code>-t, --node-type</code>, <code>--theme</code></td>
 </tr>
 <tr>
-<td><code>remote logout</code></td>
-<td>Remove the stored credential; does not clear a token already set in the environment</td>
+<td><code>edges</code></td>
+<td>none</td>
 </tr>
 <tr>
-<td><code>remote init URL [--workspace NAME]</code></td>
-<td>Check health/authentication and save <code>[remote]</code> configuration</td>
+<td><code>show &lt;ID&gt;</code></td>
+<td><code>--json</code></td>
 </tr>
 <tr>
-<td><code>remote status</code></td>
-<td>Compare local and server node and edge counts; matching counts do not prove identical content</td>
+<td><code>graph</code></td>
+<td>none; the whole graph as JSON on stdout</td>
 </tr>
 <tr>
-<td><code>remote pull</code></td>
-<td>Merge server nodes and edges into the local graph; does not retrieve attachment bytes or provide a complete server backup</td>
+<td><code>pulse</code></td>
+<td><code>-b, --branch</code>, <code>-r, --recent &lt;N&gt;</code> (default 10), <code>--json</code>, <code>--summary</code>. Active state, gaps, health.</td>
 </tr>
 <tr>
-<td><code>remote push</code></td>
-<td>Bulk-import the local graph into the server; a controlled migration/backfill operation, not routine synchronization</td>
+<td><code>serve</code></td>
+<td><code>-p, --port</code> (default 3000). The web viewer, on the local database.</td>
 </tr>
 <tr>
-<td><code>remote adopt ROOT --url URL --dry-run</code></td>
-<td>Preview configuration of existing <code>.deciduous</code> projects below a directory; omit <code>--dry-run</code> only after reviewing</td>
-</tr>
-<tr>
-<td><code>remote watch</code></td>
-<td>Connect to the event stream, print changes, and reconnect with backoff</td>
+<td><code>commands</code></td>
+<td><code>-l, --limit</code> (default 20). Recent CLI writes with exit status.</td>
 </tr>
 </tbody>
 </table>
-<p>In 1.0, <code>remote watch</code> supports <code>--types outcome,observation</code>, repeated <code>--branch NAME</code>, <code>--edges</code>, and <code>--json</code>. <code>--url</code> and <code>--claude-code</code> print connection information instead of watching; that output contains a token-bearing URL. Keep it out of logs, screenshots, and the decision graph. Older 0.19 builds print a URL by default, so check <code>deciduous --version</code> and <code>deciduous remote watch --help</code>.</p>
-<p><code>remote push</code> can overwrite newer server fields with a stale local copy. <code>remote pull</code> does not reconcile server deletions into a faithful local mirror. Read <a href="../upgrading.html">upgrading and migrating</a> before using either on valuable history.</p>
-<h2 id="http-endpoints">HTTP endpoints</h2>
+<p>All of these read the local database. Over MCP, agents read the server directly; see <a href="../mcp.html">MCP tools</a>.</p>
+<h2 id="design-history">Design history</h2>
 <table>
 <thead>
 <tr>
-<th>Method and path</th>
+<th>Command</th>
+<th>Purpose and flags</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>archaeology pivot &lt;FROM_ID&gt; &lt;OBSERVATION&gt; &lt;NEW_APPROACH&gt;</code></td>
+<td>Creates observation -&gt; revisit -&gt; new decision and marks the old one superseded, in one step. <code>-c, --confidence</code>, <code>-r, --reason</code>, <code>--dry-run</code>.</td>
+</tr>
+<tr>
+<td><code>archaeology supersede &lt;ID&gt;</code></td>
+<td>Mark superseded. <code>--cascade</code> for every descendant, <code>--dry-run</code>.</td>
+</tr>
+<tr>
+<td><code>archaeology timeline</code></td>
+<td>Nodes in time order. <code>-l, --limit</code> (0 = all), <code>-t, --node-type</code>, <code>-b, --branch</code>, <code>--json</code>.</td>
+</tr>
+<tr>
+<td><code>narratives init</code> / <code>show</code> / <code>pivots</code></td>
+<td><code>.deciduous/narratives.md</code>: seed it from active goals (<code>-o</code>, <code>--force</code>), print it (<code>-p</code>), list revisit chains (<code>-b</code>, <code>--json</code>).</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../history.html">Design history</a>.</p>
+<h2 id="evidence">Evidence</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Purpose and flags</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>doc attach &lt;NODE_ID&gt; &lt;FILE&gt;</code></td>
+<td>Attach a file. <code>-d, --description</code>, <code>--ai-describe</code> (uses the <code>claude</code> CLI).</td>
+</tr>
+<tr>
+<td><code>doc list [NODE_ID]</code></td>
+<td><code>--include-detached</code>, <code>--json</code>.</td>
+</tr>
+<tr>
+<td><code>doc show &lt;DOC_ID&gt;</code> / <code>doc open &lt;DOC_ID&gt;</code></td>
+<td>Details (<code>--json</code>) / open in the default application.</td>
+</tr>
+<tr>
+<td><code>doc describe &lt;DOC_ID&gt; [TEXT]</code></td>
+<td>Set the description; stdin if omitted; <code>--ai</code>.</td>
+</tr>
+<tr>
+<td><code>doc detach &lt;DOC_ID&gt;</code></td>
+<td>Soft-delete. <code>doc gc [--dry-run]</code> removes files nothing references.</td>
+</tr>
+<tr>
+<td><code>transcript list</code></td>
+<td>This project's Claude Code sessions and whether each is imported. <code>--dir</code>, <code>--json</code>.</td>
+</tr>
+<tr>
+<td><code>transcript import &lt;PATH or SESSION-ID&gt;...</code></td>
+<td>Derive goals, actions and outcomes from a transcript, each with evidence. Re-importing adds nothing. <code>--dry-run</code>, <code>--no-hash</code>, <code>--json</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../evidence.html">Documents and transcripts</a>.</p>
+<h2 id="coordinate-agents">Coordinate agents</h2>
+<p><code>board post --subject &lt;S&gt; [-m &lt;BODY&gt;]</code> (body from stdin if omitted), <code>--as &lt;LABEL&gt;</code> (default <code>$DECIDUOUS_AGENT_LABEL</code>), <code>--reply-to &lt;ID&gt;</code>, <code>--branch</code>, <code>--json</code>. <code>@label</code> in the subject or body addresses someone.</p>
+<p><code>board read</code>: <code>--unanswered &lt;LABEL&gt;</code> (what is waiting on you), <code>--to</code>, <code>--from</code>, <code>--since &lt;ID&gt;</code>, <code>-q, --query</code>, <code>--limit</code> (default 50, max 200), <code>--json</code>. <code>board show &lt;ID&gt;</code>.</p>
+<p>With a <code>[remote]</code> the board lives on the server, per workspace; without one, in the main worktree's database. Messages are not graph nodes and are never exported. See <a href="../teams.html">Many agents, one graph</a>.</p>
+<h2 id="export">Export</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Flags</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dot</code></td>
+<td><code>-o</code>, <code>-r, --roots</code>, <code>-n, --nodes &quot;1-11&quot;</code>, <code>--png</code> (needs graphviz), <code>--auto</code> (branch-specific name in <code>docs/</code>), <code>-t, --title</code>, <code>--rankdir TB|LR|BT|RL</code></td>
+</tr>
+<tr>
+<td><code>writeup</code></td>
+<td><code>-t, --title</code>, <code>-r, --roots</code>, <code>-n, --nodes</code>, <code>-o</code>, <code>--png &lt;FILE&gt;</code>, <code>--auto</code>, <code>--no-dot</code>, <code>--no-test-plan</code></td>
+</tr>
+<tr>
+<td><code>backup</code></td>
+<td><code>-o, --output</code> (default <code>deciduous_backup_&lt;timestamp&gt;.db</code>). Copies the local database only; back up the server's PostgreSQL separately (<a href="../operating.html">Operating</a>).</td>
+</tr>
+</tbody>
+</table>
+<h2 id="themes-and-tags-local-only">Themes and tags (local only)</h2>
+<p><code>themes create &lt;NAME&gt; [-c '#hex'] [-d TEXT]</code>, <code>themes list</code>, <code>themes delete &lt;NAME&gt;</code>; <code>tag add|remove|confirm &lt;NODE_ID&gt; &lt;THEME&gt;</code>, <code>tag list &lt;NODE_ID&gt;</code>, <code>tag suggest [NODE_ID] [--apply]</code>. These stay in the local database: they are not sent to the server, and <code>remote status</code> does not compare them.</p>
+<h2 id="without-a-server-no-server">Without a server (no server)</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
 <th>Purpose</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>GET /health</code></td>
-<td>Unauthenticated liveness response, <code>ok</code></td>
+<td><code>sync</code></td>
+<td>Reconcile <code>.deciduous/graph.json</code> with the local database, both ways, and register the git merge driver in this clone. <code>--check</code> reports without writing.</td>
 </tr>
 <tr>
-<td><code>POST /mcp</code></td>
-<td>Authenticated MCP Streamable HTTP requests</td>
-</tr>
-<tr>
-<td><code>GET /export?workspace=example-app</code></td>
-<td>Authenticated graph snapshot; metadata, not attachment bytes</td>
-</tr>
-<tr>
-<td><code>POST /import</code></td>
-<td>Authenticated bulk import of a local-export-shaped graph</td>
-</tr>
-<tr>
-<td><code>PUT /blob/:sha256</code></td>
-<td>Authenticated raw document upload, verified against its SHA-256 hash</td>
-</tr>
-<tr>
-<td><code>GET /documents/:id</code></td>
-<td>Authenticated document bytes by document ID or content hash</td>
-</tr>
-<tr>
-<td><code>GET /events?workspace=example-app</code></td>
-<td>Authenticated WebSocket upgrade for write notifications</td>
+<td><code>migrate</code></td>
+<td>Add change_id columns to a pre-sync database.</td>
 </tr>
 </tbody>
 </table>
-<p><code>GET /mcp</code> returns 405 because the server does not offer a server-to-client SSE stream. Tool responses arrive through the MCP POST transport. Use <code>/events</code> for live write notifications.</p>
-<p>Imports and blob uploads have a 64 MiB request-body limit. Document reads return 404 for an unknown attachment and 410 when the metadata exists but content is missing. The event stream can miss notifications during disconnects; query the graph after reconnecting.</p>
-<p>See <a href="../architecture.html">architecture</a> for persistence and security limits, or <a href="../solo.html">solo and offline use</a> for the local CLI and Git-based workflow.</p>
+<p>See <a href="../local.html#no-server-at-all">Without a shared server</a>.</p>
+<h2 id="project-setup">Project setup</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Purpose and flags</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>init</code></td>
+<td>Set up the project: <code>.deciduous/</code>, assistant files, and the server step. <code>--claude</code> (default), <code>--opencode</code>, <code>--windsurf</code>, <code>--both</code>, <code>--no-auto-update</code>. Without a terminal and without a <code>[remote]</code>, exits 1 after writing its files; <code>DECIDUOUS_NO_SERVER=1</code> skips the server step.</td>
+</tr>
+<tr>
+<td><code>update</code></td>
+<td>Refresh the assistant integration files deciduous wrote, keeping yours (backups in <code>.deciduous/update-backups/&lt;time&gt;/</code>). Leaves <code>.deciduous/config.toml</code> alone. In a project on this machine's native server, upgrades that server too. <code>--all &lt;DIR&gt;</code> for every project under a directory.</td>
+</tr>
+<tr>
+<td><code>check-update</code></td>
+<td>Exit 1 if this project's files are older than the binary.</td>
+</tr>
+<tr>
+<td><code>auto-update on|off</code></td>
+<td>The once-a-day <a href="http://crates.io">crates.io</a> version check.</td>
+</tr>
+<tr>
+<td><code>integration</code></td>
+<td>Show Claude Code hooks, commands and skills installed.</td>
+</tr>
+<tr>
+<td><code>hooks install|status|uninstall</code></td>
+<td>Claude Code hooks from <code>.deciduous/config.toml</code>.</td>
+</tr>
+<tr>
+<td><code>opencode install|status|uninstall</code></td>
+<td>OpenCode plugins, commands and <code>AGENTS.md</code>.</td>
+</tr>
+<tr>
+<td><code>completion &lt;SHELL&gt;</code></td>
+<td><code>bash</code>, <code>zsh</code>, <code>fish</code>, <code>powershell</code>, <code>elvish</code>.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="other-commands">Other commands</h2>
+<p><code>mcp</code> runs the stdio MCP server on the local database (<a href="../mcp.html">MCP tools</a>). <code>serve --api</code> runs a separate multi-graph JSON daemon (<code>--data-dir</code>, <code>--token</code>, <code>--bind</code>, default <code>127.0.0.1</code>); it is not the graph server. <code>audit --associate-commits</code> matches commits to nodes by title (<code>--min-score</code>, <code>--dry-run</code>, <code>--yes</code>). <code>roadmap init|refresh|sync|list|link|unlink|conflicts|status|check</code> keeps <code>ROADMAP.md</code> in step with GitHub issues; <code>sync</code> is a dry run unless <code>--execute</code>.</p>
+<h2 id="environment">Environment</h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DECIDUOUS_MCP_TOKEN</code></td>
+<td>Token for the server. Read before the stored token.</td>
+</tr>
+<tr>
+<td><code>XDG_CONFIG_HOME</code></td>
+<td>Moves <code>~/.config/deciduous/</code> (credentials, and this machine's server settings).</td>
+</tr>
+<tr>
+<td><code>DECIDUOUS_NO_SERVER</code></td>
+<td><code>1</code> makes <code>init</code> and <code>update</code> skip the server step.</td>
+</tr>
+<tr>
+<td><code>DECIDUOUS_OPS_TIMEOUT</code></td>
+<td>Seconds per <code>remote push</code> request (default 120).</td>
+</tr>
+<tr>
+<td><code>DECIDUOUS_AGENT_LABEL</code></td>
+<td>Default <code>--as</code> for <code>board post</code>.</td>
+</tr>
+<tr>
+<td><code>DECIDUOUS_QUIET_LOCAL_ONLY</code></td>
+<td>Silences the &quot;written to ... only; this project has no shared server&quot; note.</td>
+</tr>
+<tr>
+<td><code>DECIDUOUS_SERVER_BINARY</code>, <code>DECIDUOUS_SERVER_BUNDLE</code></td>
+<td>A local server executable or Docker bundle for <code>remote setup --local</code> to install instead of downloading one (unreleased builds).</td>
+</tr>
+</tbody>
+</table>
 </article><nav class="page-turn" aria-label="Previous and next guide"><a href="../concepts.html"><span>Previous</span>Graph concepts</a><a href="../mcp.html"><span>Next</span>MCP tools</a></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
-<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#which-command-reaches-which-database">Which command reaches which database</a></li><li><a href="#setup-commands-in-newer-source-builds">Setup commands in newer source builds</a></li><li><a href="#workspace-and-branch-arguments">Workspace and branch arguments</a></li><li><a href="#shared-http-mcp-tools">Shared HTTP MCP tools</a></li><li><a href="#vocabulary">Vocabulary</a></li><li><a href="#cli-remote-commands">CLI remote commands</a></li><li><a href="#http-endpoints">HTTP endpoints</a></li></ul></nav></aside></div>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#connect-a-project-to-a-server">Connect a project to a server</a></li><li><a href="#check-and-repair-the-connection">Check and repair the connection</a></li><li><a href="#record-decisions">Record decisions</a></li><li><a href="#read-the-graph">Read the graph</a></li><li><a href="#design-history">Design history</a></li><li><a href="#evidence">Evidence</a></li><li><a href="#coordinate-agents">Coordinate agents</a></li><li><a href="#export">Export</a></li><li><a href="#themes-and-tags-local-only">Themes and tags (local only)</a></li><li><a href="#without-a-server-no-server">Without a server (no server)</a></li><li><a href="#project-setup">Project setup</a></li><li><a href="#other-commands">Other commands</a></li><li><a href="#environment">Environment</a></li></ul></nav></aside></div>
 <dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
 </body></html>

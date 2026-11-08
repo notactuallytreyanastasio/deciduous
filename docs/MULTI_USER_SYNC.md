@@ -1,172 +1,209 @@
-<!-- Generated from content/teams.md by scripts/docs/build.mjs. Edit the source. -->
+<!-- Generated from content/local.md by scripts/docs/build.mjs. Edit the source. -->
 
-# Work as a team of agents
+# Without a shared server
 
-Put agents working on the same project in one Deciduous workspace. Give each agent a Git branch and a bounded file scope. One agent can publish a finding while another is still implementing; the second agent can reuse that finding and leave an edge back to its source.
+There are two fallbacks for when nobody runs a server you can join. `deciduous remote setup --local` runs the same server on your own machine as a background service, so the CLI and your agents work exactly as they would against a team server, with one person writing. `DECIDUOUS_NO_SERVER=1 deciduous init` skips the server entirely and shares the graph through a git-tracked `.deciduous/graph.json`. Use the first if you might join a team later; use the second only when a running service is not an option.
 
-Deciduous records reasoning and coordinates short graph-write bursts. Your agent runner still assigns tasks, starts sessions, and manages code changes.
+## A server on this machine
 
-## Agree on the project and branch names
+`remote setup --local` looks for a server this machine already has, and installs one if there is none. On a machine that has one, it reuses it and changes nothing about it:
 
-This guide uses server `http://127.0.0.1:4000`, workspace `example-app`, and two branches:
+```text
+$ deciduous remote setup --local
+deciduous remote setup
+Every project writes its decision graph to a shared server. This connects /home/you/code/my-app
+to one: a server on this machine, or one someone else runs.
 
-| Agent | Branch | Responsibility |
+   Found local server at http://127.0.0.1:4000
+   Wrote .deciduous/config.toml [remote] url = http://127.0.0.1:4000
+   Connected http://127.0.0.1:4000 holds 0 nodes, 0 edges in workspace my-app
+   Unchanged Claude Code already has a deciduous MCP server
+
+Done: this project writes to http://127.0.0.1:4000. Restart Claude Code so it picks up the server;
+it sends the logging instructions when it connects.
+```
+
+"This machine has a server" means `~/.config/deciduous/server/.env` exists. That settings file is authoritative once written: every later `--local`, in every project, points at the server it describes. The flags that choose how a new server is built do not replace an existing one. `--docker` on a machine with a native server is refused:
+
+```text
+Error: this machine's server is already set up to run as a background service (/Users/you/.config/deciduous/server/.env), and it is kept that way. To replace it, stop it and move that file away first; its database is not touched.
+```
+
+and `--database-url` against the same native server is accepted but ignored, with one line saying so: `Using the server already set up in ~/.config/deciduous/server/.env; its database and port stand`.
+
+The `Unchanged Claude Code already has a deciduous MCP server` line deserves a second look. `remote setup` registers its server with Claude Code at user scope only when no `deciduous` server is registered there. If one is, it is left alone even when it points somewhere else, and the "Restart Claude Code" advice below it will not fix that. Check with `claude mcp get deciduous`; the [Claude Code section of Connect your agents](content/clients.md) has the fix.
+
+### What a fresh install does
+
+The output above was observed on a machine that already had a server. The steps below are what `src/server.rs`, `src/local_server.rs` and `deciduous_mcp/DEPLOY.md` say happens on a machine without one; they were read, not run.
+
+| Flag | Server runs as | Database |
 | --- | --- | --- |
-| API agent | `agent-api` | Request validation and error responses |
-| Test agent | `agent-tests` | Fixtures and integration tests |
+| `--local` (nothing else) | the release's single-file `deciduous-mcp` executable, as a user service | PostgreSQL on `localhost:5432` as `$USER`, no password, database `deciduous` |
+| `--database-url <url>` | the same user service | the PostgreSQL you name |
+| `--docker` | a container from the release's `deciduous-mcp-docker.tar.gz` | the PostgreSQL from the first two rows; `localhost` is rewritten to `host.docker.internal` |
+| `--docker-postgres` | a container (implies `--docker`) | a new PostgreSQL 17 container |
+| `--port <port>` | any of the above | used only on first setup; asked otherwise, with a free port in 20000-32767 suggested |
 
-Use [client configuration](content/clients.md) to pin both MCP clients to `example-app`. Set that same name with `deciduous remote init ... --workspace example-app` in each initialized CLI checkout. Worktree directory names often differ; relying on their basenames can split one project into several workspaces.
+With no flags and a terminal, `remote setup` asks the same questions as a menu. Without a terminal and without `--local` or `--url`, it stops and prints the four scripted forms.
 
-Pass the real branch name on each MCP write. The server cannot inspect your Git checkout and does not infer the branch from a local process.
+The native install, in order:
 
-Create a new workspace with one client connection or `remote init` before launching parallel sessions. The current server can race if several clients first create the same workspace at once. A successful `check_activity` from the first client confirms it is ready for the rest.
+1. Downloads `deciduous-mcp-<os>-<arch>` for the CLI's own version, checks it against the release's `checksums.txt`, and installs it as `~/.config/deciduous/server/bin/deciduous-mcp`.
+2. Picks the bearer token. If the machine already has one (`DECIDUOUS_MCP_TOKEN`, else `~/.config/deciduous/credentials`) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.
+3. Runs the executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`: it connects, creates the database if missing (the role needs `CREATEDB`), migrates, and exits. A refusal comes back in PostgreSQL's words (`role "x" does not exist`, `password authentication failed`). If nothing listens on 5432 at all, setup says so and prints `brew install postgresql@17 && brew services start postgresql@17` / `sudo apt install postgresql`.
+4. Writes `~/.config/deciduous/server/.env`, mode 600. This machine's file has these keys (values other than the secrets shown):
 
-For a fresh exercise, run these commands from the code repository. The branch names and destination directories must not already exist; substitute unused names if needed:
+   ```text
+   DECIDUOUS_SERVER_MODE=native
+   DECIDUOUS_SERVER_VERSION=1.1.0
+   DECIDUOUS_BIND_ADDRESS=127.0.0.1
+   DECIDUOUS_PORT=4000
+   DECIDUOUS_MCP_TOKEN='<token>'
+   DATABASE_URL='<ecto url>'
+   DB_SSL=false
+   DB_SSL_VERIFY=full
+   DB_SSL_CA_FILE=
+   POOL_SIZE=10
+   DECIDUOUS_PREPARE_DATABASE=true
+   ```
+
+5. Installs a user service that starts at login and restarts on exit: a LaunchAgent `dev.deciduous.server` at `~/Library/LaunchAgents/dev.deciduous.server.plist` on macOS, a systemd user unit `deciduous-server.service` on Linux. The service definition carries only paths; the token and database URL stay in `.env`, which the server reads itself through `DECIDUOUS_ENV_FILE`. Output goes to `~/.config/deciduous/server/logs/server.log`. On Linux, user services stop at logout unless you run `loginctl enable-linger $USER`.
+6. Waits for `/ready`, then stores the token in `~/.config/deciduous/credentials` if it differs from the one there, writes `[remote]`, and registers with Claude Code as above.
+
+The server binds `127.0.0.1` because `DECIDUOUS_BIND_ADDRESS` says so; a server started by hand without that setting listens on every interface. Every start re-runs the migrations (`DECIDUOUS_PREPARE_DATABASE=true`), and `deciduous update` in a project that writes to this server replaces an older executable and restarts the service. Docker installs are not upgraded by `update`.
+
+A database URL may carry `?sslmode=`. The CLI maps it onto the server's TLS settings: `require` → `DB_SSL=true DB_SSL_VERIFY=none`, `verify-ca` → `ca`, `verify-full` → `full`. `disable`, `allow` and `prefer` all turn TLS off; `prefer` does not mean "try TLS" here. Any other query parameter is refused rather than dropped. The meaning of each mode is on [Architecture](content/architecture.md#tls-to-postgresql).
+
+The first log lines after a start say what the server is doing. From this machine's `server.log`:
+
+```text
+[info] Database TLS: off (DB_SSL unset or false)
+[info] Events.Listener: listening on graph_events
+[info] Running DeciduousMcp.Web.Router with Bandit 1.13.1 at 127.0.0.1:4000 (http)
+```
+
+To remove a native install (from `DEPLOY.md`; the database is left in PostgreSQL):
 
 ```bash
-git status --short
-git worktree add -b agent-api ../example-app-api HEAD
-git worktree add -b agent-tests ../example-app-tests HEAD
+launchctl bootout gui/$(id -u)/dev.deciduous.server      # macOS
+rm ~/Library/LaunchAgents/dev.deciduous.server.plist
+systemctl --user disable --now deciduous-server.service  # Linux
+rm -r ~/.config/deciduous/server
 ```
 
-Worktrees start from the selected commit and do not copy uncommitted changes. Launch the API agent in `../example-app-api` and the test agent in `../example-app-tests`. Ensure each has the same MCP connection configuration. Give each its responsibility from the table and tell both to pass their branch name on graph writes. They share Postgres memory without sharing a SQLite file.
+### One token per machine
 
-## A complete two-agent handoff
+The CLI keeps exactly one stored token, in `~/.config/deciduous/credentials`, not one per server URL. If you write to a local server for some projects and to a team server for others, only one of them can use the stored token. Two things replace it without asking:
 
-The examples below are MCP calls, not shell commands. Replace uppercase ID placeholders with the UUID returned by an earlier call. Do not send the placeholder text to the server.
+- `deciduous remote login --url https://deciduous.example.com` stores the team token over the local one.
+- `deciduous remote setup --local` stores the local server's token over whatever is there, whenever they differ.
 
-### 1. The API agent opens the work
+The other server's projects then fail on every write. The write itself still succeeds locally and the command exits 0; the op waits in the log:
 
-Check for another writer, then record the actual user request:
-
-```javascript
-check_activity({workspace: "example-app"})
-add_node({
-  workspace: "example-app", branch: "agent-api",
-  node_type: "goal", status: "active",
-  title: "Validate create-item requests",
-  prompt: "Add request validation and tests for the create-item endpoint."
-})
+```text
+Created node 6 (type: observation, title: written with the other server's token) [branch: main]
+Warning: the local write succeeded but the server refused it: the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.
+1 write(s) wait in /home/you/code/my-app/.deciduous/remote-log.jsonl, and every later write will be refused the same way until that is fixed. `deciduous remote status` lists them.
 ```
 
-Save the returned `id` as `GOAL_ID`. Before implementation, record the choice:
+`DECIDUOUS_MCP_TOKEN` is read before the stored file, so the working arrangement is: store the token you use most, and export the other one in the environment of the projects that need it (a per-directory env tool such as direnv, or a wrapper script). Once the right token is in place, `deciduous remote push` sends what waited.
 
-```javascript
-log_decision({
-  workspace: "example-app", branch: "agent-api",
-  parent_node_id: "GOAL_ID",
-  title: "Choose the validation boundary",
-  rationale: "Reject malformed requests before they reach the service layer.",
-  chosen_option: {
-    title: "Validate at the HTTP boundary",
-    description: "Return 422 with stable field error codes."
-  },
-  rejected_options: [{
-    title: "Validate after the database write",
-    reason: "The service would receive invalid input and rely on rollback."
-  }]
-})
+The ordering also matters the first time. A brand-new local server adopts whatever token the machine already holds (step 2 above), so installing a local server after `remote login` to a team server gives the local server the team's token. Both then accept the same secret, and rotating the team token later breaks the local server's projects too. Run `remote setup --local` with `DECIDUOUS_MCP_TOKEN` unset and the credentials file empty if you want the two kept apart. (This ordering was read from `machine_token()` in `src/server.rs`, not run.)
+
+Claude Code has the same shape of problem: one user-scope `deciduous` entry. For a second server, add a project-scoped `.mcp.json` in the repositories that use it; see [Connect your agents](content/clients.md).
+
+## No server at all
+
+`deciduous init` will not finish without a server. In a terminal it asks; without one it prints the four `remote setup` forms and exits 1. To opt out, say so:
+
+```text
+$ DECIDUOUS_NO_SERVER=1 deciduous init
+   Creating .gitignore (track .deciduous/graph.json, ignore the database)
+   Creating .gitattributes (merge the graph file record by record, fold it in PR diffs)
+   Configured git merge driver for graph records
+   Creating .deciduous/graph.json (run `deciduous sync` to fill it, then commit it)
+   ...
+   Skipped shared graph server (DECIDUOUS_NO_SERVER is set)
 ```
 
-Save `decision_id` as `DECISION_ID`. The helper creates a decision and its option nodes, with `chosen` and `rejected` edges. Record the action and connect it:
+The ignore rules keep the database private and track two files:
 
-```javascript
-add_node({
-  workspace: "example-app", branch: "agent-api",
-  node_type: "action", status: "active",
-  title: "Implement request validation at the route boundary",
-  files: ["src/http/items.ts"]
-})
-add_edge({
-  workspace: "example-app", branch: "agent-api",
-  from_node_id: "DECISION_ID", to_node_id: "API_ACTION_ID",
-  rationale: "Implement the selected validation boundary"
-})
+```text
+# .gitignore
+.deciduous/*
+!.deciduous/config.toml
+!.deciduous/graph.json
+
+# .gitattributes
+.deciduous/graph.json merge=deciduous linguist-generated=true
 ```
 
-`API_ACTION_ID` is the ID returned by `add_node`. Send the test agent the workspace and `DECISION_ID`, along with its assigned files. A title alone is harder to follow than a linkable node.
+and the merge driver goes into `.git/config`, which git never shares:
 
-### 2. The test agent reads before writing
-
-```javascript
-check_activity({workspace: "example-app", branches: 30})
-query_nodes({
-  workspace: "example-app", branch: "agent-api",
-  type: "decision", search: "validation", limit: 10
-})
-show_node({node_id: "DECISION_ID"})
+```text
+merge.deciduous.name deciduous decision graph record
+merge.deciduous.driver deciduous merge-record %O %A %B
 ```
 
-`query_nodes` returns summaries. `show_node` supplies the description, metadata, and edge rationales. Read those details before treating a title as an agreed contract.
+Every write goes to the local database and is mirrored into `graph.json` at once. Each write also says where it went, so nobody mistakes this mode for a shared one:
 
-The test agent uses the API agent's decision:
-
-```javascript
-log_observation({
-  workspace: "example-app", branch: "agent-tests",
-  title: "Use the API agent's field error contract in integration tests",
-  description: "Assert status 422 and stable error codes, without coupling tests to message wording.",
-  related_to: "GOAL_ID",
-  took_from: "DECISION_ID",
-  why: "The boundary decision defines the public response; a second contract would make the tests disagree with the implementation."
-})
+```text
+Note: written to /home/you/code/my-app/.deciduous/deciduous.db only; this project has no shared server. `deciduous remote setup` connects one.
 ```
 
-Save the returned `id` as `BORROW_ID`. `took_from` creates an edge from the source decision to this observation. It accepts a node UUID or a full `change_id`, within the same workspace, including a source on another branch. Use the full identifier, not a shortened display prefix.
+### Two clones, one graph
 
-### 3. The test agent implements and reports evidence
+This was run with a bare origin and two clones, `a` and `b`. In `a`: add a goal, `deciduous sync`, commit `.gitignore .gitattributes .deciduous/config.toml .deciduous/graph.json` by name, push. A fresh clone `b` sees the goal immediately (the database follows `graph.json` on the next command), but its `.git/config` has no merge driver until something registers it. `deciduous sync` does:
 
-```javascript
-add_node({
-  workspace: "example-app", branch: "agent-tests",
-  node_type: "action", status: "active",
-  title: "Cover invalid create-item requests",
-  files: ["tests/items.test.ts"]
-})
-add_edge({
-  workspace: "example-app", branch: "agent-tests",
-  from_node_id: "BORROW_ID", to_node_id: "TEST_ACTION_ID",
-  rationale: "Test the shared error contract"
-})
+```text
+$ deciduous sync
+Configured git merge driver for the graph file (this clone)
+Synced /home/you/code/b/.deciduous/graph.json (1 nodes, 0 edges, 0 themes, 0 tags on disk)
+  Database and records already agree
 ```
 
-After running the tests, record the actual command, result, and limitations. This example assumes the named tests passed:
+Then both clones changed the graph at once. `a` added an option, linked it, and set the goal `active`; `b` added a different option, linked it, and replaced the goal's prompt. Both committed; `a` pushed; `b` pulled:
 
-```javascript
-close_thread({
-  workspace: "example-app", branch: "agent-tests",
-  parent_node_id: "TEST_ACTION_ID",
-  title: "Invalid requests return the agreed field errors",
-  description: "npm test -- tests/items.test.ts passed all 8 cases. Checked missing name, invalid quantity, and unknown fields. Full-suite run remains for integration.",
-  success: true
-})
+```text
+$ git pull --no-edit origin HEAD
+Merge made by the 'ort' strategy.
+ .deciduous/graph.json | 24 +++++++++++++++++++++++-
+$ deciduous nodes
+ID    CHANGE    TYPE         STATUS     TITLE
+1     94e4b9f7  goal         active     Shared goal
+3     d04a258b  option       pending    Option from A
+2     01ed84dd  option       pending    Option from B
 ```
 
-The API agent records its own implementation outcome under `API_ACTION_ID`. Neither agent marks the shared goal complete until the coordinator has integrated the branches and verified the combined result. Deciduous does not merge code or run tests on your behalf.
+No conflict markers, both new options and both edges, and node 1 carries `a`'s status and `b`'s prompt. The driver merges record by record, and a record both sides changed field by field, breaking ties on `updated_at`. Deletes are tombstones, so a delete reaches clones that already had the node. A file that does end up with conflict markers (merged in a clone with no driver registered) is repaired by the next `deciduous sync`.
 
-## Read between milestones
-
-Call `check_activity` before a burst of writes and after each milestone. Its `sessions` list shows unexpired write leases, not every running agent. Its `branches` list shows recent branch nodes even after the writer's lease expires; `branches_total` tells you whether the list is truncated.
-
-The default is 20 branches, with a maximum of 200. Follow interesting nodes with `show_node`. Use `query_nodes` when you need a particular type or a search term.
-
-## Treat locks as coordination
-
-The default advisory lock key is `(workspace, branch)`, with a ten-second lease. Another write from the same MCP session renews it. Sessions on different branches can write at once; a conflicting session gets an error identifying the current holder.
-
-On a conflict, read `check_activity`, wait for the other writer to finish, and retry with the same intended branch. Do not invent a new branch name to bypass a teammate's ownership. Missing `branch` values share the empty-branch lock bucket. A server operator can configure a workspace-wide lock, which makes all branches contend.
-
-These locks do not protect source files, reserve a task for the duration of an agent session, or prevent raw database/import operations. Keep file ownership and code review in your team workflow.
-
-## Watch the conversation in the graph
-
-With the Deciduous 1.0 CLI configured for this workspace:
+The routine:
 
 ```bash
-deciduous remote watch --types decision,observation,outcome
-deciduous remote watch --branch agent-api --edges
+git pull
+deciduous sync          # takes in what the pull brought, registers the driver if missing
+deciduous sync --check  # before pushing: reports what sync would change, writes nothing
+git add .deciduous/graph.json
 ```
 
-The feed quotes titles and distinguishes updates from new nodes. It reconnects, but it does not replay events missed while disconnected. Query the graph after a gap. Do not count event frames as completed tasks.
+`sync --help` says `--check` exits 1 when anything is pending. In the one pending case provoked here (the database edited behind the file), it printed `Changes would: 1 nodes set back to graph.json's version` and exited 0, so read its output rather than relying on the exit status in a hook. Ordinary writes are mirrored into the file as they happen, so in day-to-day use there is rarely anything pending.
 
-`--url` prints a WebSocket URL containing the bearer token. Avoid it in screenshots, logs, and shared terminals. See [Troubleshooting](content/troubleshooting.md) for version and connection checks.
+Numeric ids are per clone (`b` numbered "Option from B" 2, `a` numbered "Option from A" 2). Refer to nodes across machines by change_id prefix: `deciduous link 94e4b9f7 01ed84dd`.
+
+What this mode does not have: agents writing over MCP (there is no HTTP server; `deciduous mcp` over stdio works against the local database, see [MCP tools](content/mcp.md)), `check_activity`, live `remote watch`, and anything faster than a git push. `graph.json` also carries every prompt and description you write, so treat it like any other committed file.
+
+### Moving to a server later
+
+Point the project at a server with `deciduous remote init https://deciduous.example.com --workspace my-app` (or `remote setup --url`, or `--local`). The history written before the project had a remote goes up with it. From a clone of the two-clone repository above, pointed at an empty workspace:
+
+```text
+$ deciduous remote init http://127.0.0.1:4000 --workspace docsref-seed2
+Remote: http://127.0.0.1:4000
+  workspace: docsref-seed2
+  claim: claimed (by this repository's root commit)
+  server holds 0 nodes, 0 edges, 0 documents
+  sent 2 local node(s), 1 edge(s) the server lacked
+```
+
+`deciduous remote status` then says In sync. If it ever lists rows as "only here" that no op covers, `deciduous remote push --seed` sends them; it adds what the server lacks and never changes a row the server already has. [Operating a server](content/operating.md) covers the other push flags. Once a project has a `[remote]`, `deciduous sync` is no longer the step that shares anything.

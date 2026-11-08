@@ -1,26 +1,120 @@
-# Recover the work, not a chat transcript
+# Pick up where the last session stopped
 
-Start a new agent with the server endpoint, workspace name, current branch, and the active goal's ID. Those references let it retrieve the reasoning that survived the previous session.
+A new session starts with nothing but the repository, and the graph on the server holds everything the last one decided. Recovery is reading that graph before writing anything: the goal still open, the decision under it, the last outcome, and anything another agent left on the board for you. An agent does it with the server's MCP tools; a person, or an agent running `/recover`, does it with the CLI after refreshing the local cache.
 
-## Read before changing anything
+## What the agent is told
 
-Use the same shared MCP connection as the rest of the team. These are MCP calls; replace the ID placeholders with server UUIDs:
+On connect, the server sends its instructions in the MCP `initialize` reply. The part about starting:
 
-```javascript
-check_activity({workspace: "example-app", branches: 30})
-query_nodes({workspace: "example-app", type: "goal", status: "active", limit: 20})
-query_nodes({workspace: "example-app", branch: "agent-api", limit: 30})
-show_node({node_id: "GOAL_ID"})
-get_descendants({node_id: "GOAL_ID"})
+```text
+At the start of a session, read before writing: `query_nodes` for this branch, `ask_graph` for the topic.
+If the work continues an existing goal, attach to it. When a line of work ends: `close_thread`, then
+`find_orphans`.
 ```
 
-`query_nodes` returns summaries, newest created nodes first. It does not include the full rationale. Follow relevant IDs with `show_node`. Defaults matter: `add_node` defaults to `pending`, so also query pending goals if an active-goal search is empty.
+So the first calls of a session look like this:
 
-Use `get_ancestors({node_id: "ACTION_ID"})` to trace an unfinished action back to the choices that led to it. Read the source node of each `took_from` edge before reusing it. A superseded decision may still be visible in the history.
+```javascript
+query_nodes({workspace: "my-app", type: "goal", status: "active"})
+query_nodes({workspace: "my-app", branch: "agent-api", limit: 30})
+ask_graph({workspace: "my-app", question: "why did we change the retry deadline?"})
+check_activity({workspace: "my-app"})
+read_messages({workspace: "my-app", unanswered_for: "api"})
+```
 
-## Reconcile the graph with the checkout
+`query_nodes` returns summaries, newest first: id, type, status, title, branch, `change_id`, confidence. No descriptions and no rationale. Follow the ids that matter with `show_node`, which adds the description, metadata (prompt, files, commit), documents, and every edge in and out with its rationale.
 
-The graph preserves what someone recorded. Check the code and tests before assuming the recorded outcome still applies:
+`ask_graph` finds entry nodes by text and then follows the edges the question asks for: "why" follows choices and revisits, "history" or "pivot" follows revisits and superseded nodes. Each result says how it was reached. For that question it returned the superseded action and decision, the observation that killed them, the revisit and the decision that replaced them, and the goal:
+
+```text
+action      superseded  anchor     Apply a 30s deadline to the retry loop
+decision    pending     anchor     Per-caller deadline passed in the request context
+revisit     pending     anchor     Reconsidering: Use an overall deadline, not an attempt cap
+observation pending     anchor     A fixed 30s deadline fails batch jobs that legitimately wait
+option      pending     rationale  Cap the attempt count
+decision    superseded  anchor     Use an overall deadline, not an attempt cap
+goal        active      anchor     Bound retries for failed requests
+```
+
+`get_ancestors` from an unfinished action walks back to the decisions and the goal behind it; `get_descendants` from a goal shows everything done under it.
+
+Two traps:
+
+- `add_node` defaults to `pending`. A search for `status: "active"` misses goals nobody activated; query `pending` too before concluding there is no open goal.
+- A `superseded` decision is history, not the plan. Look for the revisit after it.
+
+If the work continues an existing goal, attach to it with `parent_id`. Do not log the original request as a second goal with the same title.
+
+## From the CLI: refresh the cache, then read
+
+The CLI reads the local cache, `.deciduous/deciduous.db`, which only knows what this checkout wrote or last pulled. Agents writing over MCP never touch it. Check first:
+
+```console
+$ deciduous remote status
+...
+                 local    server
+  nodes              6        23
+  edges              6        22
+
+Only on the server (17)
+  observation 048e98e6 "The router already parses JSON before handlers run"
+  decision 17365e54 "Validate at the HTTP boundary, not after the write"
+  ...
+Differs: `deciduous remote pull` takes the server's side.
+```
+
+`remote status` exits 1 when anything differs. Then:
+
+```console
+$ deciduous remote pull
+Pulled: my-app <- https://deciduous.example.com
+  fetched 23 nodes, 22 edges, 1 deletion(s)
+  imported 17 new node(s), updated 0, removed 0; imported 16 edge(s), removed 0
+$ deciduous remote status | tail -2
+In sync: no writes waiting, and every node, edge and document matches field by field.
+Themes and tags are not sent to the server, so they are not compared.
+```
+
+`remote pull` first sends anything still waiting in `.deciduous/remote-log.jsonl`, then takes the server's side for every node and edge, including deletions. It does not download document bytes ([Evidence](evidence.md#documents-from-the-cli-reach-the-server)). A fresh clone or a new worktree has an empty cache; `remote pull` is the first thing to run there.
+
+Then read:
+
+```console
+$ deciduous nodes --branch "$(git rev-parse --abbrev-ref HEAD)"
+$ deciduous show 5ca33b18
+$ deciduous narratives pivots
+$ deciduous pulse --summary
+$ deciduous board read --unanswered api
+```
+
+Local ids differ in every checkout. `show`, `link`, `status` and `doc attach` take a `change_id` prefix or the server UUID as well. A prefix only resolves against the cache, so before a pull it fails with advice meant for the no-server mode:
+
+```text
+Error: No node has a change_id starting with '5ca33b18'. Run 'deciduous sync' if a teammate created it.
+```
+
+With a `[remote]` the fix is `deciduous remote pull`, not `sync`. A server UUID is looked up on the server and reports which local node it is:
+
+```console
+$ deciduous show 32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb
+Note: '32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb' is the server id 32d05bcb-1b2 = change_id 5ca33b18-c27 (Validate create-item requests): local #11
+```
+
+## The /recover command
+
+`deciduous init` writes `.claude/commands/recover.md`. In a project with a `[remote]`, `deciduous update` replaces it with a version whose first step is `deciduous remote pull` and `deciduous remote status`, then `nodes`, `nodes --branch`, `edges`, `commands`, `doc list`, the board, and `git status` / `git log`. A project set up without a server gets the git-mode version, which ends with `deciduous sync` instead; run `deciduous update` after adding `[remote]` to switch.
+
+Parts of the 1.1.0 template do not work as written:
+
+- `deciduous commands` prints `No commands logged.` in 1.1.0, however many writes the checkout made. Fixed after 1.1.0.
+- The orphan audit (`deciduous edges | cut -d'>' -f2 ...`) looks for a `>` the tabular `edges` output does not contain, so it prints nothing useful. Use `find_orphans` over MCP.
+- Step 3, `cat git.log | tail -30`, reads a file nothing creates.
+
+The template on the main branch adds a step that runs `deciduous transcript import` for sessions the graph does not have yet; 1.1.0 does not ship it. You can run the import yourself ([Evidence](evidence.md#deriving-the-graph-from-a-transcript)).
+
+## Check the graph against the checkout
+
+The graph says what someone recorded, not what the code is now:
 
 ```bash
 git status --short
@@ -28,46 +122,25 @@ git branch --show-current
 git log -5 --oneline
 ```
 
-Match the branch and commit in node metadata to the checkout. Review uncommitted changes without discarding them. If the graph says a test passed but the relevant code has changed since, run the test again and record a fresh result.
+Match the branch and commit in the node metadata to the checkout. If an outcome says tests passed and the code has changed since, run them again and record the new result under the same action.
 
-Write a short recovery observation linked to the active action or goal. State what you confirmed and what remains unknown. Continue the existing chain instead of logging the original request as a new goal.
+## Leaving a session so the next can recover
 
-## Handoff checklist
+The next session reads what you wrote, so end with:
 
-The outgoing agent should leave:
+- `close_thread` on each line of work, with the command run and its result, or `success: false` and the error.
+- `find_orphans` empty, or each remaining orphan linked to its real cause.
+- A reply to every board message addressed to you.
+- From the CLI: `deciduous remote status` saying `In sync`. Anything waiting means the server never saw it: `deciduous remote push` sends it.
 
-- The workspace and goal ID, plus the current action and latest outcome IDs.
-- Its branch, changed files, and commit SHA if committed.
-- The decisions another agent must preserve, including source IDs for borrowed findings.
-- Test commands and their actual results, followed by any checks still needed.
-- The next bounded step and any ownership conflict or missing permission.
+## When the server is down
 
-Keep credentials out of the handoff. The receiving agent gets access through its configured MCP connection.
+CLI writes still succeed locally, exit 0, and say so:
 
-## Recover the local viewer
-
-After confirming the CLI's workspace and URL:
-
-```bash
-deciduous remote status
-deciduous remote pull
-deciduous nodes
-deciduous edges
-deciduous serve
+```text
+Created node 2 (type: observation, title: written while server down) [branch: main]
+Warning: the local write succeeded but the server did not get it: transport error: https://deciduous.example.com/ops: Connection Failed: Connect error: Connection refused (os error 61)
+1 write(s) queued in .../.deciduous/remote-log.jsonl. They are sent on the next write, or now with `deciduous remote push` once the server is reachable.
 ```
 
-Local integer node IDs can differ from the server UUIDs and from another machine's IDs. Use the full `change_id` to identify the same node across stores. MCP tools that ask for a node UUID should receive the server `id`; `log_observation` also accepts a full `change_id` for `related_to` and `took_from`.
-
-`remote pull` merges node and edge records into the local cache. It does not download document bytes or provide a complete backup of the remote database. Equal counts in `remote status` mean only that counts match, not that every record matches.
-
-If local-only work exists, preserve a backup before recovery. Do not delete the database or push it over the server to resolve uncertainty. Follow [Upgrading](upgrading.md) for a reviewed import.
-
-## After a dropped event stream
-
-`deciduous remote watch` reconnects, but notifications issued during a connection gap can be lost. Call `check_activity` and query the relevant branches to catch up. A quiet stream does not establish that nobody changed the graph.
-
-## If the server is unavailable
-
-Keep any local cache and the code checkout intact. Record new offline work as local-only and avoid claiming teammates can see it. Restore the server connection before depending on shared updates. The [solo/offline guide](solo.md) explains that alternative; [Troubleshooting](troubleshooting.md) covers health, credentials, and stale sessions.
-
-Infrastructure recovery requires the operator's Postgres backup and restore process. A local `deciduous backup` protects SQLite only.
+`remote status` lists them as `waiting` before it fails on the health check. Once the server answered again, `remote pull` sent the queued write and `remote status` said `In sync`. MCP writes fail outright, since the server is the only place they go. Nothing a teammate cannot see should be described to them as shared. [Operating](operating.md) covers backups and restoring the server; a local `deciduous backup` copies only this machine's cache.

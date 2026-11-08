@@ -1,27 +1,29 @@
 {
   "groups": [
-    {"title":"Get connected","pages":["index","quickstart","local-postgres","clients"]},
-    {"title":"Work as a team","pages":["teams","workflow","recovery","evidence"]},
-    {"title":"Run the service","pages":["remote-postgres","upgrading","troubleshooting"]},
-    {"title":"Reference","pages":["concepts","reference","mcp","architecture","developer","solo","history"]}
+    {"title":"Get started","pages":["index","quickstart","run-a-server","clients","for-agents"]},
+    {"title":"Work in the graph","pages":["workflow","teams","recovery","evidence","history"]},
+    {"title":"Operate","pages":["operating","local","troubleshooting"]},
+    {"title":"Reference","pages":["concepts","reference","mcp","architecture","developer"]}
   ],
   "labels": {
-    "index":"Shared memory","quickstart":"Quickstart","local-postgres":"Local Postgres setup","clients":"Connect your agents",
-    "teams":"Two agents, one graph","workflow":"Record the reasoning","recovery":"Recover context","evidence":"Attach evidence",
-    "remote-postgres":"Remote hosting","upgrading":"Upgrade and migrate","troubleshooting":"Troubleshooting",
-    "concepts":"Graph concepts","reference":"CLI and API","mcp":"MCP tools","architecture":"Architecture and trust","developer":"Develop Deciduous","solo":"Solo and offline use","history":"Explore design history"
+    "index":"What deciduous is","quickstart":"Join a server","run-a-server":"Run a server","clients":"Connect your agents","for-agents":"For agents",
+    "workflow":"Record the reasoning","teams":"Many agents, one graph","recovery":"Recover context","evidence":"Documents and transcripts","history":"Design history",
+    "operating":"Backups, upgrades, tokens","local":"Without a shared server","troubleshooting":"Troubleshooting",
+    "concepts":"Graph concepts","reference":"CLI reference","mcp":"MCP tools","architecture":"Architecture and trust","developer":"Develop deciduous"
   },
   "aliases": {
-    "guide.html":"quickstart","remote.html":"quickstart","mcp.html":"mcp","mcp-api.html":"reference","story.html":"history","developer/index.html":"developer",
+    "guide.html":"quickstart","remote.html":"run-a-server","mcp.html":"mcp","mcp-api.html":"mcp","story.html":"history","developer/index.html":"developer",
+    "tutorial/local-postgres.html":"local","tutorial/remote-postgres.html":"run-a-server","tutorial/upgrading.html":"operating","tutorial/solo.html":"local",
     "tutorial/introduction/what-is-deciduous.html":"index","tutorial/introduction/how-to-read.html":"concepts",
-    "tutorial/getting-started/installing.html":"local-postgres","tutorial/getting-started/initializing.html":"quickstart","tutorial/getting-started/ai-integration.html":"clients",
-    "tutorial/real-work/starting-work.html":"workflow","tutorial/real-work/implementing.html":"teams","tutorial/real-work/editing-and-fixing.html":"workflow","tutorial/real-work/attaching-evidence.html":"evidence",
-    "tutorial/sharing/exporting-your-work.html":"upgrading","tutorial/sharing/pr-workflow.html":"teams",
-    "tutorial/advanced/hooks.html":"clients","tutorial/advanced/multi-assistant.html":"teams","tutorial/advanced/themes-and-tags.html":"solo",
+    "tutorial/getting-started/installing.html":"quickstart","tutorial/getting-started/initializing.html":"quickstart","tutorial/getting-started/ai-integration.html":"clients",
+    "tutorial/real-work/starting-work.html":"workflow","tutorial/real-work/implementing.html":"workflow","tutorial/real-work/editing-and-fixing.html":"workflow","tutorial/real-work/attaching-evidence.html":"evidence","tutorial/real-work/importing-a-transcript.html":"evidence",
+    "tutorial/sharing/exporting-your-work.html":"local","tutorial/sharing/pr-workflow.html":"teams",
+    "tutorial/advanced/hooks.html":"clients","tutorial/advanced/multi-assistant.html":"teams","tutorial/advanced/themes-and-tags.html":"concepts",
     "tutorial/archaeology/exploring-the-graph.html":"history","tutorial/archaeology/narratives.html":"history","tutorial/archaeology/observations-and-pivots.html":"history","tutorial/archaeology/the-decision-graph-skill.html":"history",
     "tutorial/reference/index.html":"reference"
   },
   "markdownAliases": {
-    "ARCHITECTURE.md":"architecture","CONCEPTS.md":"concepts","MULTI_USER_SYNC.md":"teams","QUICK_REFERENCE.md":"reference","WEB_VIEWER.md":"evidence","DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md":"evidence","narratives.md":"history","remote-graph.md":"remote-postgres"
+    "ARCHITECTURE.md":"architecture","CONCEPTS.md":"concepts","MULTI_USER_SYNC.md":"local","QUICK_REFERENCE.md":"reference","WEB_VIEWER.md":"evidence","DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md":"evidence","narratives.md":"history","remote-graph.md":"run-a-server","transcripts.md":"evidence",
+    "agents/index.md":"for-agents","agents/install.md":"for-agents","agents/logging.md":"for-agents","agents/project.md":"for-agents","agents/shared-graph.md":"for-agents","agents/tools.md":"mcp","agents/troubleshooting.md":"troubleshooting","agents/verify.md":"for-agents"
   }
 }

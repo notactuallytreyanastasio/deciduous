@@ -23,6 +23,7 @@ const pages = new Map(ids.map(id => {
 }));
 
 const logo = '<svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg>';
+const version = fs.readFileSync(path.join(root, 'Cargo.toml'), 'utf8').match(/^version = "([^"]+)"/m)[1];
 const searchData = [];
 
 function article(page, outputPath) {
@@ -48,7 +49,6 @@ function article(page, outputPath) {
     const [base, fragment] = href.split('#');
     const pageId = base.replace(/^\.\//, '').replace(/\.md$/, '');
     if (pages.has(pageId)) href = relative(outputPath, `tutorial/${pageId}.html`) + (fragment ? `#${fragment}` : '');
-    else if (/scripts\/team-memory\//.test(base)) href = relative(outputPath, `downloads/team-memory/${base.split('scripts/team-memory/')[1]}`) + (fragment ? `#${fragment}` : '');
     else if (base.startsWith('/tutorial/')) href = relative(outputPath, base.slice(1)) + (fragment ? `#${fragment}` : '');
     else if (base.startsWith('https://github.com/')) tokens[idx].attrSet('rel', 'noopener');
     tokens[idx].attrSet('href', href);
@@ -89,7 +89,7 @@ function render(id, outputPath) {
 <body data-search-index="${href('tutorial/search-index.json')}">
 <a class="skip-link" href="#content">Skip to content</a>
 <header class="docs-header"><a class="brand" href="${href('index.html')}" aria-label="Deciduous home">${logo}<span>deciduous</span></a><a class="docs-label" href="${href('tutorial/index.html')}">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
-<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation">${navigation}</nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation">${navigation}</nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous ${escape(version)}</span></div></aside>
 <main id="content"><div class="article-meta"><span>${escape(manifest.groups.find(group => group.pages.includes(id)).title)}</span><a href="${href(`content/${id}.md`)}">Read as Markdown</a></div>${architecture}<article>${html}</article><nav class="page-turn" aria-label="Previous and next guide">${adjacent(ids[position - 1], 'Previous')}${adjacent(ids[position + 1], 'Next')}</nav><footer class="article-footer"><a href="${href('index.html')}">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
 <aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul>${toc.map(item => `<li><a href="#${escape(item.id)}">${escape(item.text)}</a></li>`).join('')}</ul></nav></aside></div>
 <dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
@@ -107,17 +107,11 @@ for (const [outputPath, id] of Object.entries(manifest.markdownAliases)) {
   generated.set(outputPath, `<!-- Generated from content/${id}.md by scripts/docs/build.mjs. Edit the source. -->\n\n${markdown}`);
 }
 generated.set('tutorial/search-index.json', JSON.stringify(searchData, null, 2) + '\n');
-const scriptRoot = path.join(root, 'scripts/team-memory');
-if (fs.existsSync(scriptRoot)) {
-  for (const entry of fs.readdirSync(scriptRoot, {withFileTypes: true})) {
-    if (entry.isFile() && (/\.(py|ya?ml|md|sh)$/.test(entry.name) || entry.name === 'Caddyfile.example') && !entry.name.startsWith('test')) {
-      generated.set(`downloads/team-memory/${entry.name}`, fs.readFileSync(path.join(scriptRoot, entry.name)));
-    }
-  }
-  for (const name of ['Dockerfile', 'compose.yaml', 'README.md', '.gitignore']) {
-    generated.set(`downloads/team-memory/postgres-only/${name}`, fs.readFileSync(path.join(scriptRoot, 'postgres-only', name)));
-  }
-}
+const site = 'https://deciduous.dev';
+const llmsGroups = manifest.groups.map(group => `## ${group.title}\n\n${group.pages.map(id => `- [${pages.get(id).title}](${site}/content/${id}.md): ${pages.get(id).description}`).join('\n')}`).join('\n\n');
+generated.set('llms.txt', `# Deciduous\n\n> A decision graph for AI-assisted development. Agents and people write goals, options, decisions, actions and outcomes to a shared server (PostgreSQL behind an authenticated HTTP MCP endpoint), one workspace per repository. Deciduous ${version}.\n\nEvery page below is Markdown. The whole set in one file: ${site}/llms-full.txt\n\n${llmsGroups}\n`);
+generated.set('llms-full.txt', ids.map(id => `<!-- ${site}/content/${id}.md -->\n\n${pages.get(id).source.trim()}\n`).join('\n---\n\n'));
+generated.set('agents/llms-full.txt', generated.get('llms-full.txt'));
 let stale = 0;
 for (const [outputPath, content] of generated) {
   const filename = path.join(docs, outputPath);
