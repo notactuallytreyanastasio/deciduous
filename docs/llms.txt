@@ -1,0 +1,16 @@
+# Deciduous
+
+> Decision graph memory for coding agents. Setup and working instructions written for agents are under /agents/.
+
+## For agents
+
+- [Deciduous, for agents](https://deciduous.dev/agents/index.md): This section is written for you, the coding agent, not for the person you work for.
+- [Install](https://deciduous.dev/agents/install.md): You need one binary, `deciduous`: the CLI that sets up a project, points it at the shared server and installs the agent instructions.
+- [Set up the project](https://deciduous.dev/agents/project.md): Run everything from the repository root.
+- [Shared graph](https://deciduous.dev/agents/shared-graph.md): A shared server is one PostgreSQL database behind an HTTP MCP endpoint.
+- [Logging while you work](https://deciduous.dev/agents/logging.md): The graph is only worth reading if it is written while the work happens.
+- [MCP tools](https://deciduous.dev/agents/tools.md): The shared server's 18 tools in 1.0.2, generated from its own `tools/list` reply, not written by hand.
+- [Verify](https://deciduous.dev/agents/verify.md): Run these after setting up and report each result to the user as pass or fail, with the output.
+- [Troubleshooting](https://deciduous.dev/agents/troubleshooting.md): Each entry is a failure that has actually happened, with the text you will see.
+
+- [Everything above in one file](https://deciduous.dev/agents/llms-full.txt)

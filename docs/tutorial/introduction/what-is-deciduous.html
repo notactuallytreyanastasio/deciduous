@@ -1,180 +1,71 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-docs-generated="true">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>What is Deciduous? - The Deciduous Tutorial</title>
-    <link rel="stylesheet" href="../style.css">
-
-    <!-- Open Graph / Social -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="The Deciduous Tutorial" />
-    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
-    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shared memory for a team of agents · Deciduous docs</title>
+<meta name="description" content="Give each coding agent its own branch and connect them to the same Deciduous workspace. They can read the decisions already made, record what they learn, and credit the findings they reuse.">
+<link rel="canonical" href="https://deciduous.dev/tutorial/">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Shared memory for a team of agents · Deciduous docs"><meta property="og:description" content="Give each coding agent its own branch and connect them to the same Deciduous workspace. They can read the decisions already made, record what they learn, and credit the findings they reuse."><meta property="og:url" content="https://deciduous.dev/tutorial/">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css"><script src="../docs.js" defer></script>
 </head>
-<body style="padding-top: 0;">
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <a href="../../" class="logo">DECIDUOUS</a>
-            <span class="subtitle">Tutorial</span>
-        </div>
-        <div class="toc">
-            <div class="toc-section">
-                <a href="../introduction/what-is-deciduous.html" class="toc-title active">Introduction</a>
-                <ul>
-                    <li><a href="../introduction/what-is-deciduous.html" class="active">What is Deciduous?</a></li>
-                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
-                <ul>
-                    <li><a href="../getting-started/installing.html">Installing</a></li>
-                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
-                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
-                <ul>
-                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
-                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
-                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
-                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
-                <ul>
-                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
-                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
-                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
-                    <li><a href="../real-work/importing-a-transcript.html">Importing a Transcript</a></li>
-                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
-                <ul>
-                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
-                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
-                <ul>
-                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
-                    <li><a href="../advanced/hooks.html">Hooks</a></li>
-                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
-            </div>
-        </div>
-    </nav>
-
-    <main class="content">
-        <article>
-            <div class="info-box">
-                <strong>Disclaimer:</strong> This tutorial was written by deciduous using itself. It was rewritten for 1.1.0 on 2026-10-24 by running every command shown against the release binary.
-            </div>
-
-            <h1>What is Deciduous and Why Should I Care?</h1>
-
-            <p>Three months into a project someone asks why you chose PostgreSQL over MongoDB. There was a reason, something about transactions and the data model, but the Claude session where you worked it through has long been compacted and the Slack thread is buried. You say "it made sense at the time."</p>
-
-            <p>That is the problem deciduous is built against, and it has got worse with AI-assisted development: an assistant considers three approaches, rejects two, implements one, and the reasoning is gone when the context window compacts or the session ends.</p>
-
-            <h2>What a Decision Graph Is</h2>
-
-            <p>One graph per repository. Its nodes are of seven types: <span class="node-goal">goal</span>, <span class="node-option">option</span>, <span class="node-decision">decision</span>, <span class="node-action">action</span>, <span class="node-outcome">outcome</span>, <span class="node-observation">observation</span> and <span class="node-revisit">revisit</span>. Its edges are <code>leads_to</code>, <code>requires</code>, <code>chosen</code>, <code>rejected</code>, <code>blocks</code>, <code>enables</code> and <code>took_from</code>. The canonical flow is:</p>
-
-            <pre>goal &rarr; options &rarr; decision &rarr; actions &rarr; outcomes</pre>
-
-            <p>A goal leads to the options considered; the options lead to the decision that picked one; the decision leads to the actions that implemented it; the actions lead to what happened. Observations attach wherever they were made. A revisit marks the moment an earlier approach was reconsidered. Every node has a status, and nodes created by the CLI start as <code>pending</code>.</p>
-
-            <h2>Three Ways the Graph Gets Written</h2>
-
-            <ol>
-                <li><strong>The CLI.</strong> <code>deciduous add goal "..."</code>, <code>deciduous link 1 2</code>, and the rest. This is what the tutorial shows, because its output is easy to read.</li>
-                <li><strong>MCP tools, while the agent works.</strong> There are two servers. <code>deciduous mcp</code> is a local stdio server with 34 tools (<code>add_node</code>, <code>link_nodes</code>, <code>search_nodes</code>, <code>trace_chain</code>, ...). The shared graph server, which <code>deciduous init</code> sets up and registers with Claude Code, speaks MCP over HTTP with 21 tools (<code>add_node</code>, <code>capture_conversation_turn</code>, <code>ask_graph</code>, <code>query_nodes</code>, <code>post_message</code>, ...). When Claude Code connects to it, the server sends the logging instructions; no hook is involved.</li>
-                <li><strong>The transcript, after the fact.</strong> New in 1.1.0: <code>deciduous transcript import</code> reads the JSONL file Claude Code writes for every session and derives goals from your prompts, actions from edits and commits, and outcomes from test runs. Every derived node says whether it is <code>proven</code> (a tool call and its result) or <code>inferred</code> (the assistant said so). <a href="../real-work/importing-a-transcript.html">Importing a Transcript</a> shows it on a real session.</li>
-            </ol>
-
-            <p>The third one changes the premise. An agent that logs its own decisions can forget to; the transcript cannot. On a three-week session that had logged nine nodes through MCP, the import found 119 actions, 67 command outcomes and 68 verbatim prompts.</p>
-
-            <h2>Where the Graph Lives</h2>
-
-            <p>Since 1.0.11, <code>deciduous init</code> asks. The default is a server on this machine, installed as a user service (launchd on macOS, systemd on Linux) against the PostgreSQL already on <code>localhost:5432</code>. The alternatives are a PostgreSQL you name, a new PostgreSQL and server in Docker, or a server someone else runs. The server is the truth; <code>.deciduous/deciduous.db</code>, the SQLite file in your checkout, is this machine's cache of it. Every project on the machine shares the one server, one workspace per repository, and the shared server's <code>ask_graph</code> can search across all of them.</p>
-
-            <p>A project that never answered that question (tests and CI set <code>DECIDUOUS_NO_SERVER=1</code>) keeps the older model: the SQLite file is the graph and <code>.deciduous/graph.json</code>, committed to git and merged record by record by a merge driver, is how it travels between clones.</p>
-
-            <h2>The Story We'll Follow</h2>
-
-            <p><a href="https://github.com/pepsico-ecommerce/snowflex">snowflex</a> connects Elixir to Snowflake. It started as one module around Erlang's ODBC driver. Over about 130 commits it grew a connection pool, then a module-based API modelled on <code>Ecto.Repo</code>, then threw the ODBC transport away for Snowflake's HTTP REST API with JWT authentication, then made key management flexible. Each pivot was driven by production pain. You will reconstruct that history as a graph, then work a real open issue (#93, CI pipelines) with Claude logging as it goes.</p>
-
-            <h2>Two Ways to Use It</h2>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Archaeology: an existing project</div>
-                <div class="terminal-body"><span class="user-input">&gt; /decision-graph</span>
-
-I'll read the full commit history first, then map the eras.
-
-<span class="command">git log --oneline --reverse | wc -l</span>
-<span class="output">130</span>
-
-<span class="command">deciduous add goal "Create an Elixir library for querying Snowflake" -c 100 --date 2019-06-15 --commit da7ef84</span>
-<span class="output">Created node 1 (type: goal, title: Create an Elixir library for querying Snowflake) [confidence: 100%] [commit: da7ef84427ca8625acc0dccfd88cda1c86566d3d] [branch: main] [date: 2019-06-15T00:00:00-04:00]</span></div>
-            </div>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Forward logging: new work</div>
-                <div class="terminal-body"><span class="user-input">&gt; /work Add CI pipelines for snowflex (issue #93)</span>
-
-Logging the goal with your request verbatim before touching anything.
-
-<span class="command">deciduous add goal "Add CI pipelines for snowflex" -c 90 --prompt-stdin &lt;&lt; 'EOF'
-Add support for running tests in CI/CD. We need GitHub Actions workflows
-for both unit tests and integration tests. See issue #93.
-EOF</span>
-<span class="output">Created node 16 (type: goal, title: Add CI pipelines for snowflex) [confidence: 90%] [prompt: 130 chars] [branch: ci-pipelines]</span></div>
-            </div>
-
-            <p>In a Claude Code session connected to the server, the agent makes the same writes through MCP (<code>add_node</code> with <code>parent_id</code>, one call per node and edge) rather than the shell. The graph is identical either way.</p>
-
-            <h2>What You Get</h2>
-
-            <ul>
-                <li><strong>Context that survives.</strong> <code>/recover</code> at session start reads the graph, imports any transcript the graph does not have yet, and checks the message board.</li>
-                <li><strong>Questions answered from evidence.</strong> Ask "why did we drop ODBC?" and the assistant answers from the revisit node and the observations behind it.</li>
-                <li><strong>PRs that explain themselves.</strong> <code>deciduous writeup</code> and <code>deciduous dot --png</code> produce the PR body and the picture.</li>
-                <li><strong>Several agents, one graph.</strong> Parallel sessions write to the same workspace and coordinate on the message board (<code>deciduous board</code>).</li>
-            </ul>
-
-            <p>Deciduous tracks its own development this way. The graph exported with this repository held 1,465 nodes and 1,313 edges on 2026-10-24.</p>
-
-            <h2>Why "Deciduous"?</h2>
-
-            <p>Deciduous trees shed their leaves; the structure stays. The working memory of a session falls away, and the graph remains for the next one.</p>
-
-            <div class="page-nav">
-                <a href="../index.html" class="prev">
-                    <span class="label">Previous</span>
-                    <span class="title">Introduction</span>
-                </a>
-                <a href="../introduction/how-to-read.html" class="next">
-                    <span class="label">Next</span>
-                    <span class="title">How to Read This</span>
-                </a>
-            </div>
-        </article>
-    </main>
-
-    <script src="../terminal-demo.js"></script>
-</body>
-</html>
+<body data-search-index="../search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="../index.html" aria-current="page">Shared memory</a></li><li><a href="../quickstart.html">Quickstart</a></li><li><a href="../local-postgres.html">Local Postgres setup</a></li><li><a href="../clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="../teams.html">Two agents, one graph</a></li><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="../remote-postgres.html">Remote hosting</a></li><li><a href="../upgrading.html">Upgrade and migrate</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html">Graph concepts</a></li><li><a href="../reference.html">CLI and API</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop Deciduous</a></li><li><a href="../solo.html">Solo and offline use</a></li><li><a href="../history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Get connected</span><a href="../../content/index.md">Read as Markdown</a></div><div class="connection-strip" aria-label="Agents connect through HTTP MCP to the shared Deciduous service, which stores memory in Postgres"><span><i class="agent-mark"></i>Your agents</span><span class="connection-label">HTTP MCP</span><span><i class="service-mark"></i>Shared service</span><span class="connection-label">Private network</span><span><i class="database-mark"></i>Postgres</span></div><article><h1 id="shared-memory-for-a-team-of-agents">Shared memory for a team of agents</h1>
+<p>Give each coding agent its own branch and connect them to the same Deciduous workspace. They can read the decisions already made, record what they learn, and credit the findings they reuse.</p>
+<p>The shared service stores the graph in Postgres. Agents reach it over authenticated HTTP through MCP. The database stays behind the service; agents do not need a database password.</p>
+<h2 id="start-with-a-working-team">Start with a working team</h2>
+<ol>
+<li><a href="../local-postgres.html">Run Postgres and the shared service on your machine</a>. The guide covers persistent storage, credentials, health checks, and a first connection.</li>
+<li><a href="../clients.html">Connect your agent clients</a> to the same workspace. Give each agent a distinct branch name.</li>
+<li><a href="../teams.html">Run a two-agent handoff</a>. One agent records a decision; the other reads it and links the work that uses it.</li>
+</ol>
+<p>Already have a server? <a href="../quickstart.html">The quickstart</a> begins with its address and an access token. Already have local graphs? <a href="../upgrading.html">Upgrade and import them</a> with backups and a preview before changing anything.</p>
+<h2 id="three-separate-responsibilities">Three separate responsibilities</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>What it owns</th>
+<th>What you configure</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Your agents</td>
+<td>Code in separate worktrees, decisions and evidence</td>
+<td>HTTP MCP endpoint, bearer token, workspace, branch</td>
+</tr>
+<tr>
+<td>Deciduous service</td>
+<td>Graph tools, project routing, writes and live events</td>
+<td>Service token, database connection, HTTP listener</td>
+</tr>
+<tr>
+<td>Postgres</td>
+<td>Shared graph and document storage</td>
+<td>Database role, persistent volume, backups</td>
+</tr>
+</tbody>
+</table>
+<p>One service can hold several workspaces. Use the same explicit workspace name across clones and machines. Workspaces organize the graph; the shared bearer token is a service-wide trust boundary, not a per-workspace permission system. Run separate services for teams that should not read each other's data.</p>
+<h2 id="read-before-writing">Read before writing</h2>
+<p>An agent starting work should check recent activity and query the relevant part of the graph. It records the goal, options and chosen decision before implementation, then attaches actions and outcomes as the work proceeds. A later agent can follow those connections without the original chat transcript.</p>
+<p><a href="../teams.html">Working as a team</a> covers branch identities and reused findings. <a href="../workflow.html">The decision workflow</a> covers the graph itself. <a href="../recovery.html">Recovering context</a> shows how a new session picks up the same reasoning.</p>
+<h2 id="know-which-store-you-are-using">Know which store you are using</h2>
+<p>In Deciduous 1.0, the HTTP MCP server writes to Postgres. Ordinary commands such as <code>deciduous add</code>, <code>deciduous link</code>, and the local stdio <code>deciduous mcp</code> still use SQLite. Running <code>deciduous remote init</code> does not redirect those commands to Postgres.</p>
+<p>Use the HTTP MCP connection for shared agent work. The Rust CLI's <code>remote</code> commands configure the connection, compare stores, transfer graph data, and watch events. <a href="../reference.html">The reference</a> spells out which commands contact the server.</p>
+<p>You can keep using <a href="../solo.html">SQLite for solo or offline work</a>. Treat moving between the two stores as an explicit operation. A pull changes local data; a push can overwrite corresponding remote records. The <a href="../upgrading.html">upgrade guide</a> explains the checks and limitations.</p>
+<h2 id="take-the-same-setup-to-a-remote-host">Take the same setup to a remote host</h2>
+<p><a href="../remote-postgres.html">Remote hosting</a> is the short version: put the service behind HTTPS, keep Postgres on a private network, distribute the service token through a secret store, and test a restore from backup. Your agents then use the new service address with the same workspace conventions.</p>
+<p>The <a href="../architecture.html">architecture guide</a> documents the trust boundaries and the current TLS limitations of the database client. <a href="../troubleshooting.html">Troubleshooting</a> covers connection failures, missing records, locks, and split local/remote histories.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><span></span><a href="../quickstart.html"><span>Next</span>Quickstart</a></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#start-with-a-working-team">Start with a working team</a></li><li><a href="#three-separate-responsibilities">Three separate responsibilities</a></li><li><a href="#read-before-writing">Read before writing</a></li><li><a href="#know-which-store-you-are-using">Know which store you are using</a></li><li><a href="#take-the-same-setup-to-a-remote-host">Take the same setup to a remote host</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

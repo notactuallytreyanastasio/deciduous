@@ -1,519 +1,122 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-docs-generated="true">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Developer Documentation - Deciduous</title>
-
-    <!-- Primary Meta Tags -->
-    <meta name="title" content="Deciduous Developer Documentation">
-    <meta name="description" content="Architecture, concepts, and reference documentation for deciduous - decision graph tooling for AI-assisted development.">
-
-    <link rel="stylesheet" href="../tutorial/style.css">
-    <style>
-        /* Additional styles for documentation page */
-        .doc-nav {
-            position: sticky;
-            top: 48px;
-            background: var(--bg-secondary);
-            padding: 12px 20px;
-            border-bottom: 1px solid var(--border-color);
-            z-index: 100;
-        }
-        .doc-nav ul {
-            display: flex;
-            gap: 20px;
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            flex-wrap: wrap;
-        }
-        .doc-nav a {
-            color: var(--text-secondary);
-            font-weight: 500;
-            font-size: 0.9rem;
-        }
-        .doc-nav a:hover {
-            color: var(--accent-blue);
-        }
-
-        .doc-section {
-            padding: 40px 0;
-            border-bottom: 2px solid var(--border-color);
-        }
-        .doc-section:last-child {
-            border-bottom: none;
-        }
-
-        .wip-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-left: 10px;
-            vertical-align: middle;
-        }
-
-        .diagram-box {
-            background: var(--bg-code);
-            color: #f6f8fa;
-            padding: 20px;
-            border-radius: 8px;
-            overflow-x: auto;
-            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-            font-size: 0.8rem;
-            line-height: 1.4;
-            margin: 20px 0;
-        }
-
-        .quick-links {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin: 30px 0;
-        }
-        .quick-link {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            text-decoration: none;
-            transition: all 0.15s;
-        }
-        .quick-link:hover {
-            border-color: var(--accent-blue);
-            transform: translateY(-2px);
-        }
-        .quick-link h3 {
-            margin: 0 0 8px 0;
-            font-size: 1.1rem;
-            color: var(--text-primary);
-        }
-        .quick-link p {
-            margin: 0;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-
-        .back-to-top {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: var(--accent-green);
-            color: white;
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .back-to-top.visible {
-            opacity: 1;
-        }
-        .back-to-top:hover {
-            background: #238636;
-        }
-
-        /* Override sidebar for single-page doc */
-        .sidebar {
-            display: none;
-        }
-        .content {
-            margin-left: 0;
-            max-width: 900px;
-            margin: 0 auto;
-        }
-        body {
-            display: block;
-        }
-    </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Develop the shared graph service · Deciduous docs</title>
+<meta name="description" content="Deciduous has two implementations to account for: the shared Postgres service in deciduous_mcp/ and the Rust local CLI in src/. The team workflow depends on the former. Avoid changing one interface an">
+<link rel="canonical" href="https://deciduous.dev/tutorial/developer.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Develop the shared graph service · Deciduous docs"><meta property="og:description" content="Deciduous has two implementations to account for: the shared Postgres service in deciduous_mcp/ and the Rust local CLI in src/. The team workflow depends on the former. Avoid changing one interface an"><meta property="og:url" content="https://deciduous.dev/tutorial/developer.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tutorial/style.css"><script src="../tutorial/docs.js" defer></script>
 </head>
-<body>
-    <div class="ai-warning-banner">
-        Developer documentation for deciduous 1.1.0: how the binary, the two MCP servers and the files fit together.
-        <a href="../tutorial/">Tutorial</a> | <a href="../demo/">Graph Demo</a>
-    </div>
-
-    <nav class="doc-nav">
-        <ul>
-            <li><a href="#architecture">Architecture</a></li>
-            <li><a href="#concepts">Concepts</a></li>
-            <li><a href="#web-viewer">Web Viewer</a></li>
-            <li><a href="#quick-reference">Quick Reference</a></li>
-            <li><a href="#docs">Reference documents</a></li>
-        </ul>
-    </nav>
-
-    <main class="content">
-        <article>
-            <h1>Developer Documentation</h1>
-            <p class="lead">Architecture, concepts and reference for deciduous 1.1.0. The sections below summarise; the documents they link to are the full text.</p>
-
-            <div class="quick-links">
-                <a href="#architecture" class="quick-link">
-                    <h3>Architecture</h3>
-                    <p>The binary, the two servers, where the graph lives</p>
-                </a>
-                <a href="#concepts" class="quick-link">
-                    <h3>Concepts</h3>
-                    <p>Nodes, edges, pivots, evidence</p>
-                </a>
-                <a href="#web-viewer" class="quick-link">
-                    <h3>Web Viewer</h3>
-                    <p>deciduous serve and its API</p>
-                </a>
-                <a href="#quick-reference" class="quick-link">
-                    <h3>Quick Reference</h3>
-                    <p>Commands and file locations</p>
-                </a>
-            </div>
-
-            <!-- ARCHITECTURE SECTION -->
-            <section id="architecture" class="doc-section">
-                <h1>Architecture</h1>
-                <p class="lead">One Rust binary, one Elixir server, one graph per repository. Full text: <a href="../ARCHITECTURE.md">ARCHITECTURE.md</a>.</p>
-
-                <h2>The problem it solves</h2>
-                <p>A Claude Code session ends or compacts, and the reasoning goes with it: which option lost and why, what was tried, what the user asked for in their own words. Deciduous keeps that as a graph the next session can query, and since 1.1.0 can rebuild the graph from the session's transcript when the agent did not log.</p>
-
-                <h2>Three writers, one graph</h2>
-                <div class="diagram-box"><pre>┌──────────────────────────────────────────────────────────────────────────────┐
-│  THE CLI                      THE AGENT (MCP)                 THE TRANSCRIPT  │
-│  deciduous add / link /       capture_conversation_turn,      deciduous       │
-│  status / archaeology pivot   add_node parent_id, ...         transcript import│
-└──────────────┬───────────────────────────┬───────────────────────────┬────────┘
-               │                           │                           │
-               ▼                           ▼                           ▼
-┌──────────────────────────────┐  ┌─────────────────────┐  ┌──────────────────────┐
-│ .deciduous/deciduous.db      │  │ shared server       │  │ ~/.claude/projects/  │
-│ SQLite; the cache            │  │ deciduous_mcp/      │  │ &lt;slug&gt;/*.jsonl       │
-│ + .deciduous/remote-log.jsonl│◀─│ Elixir + PostgreSQL │  │ read, never written  │
-│   ops replayed via POST /ops │─▶│ 21 MCP tools, HTTP  │  └──────────────────────┘
-│ + .deciduous/graph.json      │  │ /events  /export    │
-│   (no [remote]: git carries  │  │ /ops  /messages     │
-│    it; merge-record driver)  │  └─────────────────────┘
-└──────────────────────────────┘
-               │
-               ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  READING: deciduous nodes/show/pulse, deciduous serve (web viewer, :3000),    │
-│  deciduous mcp (34 tools over stdio), dot --png, writeup, ask_graph (server)   │
-└──────────────────────────────────────────────────────────────────────────────┘</pre></div>
-                <p>
-                    <strong>Where the graph lives is chosen at <code>init</code>.</strong> With a <code>[remote]</code> in <code>.deciduous/config.toml</code> (the default since 1.0.5; since 1.0.11 a server on this machine against the PostgreSQL on localhost:5432), the server is the truth and the SQLite file is a cache: CLI writes go to the cache, are logged as ops in <code>remote-log.jsonl</code>, and are sent before the command exits; MCP writes reach the cache on <code>remote pull</code>. Without a <code>[remote]</code>, <code>graph.json</code> is tracked by git, <code>deciduous sync</code> reconciles it with the database in both directions, and the <code>deciduous merge-record</code> driver (hidden from <code>--help</code>, registered by <code>init</code>) merges concurrent edits record by record. <a href="../remote-graph.md">remote-graph.md</a> and <a href="../MULTI_USER_SYNC.md">MULTI_USER_SYNC.md</a> are the two models in full.
-                </p>
-                <p>
-                    <strong>There is no hooks layer.</strong> Up to 1.0.2 a hook denied the agent's next tool call until it logged; 1.0.3 removed it. <code>init</code> installs two hooks that never block: a once-a-day version check and <code>board-mentions.sh</code>, which shows a session with <code>DECIDUOUS_AGENT_LABEL</code> its unanswered board messages. What tells the agent when to log is the shared server's <code>instructions</code> on <code>initialize</code> and the <code>CLAUDE.md</code> section; what catches what it did not log is the transcript import.
-                </p>
-
-                <h2>Node types</h2>
-                <table>
-                    <thead>
-                        <tr><th>Type</th><th>Purpose</th><th>Example</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr><td><strong>goal</strong></td><td>What was asked for; the prompt verbatim in <code>metadata.prompt</code></td><td>"Add rate limiting to the public API"</td></tr>
-                        <tr><td><strong>option</strong></td><td>An approach considered</td><td>"Token bucket in Redis"</td></tr>
-                        <tr><td><strong>decision</strong></td><td>The option chosen, named against what it beat</td><td>"Token bucket in Redis, over the fixed window"</td></tr>
-                        <tr><td><strong>action</strong></td><td>Code or config changed; files and commit in metadata</td><td>"Implement RateLimiter middleware"</td></tr>
-                        <tr><td><strong>outcome</strong></td><td>What happened: the number or the error</td><td>"cargo test: 41 passed, 0 failed"</td></tr>
-                        <tr><td><strong>observation</strong></td><td>A fact that changes the plan</td><td>"Redis failover drops bucket state"</td></tr>
-                        <tr><td><strong>revisit</strong></td><td>An earlier choice reconsidered; connects old to new</td><td>"Reconsidering: Token bucket in Redis"</td></tr>
-                    </tbody>
-                </table>
-                <p>Edge types: <code>leads_to</code>, <code>requires</code>, <code>chosen</code>, <code>rejected</code>, <code>blocks</code>, <code>enables</code>, <code>took_from</code>. Statuses: <code>pending</code>, <code>active</code>, <code>completed</code>, <code>rejected</code>, <code>superseded</code>, <code>abandoned</code>. Every node has a local integer <code>id</code> and a <code>change_id</code> UUID that is the same on every machine.</p>
-
-                <h2>Source layout</h2>
-                <pre>src/
-├── main.rs           # clap CLI: every subcommand's definition and dispatch
-├── lib.rs            # public API exports
-├── db.rs             # SQLite via Diesel; the local database and its write path
-├── schema.rs         # Diesel table definitions
-├── records.rs        # graph.json record store: export, import, field-level merge
-├── oplog.rs          # .deciduous/remote-log.jsonl: ops queued for the server
-├── remote.rs         # client of the shared server: setup, status, pull, push, adopt
-├── server.rs         # init's server step: wizard, native (launchd/systemd) and Docker installs
-├── local_server.rs   # finding and talking to this machine's server
-├── watch.rs          # deciduous remote watch: the /events WebSocket client
-├── board.rs          # message board, local table and server routes
-├── transcript.rs     # deciduous transcript: Claude Code JSONL -&gt; nodes with evidence (1.1.0)
-├── archaeology.rs    # pivot, supersede, timeline
-├── narratives.rs     # .deciduous/narratives.md
-├── pulse.rs          # deciduous pulse
-├── export.rs         # DOT export and PR writeups
-├── serve.rs          # web viewer HTTP server; /api/ask shells out to the claude CLI
-├── api.rs            # deciduous serve --api: multi-graph JSON API daemon (0.16)
-├── events.rs         # deprecated `deciduous events`, kept as an alias
-├── config.rs         # .deciduous/config.toml
-├── hooks.rs          # deciduous hooks install|status|uninstall
-├── opencode.rs       # OpenCode integration
-├── roadmap.rs        # ROADMAP.md &lt;-&gt; GitHub Issues
-├── github.rs         # GitHub API client for roadmap
-├── changelog.rs      # embedded release notes shown on upgrade
-├── viewer.html       # the built web viewer, embedded in the binary
-├── init/
-│   ├── mod.rs              # deciduous init and update
-│   ├── templates.rs        # CLAUDE.md section, commands, skills, hooks (graph.json model)
-│   ├── remote_templates.rs # the same, for a project with a [remote]
-│   ├── known_templates.rs  # every template text ever shipped, so update knows what it wrote
-│   └── guard.rs            # what update may replace
-├── mcp/
-│   ├── protocol.rs   # JSON-RPC 2.0 and MCP types (pure)
-│   ├── tools.rs      # 34 tool definitions and argument validation (pure)
-│   ├── handlers.rs   # tool dispatch against the database
-│   ├── query.rs      # BFS, context, timeline, pulse, orphans (pure)
-│   └── mod.rs        # the stdio loop and session state
-└── demo_swarm/       # deciduous demo-swarm (hidden): the multi-agent demonstration
-
-deciduous_mcp/        # the shared server: Elixir, Ecto, PostgreSQL, Hermes MCP over HTTP
-├── lib/deciduous_mcp/mcp/tools/*.ex   # one module per tool, 21 of them
-├── lib/deciduous_mcp/mcp/scope.ex     # the workspace argument and the X-Deciduous-Workspace pin
-├── lib/deciduous_mcp/mcp/instructions.ex  # what every client is told on initialize
-├── DEPLOY.md         # running it for a team
-└── scripts/setup.sh  # PostgreSQL 17 and the server in Docker
-
-web/                  # the viewer's React/TypeScript source; builds to src/viewer.html</pre>
-            </section>
-
-            <!-- CONCEPTS SECTION -->
-            <section id="concepts" class="doc-section">
-                <h1>Concepts</h1>
-                <p class="lead">How to think about the graph. Full text: <a href="../CONCEPTS.md">CONCEPTS.md</a> and <a href="../narratives.md">narratives.md</a>.</p>
-
-                <h2>Log before, not after</h2>
-                <pre>action   ← what is about to change, and in which files
-outcome  ← what happened: "212 passed, 0 failed", or the error
-link     ← in the same breath, to the parent</pre>
-                <p>An outcome written after the fact tends to be an adjective ("working"). One written from the test run is a number, and a number can be checked later. The transcript import applies the same rule mechanically: a <code>cargo test</code> result is an outcome marked <code>proven</code>; the assistant's "all tests pass" is marked <code>inferred</code>, next to it.</p>
-
-                <h2>Options before decisions</h2>
-                <p>A goal does not lead straight to a decision. The options come first, with <code>chosen</code> and <code>rejected</code> edges into the decision that carry the reasons. The rejected option is the part you will want back in six months, and it is the part a summary drops.</p>
-
-                <h2>The pivot</h2>
-                <div class="diagram-box"><pre>[decision: Token bucket in Redis] (superseded)
-      │
-      ▼
-[observation: Redis failover drops bucket state]
-      │
-      ▼
-[revisit: Reconsidering: Token bucket in Redis]
-      │
-      ▼
-[decision: Fixed window counter in Postgres, 60s windows]</pre></div>
-                <p><code>deciduous archaeology pivot OLD "observation" "new approach"</code> writes the three nodes and three edges and marks the old decision superseded, atomically; <code>--dry-run</code> shows the plan. The old decision stays: deleting it would delete the reason the new one exists. <code>deciduous narratives pivots</code> reads every pivot chain back.</p>
-
-                <h2>The prompt field</h2>
-                <pre># A summary loses the request
-deciduous add goal "Add auth" -p "User wants login"
-
-# The user's words survive compaction
-deciduous add goal "Add auth" --prompt-stdin &lt;&lt; 'EOF'
-I need to add user authentication to the app. Users should be able to sign up
-with email/password, and we need OAuth support for Google and GitHub.
-EOF</pre>
-                <p>The CLI warns when a prompt is short enough to look like a summary; the node is created either way. The transcript import stores every prompt verbatim without being asked.</p>
-
-                <h2>Evidence</h2>
-                <p>Nodes derived from a transcript carry <code>metadata.evidence</code>: <code>kind</code> is <code>proven</code> (a tool call and its result, or the user's own words, with the entry uuids and tool_use ids) or <code>inferred</code> (the assistant said so). Actions carry <code>metadata.consulted</code>, the files read since the previous action, and <code>metadata.file_hashes</code>, git blob ids of the files touched. <code>deciduous show</code> prints them; the web viewer does not yet. Full text: <a href="../transcripts.md">transcripts.md</a>.</p>
-
-                <h2>Sharing</h2>
-                <p>Two models, chosen at <code>init</code>. With a <code>[remote]</code>: one PostgreSQL holds every project's graph, one workspace per repository; the CLI's writes are ops replayed on the server; agents write through the server's MCP tools; <code>deciduous remote status</code> compares the cache with the server field by field. Without one: <code>.deciduous/graph.json</code> is the shared file, carried by git, reconciled by <code>deciduous sync</code> and merged record by record by the <code>merge-record</code> driver. The 0.17 per-record directory <code>.deciduous/sync/</code> and the earlier <code>diff export</code> / <code>diff apply</code> patches are gone; a 0.17 directory is folded into <code>graph.json</code> by the next <code>sync</code>.</p>
-
-                <h2>Coordination is not the graph</h2>
-                <p>Agents working at the same time talk on the message board (<code>deciduous board</code>, <code>post_message</code> / <code>read_messages</code>): interface changes, questions, answers, with ids and replies. Messages are never in <code>graph.json</code>, never exported, never synced. Locally the board is the main worktree's database, shared by every worktree; with a <code>[remote]</code> it is on the server.</p>
-            </section>
-
-            <!-- WEB VIEWER SECTION -->
-            <section id="web-viewer" class="doc-section">
-                <h1>Web Viewer</h1>
-                <p class="lead"><code>deciduous serve</code>. Full text: <a href="../WEB_VIEWER.md">WEB_VIEWER.md</a>.</p>
-
-                <pre>deciduous serve                # http://localhost:3000, this project's database
-deciduous serve --port 8080</pre>
-                <p>Six views: DAG, Chains, Timeline, Graph, Roadmap, Story. The viewer is a React/TypeScript app in <code>web/</code>, built to a single HTML file and embedded in the binary as <code>src/viewer.html</code>; after changing <code>web/src/**</code>, <code>cd web &amp;&amp; npm run build</code> and copy <code>web/dist/index.html</code> over <code>src/viewer.html</code> and <code>docs/demo/index.html</code>. The <a href="../demo/">live demo</a> on this site is that build reading <code>docs/graph-data.json</code>, which was last exported on 2026-09-04; <code>deciduous sync</code> has not written it since 1.0.5.</p>
-
-                <h2>Routes the server answers</h2>
-                <table>
-                    <thead>
-                        <tr><th>Route</th><th>Returns</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr><td><code>GET /api/graph</code></td><td>nodes and edges</td></tr>
-                        <tr><td><code>GET /api/commands</code></td><td>the command log</td></tr>
-                        <tr><td><code>GET /api/git-history</code></td><td>commits for nodes that carry a hash</td></tr>
-                        <tr><td><code>GET /api/roadmap</code>, <code>POST /api/roadmap/checkbox</code></td><td>ROADMAP.md items; toggle one</td></tr>
-                        <tr><td><code>POST /api/ask</code></td><td>a question answered by the <code>claude</code> CLI with graph context; stored, and searchable with <code>GET /api/qa/search?q=</code></td></tr>
-                    </tbody>
-                </table>
-
-                <h2>Chain building</h2>
-                <p><code>web/src/utils/graphProcessing.ts</code> builds chains by BFS over whole connected components, following outgoing and incoming edges, with no node cap, so one chain is the entire tree a goal belongs to. The viewer embedded in the binary draws a <code>took_from</code> edge as a plain line; the source draws it dash-dot (CHANGELOG 1.0.0).</p>
-
-                <h2>The other server mode</h2>
-                <p><code>deciduous serve --api --data-dir DIR --token T [--bind 127.0.0.1]</code> is not the viewer: it is the 0.16 multi-graph JSON API daemon, one SQLite file per graph under <code>DIR/graphs/&lt;id&gt;/</code>, bearer-token auth, append-and-read only (<code>DECIDUOUS_API_DATA_DIR</code> and <code>DECIDUOUS_API_TOKEN</code> answer for scripts). The shared graph server in <code>deciduous_mcp/</code> superseded it as the way to share a graph; the daemon remains in the binary.</p>
-            </section>
-
-            <!-- QUICK REFERENCE SECTION -->
-            <section id="quick-reference" class="doc-section">
-                <h1>Quick Reference</h1>
-                <p class="lead">Every command here is in 1.1.0's <code>--help</code>. Full text: <a href="../QUICK_REFERENCE.md">QUICK_REFERENCE.md</a>; the walkthrough is <a href="../guide.html">the guide</a>.</p>
-
-                <h2>Set up</h2>
-                <pre>deciduous init [--claude|--opencode|--windsurf|--both]   # writes the files, then asks where the graph lives
-deciduous remote setup --local | --database-url URL | --docker-postgres | --url URL   # the same answer, for scripts
-deciduous update [--all DIR]                            # replace what deciduous wrote; keep what you edited
-deciduous check-update                                  # exit 1 if integration files are behind the binary</pre>
-
-                <h2>Write</h2>
-                <pre>deciduous add goal "Title" -c 90 --prompt-stdin &lt;&lt; 'EOF'
-the user's message
-EOF
-deciduous add option "A" ; deciduous add option "B"
-deciduous add decision "A, over B" -c 85
-deciduous link GOAL A -r "possible approach" ; deciduous link GOAL B -r "possible approach"
-deciduous link A DECISION -t chosen -r "why" ; deciduous link B DECISION -t rejected -r "why not"
-deciduous add action "What changes" -c 85 -f "src/a.rs,src/b.rs"
-deciduous add outcome "212 passed, 0 failed" -c 95 --commit HEAD
-deciduous add observation "Title" -d "what was seen and what it implies"
-deciduous status ID completed|superseded|abandoned|active|pending|rejected
-deciduous archaeology pivot OLD "observation" "new approach" -c 80 -r "why" [--dry-run]
-deciduous transcript import SESSION_ID [--dry-run] [--no-hash]</pre>
-
-                <h2>Read</h2>
-                <pre>deciduous nodes [-b BRANCH] [-t TYPE] [--theme NAME]
-deciduous edges
-deciduous show ID [--json]
-deciduous pulse [--summary]
-deciduous commands
-deciduous archaeology timeline [-l N]
-deciduous narratives pivots
-deciduous transcript list
-deciduous graph                      # everything, JSON</pre>
-
-                <h2>Output</h2>
-                <pre>deciduous serve [-p 3000]
-deciduous dot --png --auto           # docs/decision-graph-&lt;branch&gt;.png (needs Graphviz)
-deciduous writeup -t "Title" -n 1-9 [--auto]
-deciduous doc attach ID FILE [-d "..."] ; doc list [ID] ; doc show ; doc open ; doc detach ; doc gc
-deciduous board post --as LABEL -s "subject" -m "@other body" ; board read --unanswered LABEL ; board show ID</pre>
-
-                <h2>Share</h2>
-                <pre># with a [remote]
-deciduous remote status              # cache vs server, field by field; exit 1 on any difference
-deciduous remote pull                # take the server's side
-deciduous remote push [--seed]       # send the queued ops; --seed sends history that predates the server
-deciduous remote watch               # one line per write, live
-
-# without a [remote]
-deciduous sync                       # reconcile .deciduous/graph.json with the database
-deciduous sync --check               # exit 1 if anything is pending
-git add .deciduous/graph.json        # by path, never git add -A</pre>
-
-                <h2>File locations</h2>
-                <table>
-                    <thead>
-                        <tr><th>Path</th><th>Purpose</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr><td><code>.deciduous/deciduous.db</code></td><td>SQLite database; the cache with a <code>[remote]</code>, the store without one. Gitignored.</td></tr>
-                        <tr><td><code>.deciduous/config.toml</code></td><td><code>[remote] url</code> and <code>workspace</code>, branch settings. Committed; holds no credential.</td></tr>
-                        <tr><td><code>.deciduous/graph.json</code></td><td>The git-tracked graph for a project without a <code>[remote]</code>; merged by <code>merge-record</code>.</td></tr>
-                        <tr><td><code>.deciduous/remote-log.jsonl</code></td><td>Ops queued for the server. Gitignored.</td></tr>
-                        <tr><td><code>.deciduous/documents/</code></td><td>Attached files, named by content hash.</td></tr>
-                        <tr><td><code>.deciduous/narratives.md</code></td><td>Evolution narratives.</td></tr>
-                        <tr><td><code>.deciduous/.version</code></td><td>The binary version the integration files were written by.</td></tr>
-                        <tr><td><code>.deciduous/harness.json</code>, <code>update-backups/</code>, <code>update-templates/</code></td><td>What <code>update</code> wrote and its hashes; backups of everything it changes; the template it would have written for a file you edited, for <code>diff</code>.</td></tr>
-                        <tr><td><code>.deciduous/active_session</code></td><td>The local MCP server's current session id.</td></tr>
-                        <tr><td><code>.claude/commands/</code>, <code>.claude/skills/</code>, <code>.claude/hooks/</code>, <code>.claude/agents.toml</code>, <code>CLAUDE.md</code></td><td>What <code>init</code> writes for Claude Code.</td></tr>
-                        <tr><td><code>~/.config/deciduous/credentials</code></td><td>The server token, mode 0600, outside every repository.</td></tr>
-                        <tr><td><code>~/.config/deciduous/server/.env</code></td><td>This machine's server: database URL, token, port, mode, version.</td></tr>
-                        <tr><td><code>~/.claude/projects/&lt;slug&gt;/*.jsonl</code></td><td>Claude Code's transcripts, read by <code>deciduous transcript</code>.</td></tr>
-                    </tbody>
-                </table>
-
-                <h2>Environment variables the binary reads</h2>
-                <table>
-                    <thead>
-                        <tr><th>Variable</th><th>Effect</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr><td><code>DECIDUOUS_MCP_TOKEN</code></td><td>The server token; overrides the credentials file. Never written to config.</td></tr>
-                        <tr><td><code>DECIDUOUS_DB_PATH</code></td><td>The database to use instead of walking up to <code>.deciduous/</code>; for Claude Desktop and worktrees.</td></tr>
-                        <tr><td><code>DECIDUOUS_PORT</code></td><td>The port for this machine's server, the first time it is set up.</td></tr>
-                        <tr><td><code>DECIDUOUS_NO_SERVER</code></td><td>Skip <code>init</code>'s server step (tests, CI).</td></tr>
-                        <tr><td><code>DECIDUOUS_QUIET_LOCAL_ONLY</code></td><td>Silence the stderr line a write prints when the project has no server anywhere.</td></tr>
-                        <tr><td><code>DECIDUOUS_OPS_TIMEOUT</code></td><td>Per-request timeout when replaying ops to the server.</td></tr>
-                        <tr><td><code>DECIDUOUS_AGENT_LABEL</code></td><td>This session's board label; <code>board post --as</code> default and the board-mentions hook.</td></tr>
-                        <tr><td><code>DECIDUOUS_API_DATA_DIR</code>, <code>DECIDUOUS_API_TOKEN</code></td><td><code>serve --api</code> settings.</td></tr>
-                        <tr><td><code>DECIDUOUS_BIND_ADDRESS</code></td><td>In <code>~/.config/deciduous/server/.env</code>: the address this machine's server listens on (setup writes 127.0.0.1).</td></tr>
-                    </tbody>
-                </table>
-                <p><code>DECIDUOUS_ENV_FILE</code>, <code>DECIDUOUS_SERVER_MODE</code> and <code>DECIDUOUS_MCP_INSTALL_DIR</code> also exist in the source, for the server install; they are not documented here because their behaviour was not verified for this page.</p>
-            </section>
-
-            <!-- DOCS SECTION -->
-            <section id="docs" class="doc-section">
-                <h1>Reference documents</h1>
-                <div class="quick-links">
-                    <a href="../ARCHITECTURE.md" class="quick-link"><h3>ARCHITECTURE.md</h3><p>How the binary, the servers and the files fit together</p></a>
-                    <a href="../CONCEPTS.md" class="quick-link"><h3>CONCEPTS.md</h3><p>The mental model: nodes, edges, pivots, prompts</p></a>
-                    <a href="../QUICK_REFERENCE.md" class="quick-link"><h3>QUICK_REFERENCE.md</h3><p>Commands, one screen</p></a>
-                    <a href="../WEB_VIEWER.md" class="quick-link"><h3>WEB_VIEWER.md</h3><p>deciduous serve: views, routes, rebuilding</p></a>
-                    <a href="../remote-graph.md" class="quick-link"><h3>remote-graph.md</h3><p>The shared server: init's choices, status, pull, push, events</p></a>
-                    <a href="../MULTI_USER_SYNC.md" class="quick-link"><h3>MULTI_USER_SYNC.md</h3><p>graph.json through git, for a project without a [remote]</p></a>
-                    <a href="../transcripts.md" class="quick-link"><h3>transcripts.md</h3><p>The transcript import: what is derived, evidence, the SessionEnd hook</p></a>
-                    <a href="../DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md" class="quick-link"><h3>DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md</h3><p>Attaching documents in the flow of work</p></a>
-                    <a href="../narratives.md" class="quick-link"><h3>narratives.md</h3><p>Pulse, narratives and archaeology: the three skills</p></a>
-                    <a href="https://github.com/notactuallytreyanastasio/deciduous/blob/main/deciduous_mcp/DEPLOY.md" class="quick-link"><h3>deciduous_mcp/DEPLOY.md</h3><p>Running the shared server for a team</p></a>
-                    <a href="https://github.com/notactuallytreyanastasio/deciduous/blob/main/CHANGELOG.md" class="quick-link"><h3>CHANGELOG.md</h3><p>Every release from 0.3.2 to 1.1.0, with what was left undone</p></a>
-                </div>
-            </section>
-
-            <div class="page-nav" style="margin-top: 60px;">
-                <a href="../tutorial/" class="prev">
-                    <span class="label">Previous</span>
-                    <span class="title">Tutorial</span>
-                </a>
-                <a href="../demo/" class="next">
-                    <span class="label">Next</span>
-                    <span class="title">Live Demo</span>
-                </a>
-            </div>
-
-        </article>
-    </main>
-
-    <a href="#" class="back-to-top" title="Back to top">↑</a>
-
-    <script>
-        // Back to top button visibility
-        const backToTop = document.querySelector('.back-to-top');
-        window.addEventListener('scroll', () => {
-            if (window.scrollY > 500) {
-                backToTop.classList.add('visible');
-            } else {
-                backToTop.classList.remove('visible');
-            }
-        });
-
-        // Smooth scroll for anchor links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            });
-        });
-    </script>
-</body>
-</html>
+<body data-search-index="../tutorial/search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../tutorial/index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="../tutorial/index.html">Shared memory</a></li><li><a href="../tutorial/quickstart.html">Quickstart</a></li><li><a href="../tutorial/local-postgres.html">Local Postgres setup</a></li><li><a href="../tutorial/clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="../tutorial/teams.html">Two agents, one graph</a></li><li><a href="../tutorial/workflow.html">Record the reasoning</a></li><li><a href="../tutorial/recovery.html">Recover context</a></li><li><a href="../tutorial/evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="../tutorial/remote-postgres.html">Remote hosting</a></li><li><a href="../tutorial/upgrading.html">Upgrade and migrate</a></li><li><a href="../tutorial/troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../tutorial/concepts.html">Graph concepts</a></li><li><a href="../tutorial/reference.html">CLI and API</a></li><li><a href="../tutorial/mcp.html">MCP tools</a></li><li><a href="../tutorial/architecture.html">Architecture and trust</a></li><li><a href="../tutorial/developer.html" aria-current="page">Develop Deciduous</a></li><li><a href="../tutorial/solo.html">Solo and offline use</a></li><li><a href="../tutorial/history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Reference</span><a href="../content/developer.md">Read as Markdown</a></div><article><h1 id="develop-the-shared-graph-service">Develop the shared graph service</h1>
+<p>Deciduous has two implementations to account for: the shared Postgres service in <code>deciduous_mcp/</code> and the Rust local CLI in <code>src/</code>. The team workflow depends on the former. Avoid changing one interface and assuming the other inherited the behavior.</p>
+<p>Use a disposable local stack from <a href="../tutorial/local-postgres.html">local Postgres setup</a>. Do not point tests or migration experiments at a production database.</p>
+<h2 id="repository-layout">Repository layout</h2>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>What to change there</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>deciduous_mcp/lib/deciduous_mcp/mcp/tools/</code></td>
+<td>Shared HTTP MCP tool schemas and handlers</td>
+</tr>
+<tr>
+<td><code>deciduous_mcp/lib/deciduous_mcp/graph/</code></td>
+<td>Postgres graph operations</td>
+</tr>
+<tr>
+<td><code>deciduous_mcp/lib/deciduous_mcp/web/</code></td>
+<td>HTTP auth, routes, sessions, workspace pinning, event socket</td>
+</tr>
+<tr>
+<td><code>deciduous_mcp/priv/repo/migrations/</code></td>
+<td>Postgres schema and triggers</td>
+</tr>
+<tr>
+<td><code>deciduous_mcp/test/</code></td>
+<td>Shared-service tests</td>
+</tr>
+<tr>
+<td><code>src/remote.rs</code>, <code>src/watch.rs</code></td>
+<td>CLI remote configuration, transfer, event client</td>
+</tr>
+<tr>
+<td><code>src/mcp/</code></td>
+<td>Local SQLite MCP tools and protocol</td>
+</tr>
+<tr>
+<td><code>src/db.rs</code>, <code>src/records.rs</code></td>
+<td>SQLite and optional Git record synchronization</td>
+</tr>
+<tr>
+<td><code>web/</code>, <code>src/viewer.html</code></td>
+<td>Local graph viewer source and embedded build</td>
+</tr>
+<tr>
+<td><code>docs/content/</code></td>
+<td>Canonical documentation source</td>
+</tr>
+</tbody>
+</table>
+<h2 id="work-on-the-server">Work on the server</h2>
+<p>The Mix project declares Elixir <code>~&gt; 1.16</code>; the supplied container builds with Elixir 1.18.4 and Erlang/OTP 28.0. Use the pinned container recipe when you want the same release environment as deployment.</p>
+<p>For a native development environment, install Elixir/Erlang and run a disposable Postgres instance compatible with <code>deciduous_mcp/config/dev.exs</code> and <code>test.exs</code>. Those files use local development credentials and separate <code>deciduous_mcp_dev</code> and <code>deciduous_mcp_test</code> databases. They are not production examples. The <code>DATABASE_URL</code> override in <code>runtime.exs</code> applies in production mode.</p>
+<p>From <code>deciduous_mcp/</code>, with a development-only token supplied through the environment:</p>
+<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">mix deps.get
+mix ecto.create
+mix ecto.migrate
+mix test
+mix format --check-formatted
+</code></pre>
+</div><p>The application requires <code>DECIDUOUS_MCP_TOKEN</code> even during tests. Supply a generated development token of at least 32 bytes, not a production credential. <code>mix test</code> creates and migrates its configured test database before the tests run. Check its target before invoking it. <code>mix ecto.reset</code> drops data and is not part of an upgrade procedure.</p>
+<p>Run the development service with <code>mix run --no-halt</code> after migrations. The default HTTP port is 4000. Use the <a href="../tutorial/reference.html#http-endpoints">reference</a> to distinguish <code>/health</code>, <code>/mcp</code>, and <code>/events</code>.</p>
+<h2 id="add-or-change-a-shared-tool">Add or change a shared tool</h2>
+<p>Create the tool under <code>mcp/tools/</code> using <code>DeciduousMcp.MCP.Component</code>, then register it in <code>mcp/server.ex</code>. Registration in the convenience <code>Tools</code> list alone does not expose it to clients. Check the live <code>tools/list</code> result after rebuilding.</p>
+<p>For a scoped read, resolve the workspace through <code>Scope.read_scope</code>. For a new-node write, use <code>Scope.write_workspace_id</code>. For an existing-node mutation, use <code>Scope.write_scope_for_node</code> so the lease matches the node's workspace and the header pin is checked.</p>
+<p>Keep an actual transaction around any operation documented as all-or-nothing. Several existing convenience helpers perform sequential writes despite their schema descriptions; do not copy that atomicity claim into a new tool without testing rollback behavior.</p>
+<p>Add tests for missing or invalid arguments, the correct workspace, header/argument precedence, conflicting sessions on one branch, independent branches, and partial-failure behavior. For borrowed ideas, verify both the source resolution and the <code>took_from</code> edge direction.</p>
+<p>The custom component module preserves the JSON Schema in <code>tools/list</code> and derives a looser Peri validation schema for incoming arguments. Required fields and basic scalar types are checked, while arrays and objects use a permissive type. Do not assume the advertised schema alone enforces every enum or nested constraint. Validate in the handler or graph changeset and test rejection paths.</p>
+<h2 id="test-the-http-boundary">Test the HTTP boundary</h2>
+<p>Check a release through its public routes, not only by calling a tool module in a unit test:</p>
+<ul>
+<li><code>/health</code> answers without a token; protected routes reject missing or wrong credentials.</li>
+<li>MCP initialization and <code>tools/list</code> succeed; arguments such as <code>workspace</code>, <code>branch</code>, and search filters reach the handler.</li>
+<li>A scoped write can be read by a second client in the same workspace.</li>
+<li>Stale MCP sessions fail fast and clients can initialize again.</li>
+<li><code>GET /mcp</code> returns the expected 405; normal tool calls still work.</li>
+<li><code>/events</code> receives a real write and a disconnected client can recover through graph queries.</li>
+<li>Blob upload validates content hashes; document reads do not expose private content through caches.</li>
+</ul>
+<p>Do not interpret a workspace-header test as proof of tenant authorization. The current service is a shared trust boundary. Test any future access-control change across ID-based reads, workspace listing, imports, document access, and all write paths.</p>
+<h2 id="work-on-the-rust-cli">Work on the Rust CLI</h2>
+<p>From the repository root:</p>
+<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">cargo test
+cargo build --release
+cargo clippy
+./target/release/deciduous --version
+./target/release/deciduous remote watch --help
+</code></pre>
+</div><p>Use the built binary for command verification. A <code>deciduous</code> elsewhere on your PATH may be an older release with different behavior. In particular, 0.19's <code>remote watch</code> printed a URL; 1.0 connects and streams by default.</p>
+<p>Use a temporary test repository and database for mutation tests. Do not run <code>deciduous update</code>, migrations, or import experiments against a user's working checkout as a substitute for a fixture.</p>
+<h2 id="viewer-changes">Viewer changes</h2>
+<p>The viewer reads the local graph. A viewer build does not add a Postgres connection or make <code>remote pull</code> automatic. If you change <code>web/src/</code>, rebuild and update the embedded HTML locations required by the repository's <code>AGENTS.md</code>, then test the local server and static demo. Keep graph data fixtures free of private prompts and documents.</p>
+<h2 id="release-and-upgrades">Release and upgrades</h2>
+<p>Keep the Rust and Elixir versioned interfaces documented. A server migration and a CLI update are distinct operations. Back up Postgres before a schema upgrade, test restoration into a separate database, and retain the prior application image until the new release is verified. Follow <a href="../tutorial/upgrading.html">upgrading</a> for the supported operator procedure.</p>
+<p>The container runs <code>DeciduousMcp.Release.migrate()</code> before it starts the release. Review a new migration for data loss, locking, and compatibility with the old application before relying on that startup behavior. Do not promise that rolling back an image reverses a schema migration.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="../tutorial/architecture.html"><span>Previous</span>Architecture and trust</a><a href="../tutorial/solo.html"><span>Next</span>Solo and offline use</a></nav><footer class="article-footer"><a href="../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#repository-layout">Repository layout</a></li><li><a href="#work-on-the-server">Work on the server</a></li><li><a href="#add-or-change-a-shared-tool">Add or change a shared tool</a></li><li><a href="#test-the-http-boundary">Test the HTTP boundary</a></li><li><a href="#work-on-the-rust-cli">Work on the Rust CLI</a></li><li><a href="#viewer-changes">Viewer changes</a></li><li><a href="#release-and-upgrades">Release and upgrades</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

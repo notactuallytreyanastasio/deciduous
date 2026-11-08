@@ -1,0 +1,37 @@
+# Local development stack. The app is reachable only through loopback;
+# PostgreSQL is reachable only by containers in this Compose project.
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: deciduous
+      POSTGRES_USER: deciduous
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?configure local.env first}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U deciduous -d deciduous"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  mcp:
+    build:
+      context: ../../deciduous_mcp
+    image: deciduous-team-memory:${MCP_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ecto://deciduous:${POSTGRES_PASSWORD:?configure local.env first}@db/deciduous
+      DECIDUOUS_MCP_TOKEN: ${DECIDUOUS_MCP_TOKEN:?configure local.env first}
+      PORT: "4000"
+      POOL_SIZE: "10"
+      DB_SSL: "false"
+    ports:
+      - "127.0.0.1:${MCP_PORT:-4000}:4000"
+
+volumes:
+  postgres-data:

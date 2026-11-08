@@ -1,155 +1,82 @@
-# Web Viewer
+<!-- Generated from content/evidence.md by scripts/docs/build.mjs. Edit the source. -->
 
-`deciduous serve` puts the local graph in a browser. The viewer is one React
-page (`web/src/App.tsx`, built with Vite and embedded in the binary as
-`src/viewer.html`) that groups the graph into narratives, draws the one you
-pick as a tree and a D3 graph, and shows a node's full record beside it. It
-reads the local database, so with a `[remote]` run `deciduous remote pull`
-first to see what agents wrote on the server.
+# Give each finding evidence
 
+Record enough evidence for another agent to check a claim without reconstructing your whole session. Put the test command and result beside the action it verifies. Keep a rejected experiment's failure reason connected to the decision it changed.
+
+## Record the check you ran
+
+An outcome should say what ran, on which code, and what remains untested. Avoid "all tests pass" if you ran one file.
+
+```javascript
+add_node({
+  workspace: "example-app", branch: "agent-tests",
+  node_type: "outcome", status: "completed",
+  title: "Request validation passes 8 integration cases",
+  description: "npm test -- tests/items.test.ts: 8 passed, 0 failed. Covers malformed input and the 422 response body. Browser behavior was not checked.",
+  files: ["tests/items.test.ts"]
+})
+add_edge({
+  workspace: "example-app", branch: "agent-tests",
+  from_node_id: "ACTION_ID", to_node_id: "OUTCOME_ID",
+  rationale: "Integration results for this implementation"
+})
 ```
-$ deciduous serve
-🌳 Deciduous
-   Graph viewer: http://localhost:3000
-   Press Ctrl+C to stop
+
+These are MCP calls. Replace `ACTION_ID` and `OUTCOME_ID` with real server UUIDs. Add `commit` to `add_node` when you have a real Git SHA; the server cannot resolve `HEAD` against your working directory.
+
+A file path is context, not an upload. A commit reference is a string in metadata, not proof that the commit exists on the reader's machine. Make the referenced code accessible through the team's repository.
+
+## Distinguish a source from agreement
+
+Use a `took_from` edge when a finding changes your approach. Include why you adopted it and which part you verified. Reusing a decision does not prove it correct in a new context.
+
+```javascript
+log_observation({
+  workspace: "example-app", branch: "agent-tests",
+  related_to: "ACTION_ID",
+  took_from: "SOURCE_DECISION_ID",
+  title: "Reuse the field error codes in the request tests",
+  why: "The API decision defines stable codes; tests should not depend on prose messages.",
+  description: "Read the source decision and confirmed the handler emits the documented codes."
+})
 ```
 
-`-p <port>` changes the port. The server binds `127.0.0.1` and does not open a
-browser for you.
+The server writes this observation and its edges in one transaction. Both references must resolve in the same workspace. A node UUID or full `change_id` works; a display prefix does not.
 
----
+## Documents in the shared server
 
-## What is on the page
+The Postgres service stores attachment metadata and document bytes separately. Byte content is keyed by SHA-256 and deduplicated in Postgres. Existing local attachments can move to the server through the [upgrade/import procedure](content/upgrading.md).
 
-**Narratives.** The left panel lists narratives: connected trees of the graph,
-each rooted at a node, as cards with the root's title, size and date range.
-A selector in the header chooses how the graph is cut into them:
+`show_node` lists a node's document IDs, filenames, and MIME types. `get_graph` includes document metadata. Authorized clients can fetch bytes at `GET /documents/{document-id}` or by content hash. A `410` means metadata exists but content is missing; a `404` means the requested document was not found. The download response uses private, no-store caching headers.
 
-| Mode | Narratives are |
-|---|---|
-| Major Narratives (10+ nodes) | goal-rooted trees with ten or more nodes (the default) |
-| All Goals | one tree per goal |
-| By Git Branch | one per `metadata.branch` |
-| By Key Decisions (3+ edges) | one per node with three or more edges, a hub |
+The current shared MCP tool set has no attachment-upload tool. `deciduous doc attach` is a local SQLite command; configuring a remote does not make it upload. `remote push` sends graph metadata but not blob bytes, and `remote pull` does not download attachment metadata or content into SQLite. Do not mistake a listed filename for a verified remote copy.
 
-Click a card to focus it: the left panel becomes an expandable tree (type,
-confidence, id, title per row, edge labels on the way down) and the right
-panel splits into the selected node's detail on top and a D3 graph of the
-narrative below. The graph can go full screen, with its own node list and a
-"commits only" filter.
+## Bring existing attachments across safely
 
-**Detail panel.** For the selected node: type and title; status, confidence,
-branch, commit (linked to GitHub, using `[github] commit_repo` from
-`config.toml` when set), created time and change id; the files it names; its
-themes as coloured chips; its attached documents (filename, size, MIME type,
-description, an `(AI)` mark for descriptions the `claude` CLI wrote; listed,
-not linked: the page does not fetch the file); the
-description; the verbatim prompt; incoming and outgoing edges with their type
-and rationale; and the raw metadata.
+Use the upgrade scripts before normal team writing begins. They must transfer both the graph rows and each attachment's bytes, then verify downloads by hash. The server's blob endpoint, `PUT /blob/{sha256}`, verifies that the bytes match the named hash; an upload by itself does not create a node attachment.
 
-**Search.** Full text over titles and descriptions, newest first, with a
-toggle per node type and a chip per theme. A result shows which narratives
-contain it.
+Keep the original `.deciduous/documents` files until the migration checks and backup are complete. Review unresolved edges and missing-content reports rather than treating a successful HTTP import as proof that all evidence arrived.
 
-**Ask AI.** A dialogue that sends your question plus what is on screen (the
-selected node, the visible nodes, the current branch, the focused narrative)
-to `POST /api/ask`, which runs `claude -p` on the machine serving the page
-and returns its Markdown answer. Without the Claude Code CLI installed the
-panel shows `Claude CLI not found`. Questions and answers are kept in the
-local database (`qa_interactions`) and listed through `/api/qa`.
+Avoid bulk-pushing a stale local graph to attach one new file after the team has started writing on the server. Import can replace matching node records. For new evidence, record a concise result plus a stable repository reference until you have a reviewed attachment-ingestion path.
 
-**Edge styles.** `took_from` draws dash-dot; the legend lists every edge and
-node type.
+## Local attachment tools
 
-## What it does not show
-
-- `metadata.evidence` (proven or inferred), `metadata.consulted` and
-  `metadata.file_hashes` from transcript imports. They appear in the raw
-  metadata block only; `deciduous show` prints them properly. CHANGELOG 1.1.0
-  lists this under "Not done".
-- The message board. Messages are not graph and have no API route here.
-- Live updates. The page loads the graph once; reload it to see new nodes.
-  There is no polling and no event stream from `serve`.
-- Document bytes. `GET /api/documents/file/<id>` serves them, but nothing in
-  the page calls it; `deciduous doc open <id>` does.
-- Roadmap items, the command log and git history have routes (below) but no
-  view in the current page.
-
-## Data
-
-The page asks, in order, `/api/graph`, `./graph-data.json`, `/graph-data.json`
-and uses the first that answers with `{ok, data}` or a bare `{nodes, ...}`.
-
-Routes `deciduous serve` answers:
-
-| Route | Returns |
-|---|---|
-| `GET /api/graph` | `{ok, data: {nodes, edges, themes, node_themes, documents, config?}}`; `config` only when `[github] commit_repo` is set |
-| `GET /api/documents?node_id=N` | documents attached to node N |
-| `GET /api/documents/file/<id>` | the file's bytes |
-| `POST /api/ask` | `{question, context}` → `claude -p`'s answer |
-| `GET /api/qa`, `GET /api/qa/search?q=`, `GET`/`DELETE /api/qa/<id>` | stored questions and answers |
-| `GET /api/git-history` | commits for every node that names one |
-| `GET /api/roadmap`, `POST /api/roadmap/checkbox` | ROADMAP.md items; toggle one |
-| `GET /api/commands` | the command log (empty in 1.1.0 projects) |
-| `GET /api/sync-status` | whether `graph.json` exists and what `sync` would import or export |
-| anything else | the embedded page |
-
-### A static copy
-
-`deciduous sync` stopped writing `docs/graph-data.json` in 1.0.5, and `init`
-no longer sets up GitHub Pages. The page still reads `./graph-data.json` when
-there is no API, so a static copy is the viewer HTML next to a graph export:
+For the [solo/offline](content/solo.md) workflow, the CLI supports:
 
 ```bash
-deciduous graph > docs/graph-data.json    # {nodes, edges, themes, node_themes[, documents]}
-cp src/viewer.html docs/demo/index.html   # the embedded page; this repository keeps one there
+deciduous doc attach 42 ./evidence/validation-output.txt \
+  -d "Sanitized integration test output"
+deciduous doc list 42
+deciduous doc show 7
 ```
 
-The Ask panel needs the server and does not work from a static copy. The `docs/graph-data.json` in this repository is such a hand-made export
-(1465 nodes, 1313 edges when it was last written), not something a command
-maintains.
+`42` and `7` are example local IDs; use the IDs from your own graph and document listing. These commands do not operate on server UUIDs. `doc detach` soft-deletes an attachment; `doc gc` can remove orphaned files, so review and back up before cleanup.
 
-## Building it
+## Review before sharing
 
-```bash
-cd web
-npm install
-npm run dev            # Vite dev server against a running `deciduous serve`
-npm run typecheck      # tsc --noEmit
-npm run test           # vitest
-npm run build          # tsc && vite build -> web/dist/index.html, one self-contained file
-```
+Prompts and attachments can contain customer records, private paths, or credentials. Sanitize command output and screenshots before recording them. Do not attach `.env` files, credential stores, database connection strings, or token-bearing event URLs.
 
-Three Vite configs:
+The current bearer token grants access across the server. Workspace naming and headers do not create a separate permission boundary for attachments. Use separate deployments when different groups must not see each other's evidence.
 
-| Config | Output | For |
-|---|---|---|
-| `vite.config.ts` | `web/dist/index.html`, single file, `base: './'` | the embedded viewer |
-| `vite.embed.config.ts` | `web/dist-embed/` | the same, kept separately |
-| `vite.pages.config.ts` | `../docs/demo/`, `base: '/deciduous/demo/'` | the static demo for this repository's GitHub Pages |
-
-After a change under `web/src`, the built file has to be copied into the two
-places it is served from, then the binary rebuilt:
-
-```bash
-cp web/dist/index.html src/viewer.html
-cp web/dist/index.html docs/demo/index.html
-cargo build --release
-```
-
-`src/viewer.html` is `include_str!`ed by `src/serve.rs`. It is a build product;
-do not edit it by hand.
-
-## Types
-
-`web/src/types/graph.ts` mirrors `src/db.rs`: `NODE_TYPES` (seven, including
-`revisit`), `EDGE_TYPES` (seven, including `took_from`), `NodeMetadata`
-(`confidence`, `commit`, `prompt`, `files`, `branch`, GitHub fields, and
-anything else as `unknown`), `Theme`, `NodeThemeAssociation`, `NodeDocument`.
-The generated `DecisionNode` and `DecisionEdge` come from `types/generated/`.
-
-One mismatch to know about: `NODE_STATUSES` in `graph.ts` lists four statuses
-(`pending`, `active`, `completed`, `rejected`) while the binary accepts six
-(`superseded` and `abandoned` too). Nodes with those statuses load and display;
-the type is narrower than the data.
+Static graph exports can publish the same sensitive text without the MCP server's authentication. Review exported JSON and generated writeups before committing them or publishing a docs site.
