@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- The server installed by `remote setup --local` (and `--database-url`) now starts on Linux. The systemd user unit put `WorkingDirectory` in double quotes, which systemd refuses as "path is not absolute", a fatal error that stops the unit from loading. The path is now written verbatim, spaces included, with `%` escaped as `%%`. macOS was not affected.
+
 ## [1.1.0] - 2026-10-24
 
 The agent does not have to log anything for a session to be in the graph. Claude Code already wrote the whole session to a JSONL transcript; 1.1.0 reads it.
