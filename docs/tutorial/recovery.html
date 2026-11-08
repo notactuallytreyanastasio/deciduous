@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-docs-generated="true">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recover the work, not a chat transcript · Deciduous docs</title>
+<meta name="description" content="Start a new agent with the server endpoint, workspace name, current branch, and the active goal&#39;s ID. Those references let it retrieve the reasoning that survived the previous session.">
+<link rel="canonical" href="https://deciduous.dev/tutorial/recovery.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Recover the work, not a chat transcript · Deciduous docs"><meta property="og:description" content="Start a new agent with the server endpoint, workspace name, current branch, and the active goal&#39;s ID. Those references let it retrieve the reasoning that survived the previous session."><meta property="og:url" content="https://deciduous.dev/tutorial/recovery.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"><script src="docs.js" defer></script>
+</head>
+<body data-search-index="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="index.html">Shared memory</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="local-postgres.html">Local Postgres setup</a></li><li><a href="clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="teams.html">Two agents, one graph</a></li><li><a href="workflow.html">Record the reasoning</a></li><li><a href="recovery.html" aria-current="page">Recover context</a></li><li><a href="evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="remote-postgres.html">Remote hosting</a></li><li><a href="upgrading.html">Upgrade and migrate</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="concepts.html">Graph concepts</a></li><li><a href="reference.html">CLI and API</a></li><li><a href="mcp.html">MCP tools</a></li><li><a href="architecture.html">Architecture and trust</a></li><li><a href="developer.html">Develop Deciduous</a></li><li><a href="solo.html">Solo and offline use</a></li><li><a href="history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Work as a team</span><a href="../content/recovery.md">Read as Markdown</a></div><article><h1 id="recover-the-work-not-a-chat-transcript">Recover the work, not a chat transcript</h1>
+<p>Start a new agent with the server endpoint, workspace name, current branch, and the active goal's ID. Those references let it retrieve the reasoning that survived the previous session.</p>
+<h2 id="read-before-changing-anything">Read before changing anything</h2>
+<p>Use the same shared MCP connection as the rest of the team. These are MCP calls; replace the ID placeholders with server UUIDs:</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">check_activity({workspace: &quot;example-app&quot;, branches: 30})
+query_nodes({workspace: &quot;example-app&quot;, type: &quot;goal&quot;, status: &quot;active&quot;, limit: 20})
+query_nodes({workspace: &quot;example-app&quot;, branch: &quot;agent-api&quot;, limit: 30})
+show_node({node_id: &quot;GOAL_ID&quot;})
+get_descendants({node_id: &quot;GOAL_ID&quot;})
+</code></pre>
+</div><p><code>query_nodes</code> returns summaries, newest created nodes first. It does not include the full rationale. Follow relevant IDs with <code>show_node</code>. Defaults matter: <code>add_node</code> defaults to <code>pending</code>, so also query pending goals if an active-goal search is empty.</p>
+<p>Use <code>get_ancestors({node_id: &quot;ACTION_ID&quot;})</code> to trace an unfinished action back to the choices that led to it. Read the source node of each <code>took_from</code> edge before reusing it. A superseded decision may still be visible in the history.</p>
+<h2 id="reconcile-the-graph-with-the-checkout">Reconcile the graph with the checkout</h2>
+<p>The graph preserves what someone recorded. Check the code and tests before assuming the recorded outcome still applies:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">git status --short
+git branch --show-current
+git log -5 --oneline
+</code></pre>
+</div><p>Match the branch and commit in node metadata to the checkout. Review uncommitted changes without discarding them. If the graph says a test passed but the relevant code has changed since, run the test again and record a fresh result.</p>
+<p>Write a short recovery observation linked to the active action or goal. State what you confirmed and what remains unknown. Continue the existing chain instead of logging the original request as a new goal.</p>
+<h2 id="handoff-checklist">Handoff checklist</h2>
+<p>The outgoing agent should leave:</p>
+<ul>
+<li>The workspace and goal ID, plus the current action and latest outcome IDs.</li>
+<li>Its branch, changed files, and commit SHA if committed.</li>
+<li>The decisions another agent must preserve, including source IDs for borrowed findings.</li>
+<li>Test commands and their actual results, followed by any checks still needed.</li>
+<li>The next bounded step and any ownership conflict or missing permission.</li>
+</ul>
+<p>Keep credentials out of the handoff. The receiving agent gets access through its configured MCP connection.</p>
+<h2 id="recover-the-local-viewer">Recover the local viewer</h2>
+<p>After confirming the CLI's workspace and URL:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous remote status
+deciduous remote pull
+deciduous nodes
+deciduous edges
+deciduous serve
+</code></pre>
+</div><p>Local integer node IDs can differ from the server UUIDs and from another machine's IDs. Use the full <code>change_id</code> to identify the same node across stores. MCP tools that ask for a node UUID should receive the server <code>id</code>; <code>log_observation</code> also accepts a full <code>change_id</code> for <code>related_to</code> and <code>took_from</code>.</p>
+<p><code>remote pull</code> merges node and edge records into the local cache. It does not download document bytes or provide a complete backup of the remote database. Equal counts in <code>remote status</code> mean only that counts match, not that every record matches.</p>
+<p>If local-only work exists, preserve a backup before recovery. Do not delete the database or push it over the server to resolve uncertainty. Follow <a href="upgrading.html">Upgrading</a> for a reviewed import.</p>
+<h2 id="after-a-dropped-event-stream">After a dropped event stream</h2>
+<p><code>deciduous remote watch</code> reconnects, but notifications issued during a connection gap can be lost. Call <code>check_activity</code> and query the relevant branches to catch up. A quiet stream does not establish that nobody changed the graph.</p>
+<h2 id="if-the-server-is-unavailable">If the server is unavailable</h2>
+<p>Keep any local cache and the code checkout intact. Record new offline work as local-only and avoid claiming teammates can see it. Restore the server connection before depending on shared updates. The <a href="solo.html">solo/offline guide</a> explains that alternative; <a href="troubleshooting.html">Troubleshooting</a> covers health, credentials, and stale sessions.</p>
+<p>Infrastructure recovery requires the operator's Postgres backup and restore process. A local <code>deciduous backup</code> protects SQLite only.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="workflow.html"><span>Previous</span>Record the reasoning</a><a href="evidence.html"><span>Next</span>Attach evidence</a></nav><footer class="article-footer"><a href="../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#read-before-changing-anything">Read before changing anything</a></li><li><a href="#reconcile-the-graph-with-the-checkout">Reconcile the graph with the checkout</a></li><li><a href="#handoff-checklist">Handoff checklist</a></li><li><a href="#recover-the-local-viewer">Recover the local viewer</a></li><li><a href="#after-a-dropped-event-stream">After a dropped event stream</a></li><li><a href="#if-the-server-is-unavailable">If the server is unavailable</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

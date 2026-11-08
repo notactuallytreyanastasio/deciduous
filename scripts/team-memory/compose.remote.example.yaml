@@ -1,0 +1,50 @@
+# Review before deploying. Separate stack; do not overlay this on local compose.yaml.
+# Use a private --env-file containing POSTGRES_PASSWORD, DECIDUOUS_MCP_TOKEN,
+# and MCP_DOMAIN. Secrets must never be committed.
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: deciduous
+      POSTGRES_USER: deciduous
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?provide a database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U deciduous -d deciduous"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  mcp:
+    build:
+      context: ../../deciduous_mcp
+    image: deciduous-team-memory:${MCP_IMAGE_TAG:-reviewed}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ecto://deciduous:${POSTGRES_PASSWORD:?provide a database password}@db/deciduous
+      DECIDUOUS_MCP_TOKEN: ${DECIDUOUS_MCP_TOKEN:?provide a server token}
+      PORT: "4000"
+      POOL_SIZE: "10"
+      DB_SSL: "false"
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - mcp
+    environment:
+      MCP_DOMAIN: ${MCP_DOMAIN:?set a real DNS name}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

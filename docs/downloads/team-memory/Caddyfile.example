@@ -1,0 +1,7 @@
+{$MCP_DOMAIN} {
+    reverse_proxy mcp:4000 {
+        flush_interval -1
+    }
+    # Access logging is intentionally not enabled: /events can carry a token
+    # in its query string. Redact that value before enabling request logs.
+}
