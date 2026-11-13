@@ -115,7 +115,7 @@ Required arguments in bold. Node ids are full server UUIDs (the `id` in every re
 | `post_message` | **`author`**, **`subject`**, **`body`**, `reply_to`, `branch` |
 | `read_messages` | `unanswered_for`, `to`, `author`, `branch`, `query`, `since_id`, `id`, `limit` (default 50) |
 
-Messages are per workspace and are not graph nodes. See [Many agents, one graph](content/teams.md).
+Messages are per workspace and are not graph nodes. See [The message board](content/board.md).
 
 ### Prompt
 
