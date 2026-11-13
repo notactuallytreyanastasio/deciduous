@@ -30,7 +30,7 @@ Every page below is Markdown. The whole set in one file: https://deciduous.dev/l
 ## Reference
 
 - [Graph concepts](https://deciduous.dev/content/concepts.md): A deciduous graph is typed nodes joined by typed, directed edges, kept per workspace (one per repository) on a shared server. Seven node types, seven edge types, six statuses, and a confidence from 0 
-- [CLI reference](https://deciduous.dev/content/reference.md): The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project with a [remote], every write command writes the loca
-- [MCP tools](https://deciduous.dev/content/mcp.md): There are two MCP servers with different tool sets, and an agent gets whichever one its client is configured for. The graph server answers at /mcp over HTTP with 21 tools and writes PostgreSQL directl
+- [CLI reference](https://deciduous.dev/content/reference.md): The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project connected to a server (one whose .deciduous/config.t
+- [MCP tools](https://deciduous.dev/content/mcp.md): There are two MCP servers with different tool sets, and an agent gets whichever one its client is configured for.
 - [Architecture and trust](https://deciduous.dev/content/architecture.md): The graph lives in PostgreSQL behind one server process. Agents reach that server over HTTPS MCP; the CLI reaches the same server, over the same HTTPS and token, through ordinary JSON endpoints (/ops,
 - [Develop deciduous](https://deciduous.dev/content/developer.md): The repository holds three things that are built and tested separately: the Rust CLI at the root (cargo), the graph server in deciduous_mcp/ (Elixir, mix), and two web builds, the graph viewer in web/

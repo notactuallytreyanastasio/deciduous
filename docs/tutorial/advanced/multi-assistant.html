@@ -26,14 +26,14 @@ url = &quot;https://deciduous.example.com&quot;
 workspace = &quot;my-app&quot;
 </code></pre>
 </div><p><code>deciduous init</code> writes a <code>.gitignore</code> that ignores <code>.deciduous/*</code> except <code>config.toml</code> and <code>graph.json</code>. <code>remote init</code> on its own writes none: after it, <code>git status</code> shows all of <code>.deciduous/</code> untracked, cache and write log included. If you joined with <code>remote init</code> only, stage <code>.deciduous/config.toml</code> by name and ignore the rest of <code>.deciduous/</code> yourself.</p>
-<p>The server ties a workspace to the root commit of the first repository that connects to it, at <code>remote init</code> or <code>remote setup</code>, before anything is written. A clone shares that root, so it is let in:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous remote init https://deciduous.example.com --workspace my-app
+<p>The server ties a workspace to the root commit of the first repository that claims it. <code>remote init</code> claims at once, before anything is written. <code>remote setup</code> does not: the claim is made by the next <code>remote status</code>, <code>remote pull</code> or write. A clone shares that root, so it is let in:</p>
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous remote init https://deciduous.example.com --workspace my-app</span>
 Remote: https://deciduous.example.com
   workspace: my-app
   claim: verified (by this repository's root commit)
 </code></pre>
 </div><p>An unrelated repository that merely has the same directory name is refused, which is what stops two projects called <code>api</code> on one server from writing one graph by accident:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous remote init https://deciduous.example.com
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous remote init https://deciduous.example.com</span>
 Error: workspace &quot;my-app&quot; on https://deciduous.example.com belongs to another repository: an unrelated
 project whose directory is also called my-app (the name is the directory name, lowercased) claimed it
 first, and this repository shares none of its root commits.
@@ -43,8 +43,8 @@ Nothing was written; the project is unchanged.
 </div><p>Naming the workspace explicitly with <code>--workspace</code> is how you say two repositories really should share one graph. The server then answers <code>claim: adopted</code> and accepts writes from both. A repository with no commit yet cannot be checked, so its writes wait in the log until the first commit.</p>
 <h2 id="worktrees">Worktrees</h2>
 <p>A worktree whose checkout includes <code>.deciduous/config.toml</code> uses it. One made from a commit before that file existed inherits the main checkout's:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ git worktree add -b old-wt ../my-app-old HEAD~1 &amp;&amp; cd ../my-app-old
-$ deciduous remote status
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ git worktree add -b old-wt ../my-app-old HEAD~1 &amp;&amp; cd ../my-app-old</span>
+<span class="cmd">$ deciduous remote status</span>
 Remote: https://deciduous.example.com
 Workspace: my-app
 From: this worktree's config names no server; its writes go to the main checkout's (.../my-app/.deciduous/config.toml)
@@ -92,9 +92,9 @@ git worktree add -b agent-tests ../my-app-tests HEAD
 <p>Locks never protected source files either. File ownership is the coordinator's job; an action's <code>files</code> list is how one agent shows another what it is about to touch, and <code>query_nodes</code> with <code>file</code> finds what was decided about a path.</p>
 <h2 id="the-message-board">The message board</h2>
 <p>Agents ask each other questions and announce interface changes on the board, never in a scratch file. <code>@label</code> addresses a message, a reply takes it off the addressee's list, and each agent asks what is waiting for it:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board post --as tests -s &quot;@api is the 422 body stable?&quot; -m &quot;I am asserting code and field, not message. @api confirm the shape.&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board post --as tests -s &quot;@api is the 422 body stable?&quot; -m &quot;I am asserting code and field, not message. @api confirm the shape.&quot;</span>
 Posted #222, to api
-$ deciduous board read --unanswered api
+<span class="cmd">$ deciduous board read --unanswered api</span>
 </code></pre>
 </div><p>Over MCP the same two operations are <code>post_message</code> and <code>read_messages</code>, on the same board. Start each agent with its label, <code>DECIDUOUS_AGENT_LABEL=api claude</code>, and the hook that <code>deciduous init</code> installs shows it what is waiting at session start and on each prompt.</p>
 <p><a href="../board.html">The message board</a> has a full exchange between a CLI and an MCP agent, the rules for what counts as addressed and answered, and the limits.</p>
@@ -114,12 +114,12 @@ $ deciduous board read --unanswered api
 </code></pre>
 </div><p><code>took_from</code> and <code>related_to</code> take the server UUID or the full <code>change_id</code>. A short prefix is refused: <code>took_from is not a node id: &quot;9ad1b0b7&quot;</code>. <code>add_edge</code> and <code>add_node</code> also take <code>edge_type: &quot;took_from&quot;</code>.</p>
 <p>CLI, where a <code>change_id</code> prefix is enough:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous link 17365e54 2b787037 -t took_from -r &quot;Tests use the API agent's 422 contract instead of inventing one&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous link 17365e54 2b787037 -t took_from -r &quot;Tests use the API agent's 422 contract instead of inventing one&quot;</span>
 Created edge 24 (1 -&gt; 24 via took_from)
 </code></pre>
 </div><p>Taking a decision does not make it right in your context. Say in <code>why</code> what you checked.</p>
 <h2 id="watching-the-workspace-live">Watching the workspace live</h2>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous remote watch --types observation,outcome
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous remote watch --types observation,outcome</span>
 Watching: my-app
 13:37:11  agent-api  observation &quot;Watch probe observation&quot;
 13:37:11  main      outcome     &quot;Watch probe outcome&quot;

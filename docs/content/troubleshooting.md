@@ -6,10 +6,10 @@ Two commands answer most questions:
 
 ```bash
 deciduous remote status      # this copy vs the server: waiting writes, rejected writes, rows that differ
-claude mcp get deciduous     # where Claude Code's agent is actually writing
+claude mcp get deciduous | grep -E 'Status|URL|Scope'   # where Claude Code's agent is actually writing
 ```
 
-`remote status` exits 0 when it prints `In sync` or `Local only`; anything waiting, rejected or different exits 1.
+Unfiltered, `claude mcp get` prints the whole token. `remote status` exits 0 when it prints `In sync` or `Local only`; anything waiting, rejected or different exits 1.
 
 ## Setting up
 
@@ -28,7 +28,7 @@ then rerun this command. Tests and CI in a throwaway directory can set DECIDUOUS
 
 **Cause.** `init` was run from a script, an agent's shell, or anything else without a terminal on stdin, in a project with no `[remote]`. It exits 1, but it has already written `.claude/`, `CLAUDE.md`, `.deciduous/`, `.gitignore`, `.gitattributes` and `.github/workflows/cleanup-decision-graphs.yml` before stopping, so the directory looks initialized.
 
-**Fix.** Run the `remote setup` form that fits, then `deciduous init` again. To join a team server: `DECIDUOUS_MCP_TOKEN=<token> deciduous remote setup --url https://deciduous.example.com`. `DECIDUOUS_NO_SERVER=1` is for throwaway directories; it gives a project with no server at all (see [Without a shared server](local.md#no-server-at-all)).
+**Fix.** Run the `remote setup` form that fits, then `deciduous init` again. To join a team server: `deciduous remote login --url https://deciduous.example.com` once per machine (it reads the token from stdin), then `deciduous remote setup --url https://deciduous.example.com`. `DECIDUOUS_NO_SERVER=1 deciduous init` is not a way past this error: it makes a project with no server at all, sharing its graph through git (see [Without a shared server](local.md#no-server-at-all)).
 
 ### "the server rejected the token (401)"
 
@@ -213,7 +213,7 @@ Local only: no remote configured for this project.
 
 ### The agent's nodes are not in `deciduous nodes`, or yours are not in the agent's
 
-First, `claude mcp get deciduous`, and compare its URL with `[remote] url` in `.deciduous/config.toml`:
+First, `claude mcp get deciduous | grep -E 'Status|URL|Scope'`, and compare its URL with `[remote] url` in `.deciduous/config.toml`:
 
 ```text
 $ claude mcp get deciduous
@@ -276,4 +276,4 @@ These are what an MCP client (or `curl`) sees from `<base>/mcp`.
 
 ## Reporting a problem
 
-Include `deciduous --version`, the server version (`serverInfo.version` in the MCP `initialize` reply), the command, and the error text as printed. Replace tokens with `<token>`. Two outputs this page asks for carry one: `claude mcp get deciduous` prints `Authorization: Bearer` followed by the full token (Claude Code 2.1.319), and `deciduous remote watch --url` prints a URL with the token in its query string. Edit the first as in the sample above; never paste the second.
+Include `deciduous --version`, the server version (`serverInfo.version` in the MCP `initialize` reply), the command, and the error text as printed. Replace tokens with `<token>`. Two outputs carry one: `claude mcp get deciduous`, unfiltered, prints `Authorization: Bearer` followed by the full token (Claude Code 2.1.319), and `deciduous remote watch --url`, which you may have open, prints a URL with the token in its query string. Edit the first as in the sample above; never paste the second.

@@ -94,9 +94,9 @@ Pivot #1: [revisit #9] "Reconsidering the error format"
 
 ## Statuses
 
-`superseded` means replaced by a newer approach; `abandoned` means tried and dropped with nothing replacing it. `deciduous status <id> superseded` and `abandoned` work. In 1.1.0, `add --help` leaves out `revisit` and `status --help` lists only four statuses; both are accepted. The next release lists them all. Over MCP, `update_node` takes all six.
+`superseded` means replaced by a newer approach; `abandoned` means tried and dropped with nothing replacing it. `deciduous status <id> superseded` and `abandoned` both work, although 1.1.0's `status --help` lists only `pending, active, completed, rejected`. Over MCP, `update_node` takes all six.
 
-`active` is only set when someone sets it: new nodes are `pending`, and so is the new decision `archaeology pivot` writes. So `query_nodes` with `status: "active"` usually returns `{"count":0,"nodes":[]}`, even in a workspace with a current decision. For the current state, query with no status filter and drop `superseded`, `abandoned` and `rejected` nodes, or use `consolidation_report`, which treats any decision not in those three as current. For the history, use no filter; for the pivots, `type: "revisit"`.
+`active` is only set when someone sets it: new nodes are `pending`, and so is the new decision `archaeology pivot` writes. So `query_nodes` with `status: "active"` returns only what someone explicitly activated: the goals and actions in [Record the reasoning](workflow.md) are, decisions from `log_decision` are `completed`, and a pivot's new decision is `pending`. It can return `{"count":0,"nodes":[]}` in a workspace with a current decision. For the current state, query with no status filter and drop `superseded`, `abandoned` and `rejected` nodes, or use `consolidation_report`, which treats any decision not in those three as current. For the history, use no filter; for the pivots, `type: "revisit"`.
 
 ## Reconstructing history from commits
 
@@ -161,7 +161,11 @@ That file is local. It is not sent to the server, and the `.gitignore` that `dec
 
 ## The commands and skills init installs
 
-`deciduous init` writes `.claude/commands/decision-graph.md` (`/decision-graph`: build a graph from commit history, with narratives as the source of truth and commits as evidence) and three instruction files, `.claude/skills/pulse.md`, `narratives.md` and `archaeology.md`, for mapping the current design, writing narratives, and turning them into nodes. Only `/decision-graph` is a slash command. Claude Code loads project skills from `.claude/skills/<name>/SKILL.md` ([Claude Code docs](https://code.claude.com/docs/en/skills)); init writes flat `.md` files with no frontmatter, so there is no `/pulse`, `/narratives` or `/archaeology`, although the generated `CLAUDE.md` lists them as skills. Point an agent at them by path: "read `.claude/skills/archaeology.md` and follow it". All of them drive the CLI (`deciduous add`, `link`, `status`, `--date`), so in a project with a `[remote]` what they write reaches the server. Review them before handing them to an agent: `/decision-graph` assumes the binary is at `~/.cargo/bin/deciduous`.
+`deciduous init` writes `.claude/commands/decision-graph.md` (`/decision-graph`: build a graph from commit history, with narratives as the source of truth and commits as evidence) and three instruction files, `.claude/skills/pulse.md`, `narratives.md` and `archaeology.md`, for mapping the current design, writing narratives, and turning them into nodes. 
+
+Only `/decision-graph` is a slash command. Claude Code loads project skills from `.claude/skills/<name>/SKILL.md` ([Claude Code docs](https://code.claude.com/docs/en/skills)); init writes flat `.md` files with no frontmatter, so there is no `/pulse`, `/narratives` or `/archaeology`, although the generated `CLAUDE.md` lists them as skills. Point an agent at them by path: "read `.claude/skills/archaeology.md` and follow it".
+
+All of them drive the CLI (`deciduous add`, `link`, `status`, `--date`), so in a project with a `[remote]` what they write reaches the server. Review them before handing them to an agent: `/decision-graph` assumes the binary is at `~/.cargo/bin/deciduous`.
 
 ## Check the result
 

@@ -14,7 +14,7 @@ workspace = "my-app"
 
 `deciduous init` writes a `.gitignore` that ignores `.deciduous/*` except `config.toml` and `graph.json`. `remote init` on its own writes none: after it, `git status` shows all of `.deciduous/` untracked, cache and write log included. If you joined with `remote init` only, stage `.deciduous/config.toml` by name and ignore the rest of `.deciduous/` yourself.
 
-The server ties a workspace to the root commit of the first repository that connects to it, at `remote init` or `remote setup`, before anything is written. A clone shares that root, so it is let in:
+The server ties a workspace to the root commit of the first repository that claims it. `remote init` claims at once, before anything is written. `remote setup` does not: the claim is made by the next `remote status`, `remote pull` or write. A clone shares that root, so it is let in:
 
 ```console
 $ deciduous remote init https://deciduous.example.com --workspace my-app
