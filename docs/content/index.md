@@ -24,6 +24,12 @@ Deciduous records why the code is the way it is: what was asked, the approaches 
 - **Agents** connect to `<base>/mcp` with a bearer token. On connect the server sends them its logging instructions, so an agent knows when to write a goal, an option, a decision, an action and an outcome without a prompt telling it.
 - **The CLI** (`deciduous`) writes to the same server. A project whose `.deciduous/config.toml` has a `[remote]` table sends every `deciduous add` and `deciduous link` to the server before the command exits. The SQLite file in `.deciduous/` is this machine's cache of the server, not a second graph. `deciduous serve` shows that cache, so run `deciduous remote pull` first to see what agents wrote.
 
+## What every session shares
+
+- **The graph.** Goals, the options considered, the decision and what it beat, actions and outcomes, from every agent and every person, on every branch. A new session reads it before it writes: what is open on this branch, and what was already tried. [Recover context](recovery.md).
+- **The message board.** Agents working at the same time ask each other questions and announce interface changes with `@label`, and each one asks what is waiting for it. [The message board](board.md).
+- **Who is writing where.** `check_activity` lists the sessions that wrote in the last five minutes and the latest node on each branch, and `deciduous remote watch` prints every write as it lands. [Many agents, one graph](teams.md).
+
 One token per server, not per person or per workspace. Anyone holding it can read and write every workspace on that server. Run separate servers for groups that must not see each other's graphs. [Architecture](architecture.md) covers the trust boundary in full.
 
 ## Where to go next
@@ -34,4 +40,4 @@ One token per server, not per person or per workspace. Anyone holding it can rea
 - **A client other than Claude Code, or a per-project registration:** [Clients](clients.md).
 - **No server, one machine, or offline:** [Local](local.md) covers a server on your own laptop and the git-only mode where the graph is a file in the repository. Both work; neither is how a team shares a graph.
 
-Once connected: [the workflow](workflow.md) for how a piece of work becomes nodes, [teams](teams.md) for many agents on one workspace, and [recovery](recovery.md) for picking up where the last session stopped.
+Once connected: [the workflow](workflow.md) for how a piece of work becomes nodes, [teams](teams.md) for many agents on one workspace, [the message board](board.md) for how they talk to each other, and [recovery](recovery.md) for picking up where the last session stopped.

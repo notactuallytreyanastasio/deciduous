@@ -137,7 +137,7 @@ The server sends you these rules when you connect. They are the rules; the rest 
 
 **When a line of work ends:** `close_thread` writes the closing outcome and can mark the goal completed; then `find_orphans` and link anything it lists except root goals. Tell the user which nodes you added.
 
-**Another session writing your branch does not block you.** Agents in parallel coordinate on the message board (`post_message`, `read_messages`, `reply_to`), never in a scratch file. [Teams](teams.md) has the details.
+**Another session writing your branch does not block you.** Agents in parallel coordinate on the message board (`post_message`, `read_messages`, `reply_to`), never in a scratch file. [The message board](board.md) has the rules, and [Teams](teams.md) the rest of working in parallel.
 
 ### Writing from the CLI instead
 
