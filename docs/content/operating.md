@@ -42,6 +42,8 @@ The test install printed `3` and `1.1`: three nodes, and the database's planner 
 
 ## Upgrade the server
 
+[Take a backup](#back-up) first. Putting the old binary back does not undo a migration, so rolling back means restoring the pre-upgrade dump.
+
 Extract the new release bundle into a new directory next to the one [Run a server](run-a-server.md) created (`deciduous-mcp-docker`). Copy your `.env` into it, plus `certs/` if you use a private database CA, and run setup there. From the directory that holds `deciduous-mcp-docker`, as the user who owns it:
 
 ```bash
@@ -51,7 +53,7 @@ cp -p deciduous-mcp-docker/.env deciduous-mcp-1.2.0/
 cd deciduous-mcp-1.2.0 && ./scripts/setup.sh
 ```
 
-Keep `COMPOSE_PROJECT_NAME` the same: it is how setup finds the running containers and the PostgreSQL volume. The new server runs pending migrations before it listens, and setup waits for `/ready`. Take a backup first. Putting the old binary back does not undo a migration, so rolling back means restoring the pre-upgrade dump.
+Keep `COMPOSE_PROJECT_NAME` the same: it is how setup finds the running containers and the PostgreSQL volume. The new server runs pending migrations before it listens, and setup waits for `/ready`.
 
 Rerunning setup on the same release was tested and took 8 seconds, because the image was already built. Settings, volume and graph all survived. A real version change was not run for this page; the procedure is the one in `deciduous_mcp/DEPLOY.md`.
 
@@ -71,8 +73,8 @@ sed -i "s/^DECIDUOUS_MCP_TOKEN=.*/DECIDUOUS_MCP_TOKEN='$NEW'/" .env
 
 For the other two kinds of install (not run for this page):
 
-- A native server the CLI installed: edit `DECIDUOUS_MCP_TOKEN` in `~/.config/deciduous/server/.env`, then restart it with `launchctl kickstart -k gui/$(id -u)/dev.deciduous.server` on macOS or `systemctl --user restart deciduous-server.service` on Linux. The CLI on that machine reuses the token in `~/.config/deciduous/credentials`, so store the new one there too with `deciduous remote login`.
-- A Docker install the CLI made: edit the same `.env`, then rerun its setup with `DECIDUOUS_ENV_FILE=~/.config/deciduous/server/.env ~/.config/deciduous/server/bundle-1.1.0/deciduous-mcp-docker/scripts/setup.sh`, and `deciduous remote login` as above.
+- A native server the CLI installed: edit `DECIDUOUS_MCP_TOKEN` in `~/.config/deciduous/server/.env`, then restart it with `launchctl kickstart -k gui/$(id -u)/dev.deciduous.server` on macOS or `systemctl --user restart deciduous-server.service` on Linux. The CLI on that machine reuses the token in `~/.config/deciduous/credentials`, so store the new one there too with `deciduous remote login --url http://127.0.0.1:<port>`, which checks the new token against the restarted server before storing it.
+- A Docker install the CLI made: edit the same `.env`, then rerun its setup with `DECIDUOUS_ENV_FILE=~/.config/deciduous/server/.env ~/.config/deciduous/server/bundle-1.1.0/deciduous-mcp-docker/scripts/setup.sh`, and `deciduous remote login --url http://127.0.0.1:<port>` as above.
 
 Once it restarts, the old token gets 401 and the new one works. Rotation logs out every client at once, but most commands do not say so. `remote status`, `remote pull`, `remote push` and `remote watch` fail and exit 1:
 
@@ -142,7 +144,7 @@ Watching: my-app
 
 ## When a client and the server disagree
 
-`deciduous remote status` compares one repository's local cache with its workspace on the server. It exits 1 when there is any difference, so a script can use it:
+`deciduous remote status` compares one repository's local cache with its workspace on the server. It exits 1 when there is any difference. It also exits 0, printing `Local only`, in a project with no `[remote]`, so a script should check for the `In sync` line as well:
 
 ```
                  local    server

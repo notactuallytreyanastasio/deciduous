@@ -29,7 +29,7 @@ claude mcp get deciduous | grep -E 'Status|URL'   # Claude Code only; read-only
 </code></pre>
 </div><p>Filter <code>claude mcp get</code>: unfiltered, it prints the registration's <code>Authorization: Bearer</code> header with the whole token, which would put the token in your context and the session transcript. <code>claude mcp list</code> shows the URL and status of every server without headers.</p>
 <ul>
-<li><strong><code>[remote]</code> with <code>url</code> and <code>workspace</code> is present:</strong> the repository is connected. Skip to <a href="#verify-the-connection">Verify</a>.</li>
+<li><strong><code>[remote]</code> with <code>url</code> and <code>workspace</code> is present:</strong> the repository is configured, but this machine may not be. If <code>claude mcp get</code> printed <code>No MCP server named &quot;deciduous&quot;</code>, or there is no token on this machine (question 2 below), the user stores the token and you run <code>deciduous remote setup --url &lt;the url in [remote]&gt;</code>. The URL is already chosen, so there is nothing else to ask. Then go to <a href="#verify-the-connection">Verify</a>.</li>
 <li><strong>No <code>.deciduous/</code>, or no <code>[remote]</code>:</strong> it needs setting up. Ask the user first (next section).</li>
 <li><strong>Your tool list has <code>mcp__deciduous__add_node</code>, <code>query_nodes</code>, <code>check_activity</code>:</strong> you are connected to a deciduous server over HTTP. <strong>It has <code>link_nodes</code>, <code>search_nodes</code>, <code>trace_chain</code>:</strong> you are on the local <code>deciduous mcp</code> stdio server instead, which has different tools and sends no logging instructions; tell the user.</li>
 </ul>
@@ -56,7 +56,7 @@ deciduous init
     deciduous remote setup --docker-postgres        # this machine: PostgreSQL and the server in Docker
     deciduous remote setup --url &lt;url&gt;              # a server someone else runs
 </code></pre>
-</div><p>That is a question for the user, not a menu for you. Run <code>remote setup --url</code> with the URL they gave you, then <code>init</code> again; it skips files that exist. Do not set <code>DECIDUOUS_NO_SERVER=1</code> to get past it; that exists for throwaway test directories.</p>
+</div><p>That is a question for the user, not a menu for you. Run <code>remote setup --url</code> with the URL they gave you, then <code>init</code> again; it skips files that exist. Do not set <code>DECIDUOUS_NO_SERVER=1</code> to get past it: that opts the project out of a server altogether, which is the user's choice (<a href="local.html">Local</a>).</p>
 <p>Use <code>init --opencode</code>, <code>--windsurf</code> or <code>--both</code> if the user runs those assistants (<a href="clients.html">Clients</a>).</p>
 <p>What can go wrong at this step, by message:</p>
 <table>
@@ -102,7 +102,7 @@ claude mcp add --scope user --transport http deciduous https://deciduous.example
 <h2 id="verify-the-connection">Verify the connection</h2>
 <p>Report each check to the user as pass or fail, with its output. A setup that writes to the wrong place is worse than one that fails.</p>
 <ol>
-<li><strong>CLI and server agree.</strong><div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>$ deciduous remote status
+<li><strong>CLI and server agree.</strong><div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code><span class="cmd">$ deciduous remote status</span>
 Remote: https://deciduous.example.com
 Workspace: my-app
 Log: 0 write(s) waiting, 0 rejected  (...)
@@ -113,9 +113,9 @@ Log: 0 write(s) waiting, 0 rejected  (...)
 
 In sync: no writes waiting, and every node, edge and document matches field by field.
 </code></pre>
-</div>Exit 0 is In sync, exit 1 is anything else.</li>
+</div>Exit 0 with the <code>In sync</code> line is a pass. Exit 0 with <code>Local only: no remote configured</code> means this checkout has no <code>[remote]</code>: a fail. Exit 1 is anything else.</li>
 <li><strong>Your MCP connection reaches the same server.</strong> <code>claude mcp get deciduous | grep -E 'Status|URL'</code> shows <code>[remote] url</code> + <code>/mcp</code>, <code>Status: ✔ Connected</code>.</li>
-<li><strong>Your writes land in this workspace.</strong> Write a node the user's request actually needs, usually the goal for their request with their message verbatim in <code>prompt</code>, or an option under it, with <code>add_node</code>, then run <code>deciduous remote status</code>. Your node appears under <code>Only on the server</code>:<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>Only on the server (1)
+<li><strong>Your writes land in this workspace.</strong> If you ran <code>remote setup</code> in this session, or the registration changed, you do not have the tools yet: report checks 1 and 2, ask the user to restart Claude Code, and do this check in the new session. Do not substitute a CLI write; it proves the CLI's path, which check 1 already did. Write a node the user's request actually needs, usually the goal for their request with their message verbatim in <code>prompt</code>, or an option under it, with <code>add_node</code>, then run <code>deciduous remote status</code>. Your node appears under <code>Only on the server</code>:<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>Only on the server (1)
   option cad0b58d &quot;Token bucket per API token in Redis&quot;
 
 Differs: `deciduous remote pull` takes the server's side.
@@ -147,12 +147,12 @@ Differs: `deciduous remote pull` takes the server's side.
 deciduous link b1710c03 2 -r &quot;possible approach&quot;
 </code></pre>
 </div><p>The local copy does not see MCP writes until it pulls. Linking the CLI to a node you just made through MCP fails until <code>deciduous remote pull</code>:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>$ deciduous link 80f8630d 6 -r &quot;implements the decision&quot;
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code><span class="cmd">$ deciduous link 80f8630d 6 -r &quot;implements the decision&quot;</span>
 Error: No node has a change_id starting with '80f8630d'. Run 'deciduous sync' if a teammate created it.
 It is not a server id in workspace my-app either.
-$ deciduous remote pull
+<span class="cmd">$ deciduous remote pull</span>
 ...
-$ deciduous link 80f8630d 6 -r &quot;implements the decision&quot;
+<span class="cmd">$ deciduous link 80f8630d 6 -r &quot;implements the decision&quot;</span>
 Created edge 5 (7 -&gt; 6 via leads_to)
 </code></pre>
 </div><p>(With a server, the fix is <code>remote pull</code>, not the <code>sync</code> the message names.)</p>

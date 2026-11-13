@@ -12,7 +12,7 @@ $ cargo build
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.36s
 ```
 
-(an incremental build; a clean one takes minutes). Before committing, run what CI runs (`.github/workflows/type-check.yml`); the repository's `CLAUDE.md` lists only the last three, and a branch that passes those can still fail CI on formatting or on a clippy warning:
+(an incremental build; a clean one takes minutes). Before committing, run this. It covers what `.github/workflows/type-check.yml` checks (formatting, `cargo test --lib`, `--test cli_integration`, clippy with warnings denied, the type validation) and more. The repository's `CLAUDE.md` lists only `cargo test`, `cargo build --release` and a plain `cargo clippy`, and a branch that passes those can still fail CI on formatting or on a clippy warning:
 
 ```bash
 cargo fmt --check

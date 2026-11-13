@@ -32,18 +32,18 @@
 </div><p>&quot;All tests pass&quot; after running one file is the claim the next agent will wrongly rely on. A <code>files</code> list and a <code>commit</code> on a node are references, not copies: the reader needs the repository to follow them.</p>
 <h2 id="documents-from-the-cli-reach-the-server">Documents from the CLI reach the server</h2>
 <p>The server's MCP tools have no upload: 21 tools, none of them attaches a file. Attaching is a CLI command, and agents run it like anyone else.</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous doc attach 5ee7c7c7 test-output.txt -d &quot;cargo test retry output&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous doc attach 5ee7c7c7 test-output.txt -d &quot;cargo test retry output&quot;</span>
 Attached document 1 to node 6 (test-output.txt)
   Description: cargo test retry output
-$ deciduous remote status | tail -2
+<span class="cmd">$ deciduous remote status | tail -2</span>
 In sync: no writes waiting, and every node, edge and document matches field by field.
 Themes and tags are not sent to the server, so they are not compared.
 </code></pre>
 </div><p>The node can be named by local id, <code>change_id</code> prefix, or server UUID (<code>deciduous doc attach de6ccf4c-877b-... file</code>). The bytes are uploaded to the server, which checks them against their SHA-256, and the attachment is recorded on the node. An agent then sees it in <code>show_node</code>:</p>
 <div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">&quot;documents&quot;: [{ &quot;id&quot;: &quot;38c69819-818d-4a4f-906c-1e8c6101b889&quot;, &quot;filename&quot;: &quot;test-output.txt&quot;, &quot;mime_type&quot;: &quot;text/plain&quot; }]
 </code></pre>
-</div><p>and anyone with the token can download it from <code>&lt;url&gt;/documents/&lt;id&gt;</code>, where <code>&lt;url&gt;</code> is <code>url</code> under <code>[remote]</code> in <code>.deciduous/config.toml</code>, including any path such as <code>/deciduous-mcp</code> on a Docker-bundle install:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ curl -s -i -H &quot;Authorization: Bearer &lt;token&gt;&quot; https://deciduous.example.com/documents/38c69819-818d-4a4f-906c-1e8c6101b889
+</div><p>and anyone with the token can download it from <code>&lt;url&gt;/documents/&lt;id&gt;</code>, where <code>&lt;url&gt;</code> is <code>url</code> under <code>[remote]</code> in <code>.deciduous/config.toml</code>, including any path prefix the server's proxy uses, such as <code>/deciduous-mcp</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ curl -s -i -H &quot;Authorization: Bearer &lt;token&gt;&quot; https://deciduous.example.com/documents/38c69819-818d-4a4f-906c-1e8c6101b889</span>
 HTTP/1.1 200 OK
 cache-control: no-store, private, max-age=0
 content-type: text/plain
@@ -51,7 +51,7 @@ content-type: text/plain
 test retry ... ok
 4 passed; 0 failed
 </code></pre>
-</div><p>Without the token: 401. An unknown id: 404. Behind the Docker bundle's Caddy, leaving out the path prefix gets an empty <code>200</code> from Caddy, not an error. One file can be at most 64 MiB; the server refuses a larger upload with 413. <code>get_graph</code> lists the workspace's documents with size, description and node.</p>
+</div><p>Without the token: 401. An unknown id: 404. Behind a Caddy that has only a <code>handle_path</code> block (<a href="../run-a-server.html#3-put-https-in-front-of-it">Run a server</a>), leaving out the path prefix gets an empty <code>200</code>, not an error. One file can be at most 64 MiB; the server refuses a larger upload with 413. <code>get_graph</code> lists the workspace's documents with size, description and node.</p>
 <p>Older pages said <code>doc attach</code> was local only and that configuring a remote did not upload. That stopped being true; in 1.1.0 the upload happens before the command exits, like every other CLI write.</p>
 <p>What does not work in 1.1.0:</p>
 <ul>
@@ -64,12 +64,12 @@ test retry ... ok
 <p>Claude Code writes every prompt, edit, command and result of a session to a JSONL file under <code>~/.claude/projects/&lt;project&gt;/</code>. <code>deciduous transcript import</code> derives nodes from it: a goal per prompt with the prompt verbatim, actions from edit runs and commits, outcomes from test and build runs with their exit status, and an outcome from the assistant's closing report. Each node carries <code>metadata.evidence.kind</code>: <code>proven</code> (a tool call and its result) or <code>inferred</code> (the assistant said so).</p>
 <p>What it cannot derive is an option or a decision. Whether one approach was chosen over another is a judgement about prose, so those still have to be logged as they happen.</p>
 <p>Start with the list and a dry run. <code>transcript list</code> reads the directory for the current project:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous transcript list
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous transcript list</span>
 /Users/me/.claude/projects/-Users-me-code-my-app
 new      6494dc2d    2 prompts  2026-11-08  &lt;session title&gt;
 new      305de803    1 prompts  2026-11-05  &lt;session title&gt;
 
-$ deciduous transcript import --dry-run 6494dc2d
+<span class="cmd">$ deciduous transcript import --dry-run 6494dc2d</span>
 Would import &lt;session title&gt; (6494dc2d, 2 prompts)
   goals 2 · actions 11 · outcomes 4 proven, 1 inferred · observations 0 · edges 17
   10 files hashed · 3 subagent runs skipped (their transcripts are separate files) · 15 deciduous MCP writes skipped (already in the graph)
@@ -77,12 +77,12 @@ Would import &lt;session title&gt; (6494dc2d, 2 prompts)
 </div><p>It takes a session id (looked up in this project's directory) or a path to a <code>.jsonl</code>. The import leaves out every deciduous MCP call the session made, reads such as <code>query_nodes</code> included, and every shell command that runs <code>deciduous</code>, on the assumption that they already wrote to the graph. It does not check. Imported into a different workspace or server than the session wrote to, or after a write that failed, those records are simply missing; the count still says &quot;already in the graph&quot;. Subagents' transcripts are separate files and are not followed. Actions record a hash of each file they touched; <code>--no-hash</code> skips that.</p>
 <p>In a directory Claude Code has never run in, 1.1.0's <code>transcript list</code> fails with the raw <code>No such file or directory (os error 2)</code> for the directory it expected (the next release says Claude Code has not run there). Pass <code>--dir</code> to <code>list</code>; <code>import</code> has no <code>--dir</code>, so give it the <code>.jsonl</code> path.</p>
 <p>A real import, into a workspace on the server:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous transcript import ~/.claude/projects/&lt;project&gt;/305de803-....jsonl
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous transcript import ~/.claude/projects/&lt;project&gt;/305de803-....jsonl</span>
 Imported &lt;session title&gt; (305de803, 1 prompts)
   goals 1 · actions 0 · outcomes 0 proven, 1 inferred · observations 0 · edges 1
   1 deciduous MCP writes skipped (already in the graph)
   root goal #1: deciduous show 1
-$ deciduous remote status | tail -2
+<span class="cmd">$ deciduous remote status | tail -2</span>
 In sync: no writes waiting, and every node, edge and document matches field by field.
 </code></pre>
 </div><p>The nodes went to the server like any CLI write. On the server, the goal's metadata:</p>

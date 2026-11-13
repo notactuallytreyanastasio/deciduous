@@ -2,7 +2,12 @@
 
 # MCP tools
 
-There are two MCP servers with different tool sets, and an agent gets whichever one its client is configured for. The graph server answers at `<base>/mcp` over HTTP with 21 tools and writes PostgreSQL directly; this is what `remote setup` registers with Claude Code and what this page is mostly about. `deciduous mcp` is a stdio server with a different set of 34 tools. Seven share a name with a graph-server tool. Five of those take different arguments and ids; `post_message` and `read_messages` take the same arguments on both, and in a project with a `[remote]` they reach the same board, with the same message ids. It writes the local database, and in a project with a `[remote]` those writes go on to the server through the CLI's op log, exactly like `deciduous add`. Nothing configures it for you, and it does not send the server's logging instructions. The two lists below are from `tools/list` against deciduous 1.1.0 on 2026-11-08.
+There are two MCP servers with different tool sets, and an agent gets whichever one its client is configured for.
+
+- **The graph server** answers at `<base>/mcp` over HTTP with 21 tools and writes PostgreSQL directly. This is what `remote setup` registers with Claude Code and what this page is mostly about.
+- **`deciduous mcp`** is a stdio server with a different set of 34 tools. It writes the local database, and in a project with a `[remote]` those writes go on to the server through the CLI's op log, exactly like `deciduous add`. Nothing configures it for you, and it does not send the server's logging instructions.
+
+Seven tools share a name across the two. Five of those take different arguments and ids; `post_message` and `read_messages` take the same arguments on both, and in a project with a `[remote]` they reach the same board, with the same message ids. The two lists below are from `tools/list` against deciduous 1.1.0 on 2026-11-08.
 
 ## Which one an agent has
 
@@ -56,12 +61,10 @@ query_nodes has no argument "bogus". Its arguments are: branch, file, limit, sea
 
 ## Workspace and branch on every call
 
-Every tool except `list_workspaces` takes `workspace`. The server decides which workspace a call acts on in this order:
-
-For tools that take a workspace rather than a node:
+Every tool except `list_workspaces` takes `workspace`. Pass the `workspace` under `[remote]` in `.deciduous/config.toml`, the name the CLI uses. For every tool that does not name a node by id, the server picks the workspace in this order:
 
 1. The `X-Deciduous-Workspace` header, if the client sends one (a repository's `.mcp.json` can). It wins over the argument: an `add_node` sent with `"workspace": "elsewhere-xyz"` on a connection pinned to `my-app` landed in `my-app`.
-2. The `workspace` argument: the `workspace` under `[remote]` in `.deciduous/config.toml`, which is what the CLI uses.
+2. The call's `workspace` argument.
 3. `scratch`.
 
 Read tools accept `"workspace": "*"` for all workspaces at once; on a pinned connection `*` reads the pinned workspace only, without an error. Writes refuse it. A read naming a workspace that does not exist is an error; the first write creates it.

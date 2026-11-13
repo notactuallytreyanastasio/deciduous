@@ -19,7 +19,7 @@ claude mcp get deciduous | grep -E 'Status|URL'   # Claude Code only; read-only
 
 Filter `claude mcp get`: unfiltered, it prints the registration's `Authorization: Bearer` header with the whole token, which would put the token in your context and the session transcript. `claude mcp list` shows the URL and status of every server without headers.
 
-- **`[remote]` with `url` and `workspace` is present:** the repository is connected. Skip to [Verify](#verify-the-connection).
+- **`[remote]` with `url` and `workspace` is present:** the repository is configured, but this machine may not be. If `claude mcp get` printed `No MCP server named "deciduous"`, or there is no token on this machine (question 2 below), the user stores the token and you run `deciduous remote setup --url <the url in [remote]>`. The URL is already chosen, so there is nothing else to ask. Then go to [Verify](#verify-the-connection).
 - **No `.deciduous/`, or no `[remote]`:** it needs setting up. Ask the user first (next section).
 - **Your tool list has `mcp__deciduous__add_node`, `query_nodes`, `check_activity`:** you are connected to a deciduous server over HTTP. **It has `link_nodes`, `search_nodes`, `trace_chain`:** you are on the local `deciduous mcp` stdio server instead, which has different tools and sends no logging instructions; tell the user.
 
@@ -57,7 +57,7 @@ Error: /path/to/my-app has no server configured ([remote] in .deciduous/config.t
     deciduous remote setup --url <url>              # a server someone else runs
 ```
 
-That is a question for the user, not a menu for you. Run `remote setup --url` with the URL they gave you, then `init` again; it skips files that exist. Do not set `DECIDUOUS_NO_SERVER=1` to get past it; that exists for throwaway test directories.
+That is a question for the user, not a menu for you. Run `remote setup --url` with the URL they gave you, then `init` again; it skips files that exist. Do not set `DECIDUOUS_NO_SERVER=1` to get past it: that opts the project out of a server altogether, which is the user's choice ([Local](content/local.md)).
 
 Use `init --opencode`, `--windsurf` or `--both` if the user runs those assistants ([Clients](content/clients.md)).
 
@@ -103,9 +103,9 @@ Report each check to the user as pass or fail, with its output. A setup that wri
 
    In sync: no writes waiting, and every node, edge and document matches field by field.
    ```
-   Exit 0 is In sync, exit 1 is anything else.
+   Exit 0 with the `In sync` line is a pass. Exit 0 with `Local only: no remote configured` means this checkout has no `[remote]`: a fail. Exit 1 is anything else.
 2. **Your MCP connection reaches the same server.** `claude mcp get deciduous | grep -E 'Status|URL'` shows `[remote] url` + `/mcp`, `Status: ✔ Connected`.
-3. **Your writes land in this workspace.** Write a node the user's request actually needs, usually the goal for their request with their message verbatim in `prompt`, or an option under it, with `add_node`, then run `deciduous remote status`. Your node appears under `Only on the server`:
+3. **Your writes land in this workspace.** If you ran `remote setup` in this session, or the registration changed, you do not have the tools yet: report checks 1 and 2, ask the user to restart Claude Code, and do this check in the new session. Do not substitute a CLI write; it proves the CLI's path, which check 1 already did. Write a node the user's request actually needs, usually the goal for their request with their message verbatim in `prompt`, or an option under it, with `add_node`, then run `deciduous remote status`. Your node appears under `Only on the server`:
    ```
    Only on the server (1)
      option cad0b58d "Token bucket per API token in Redis"

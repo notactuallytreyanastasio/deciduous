@@ -24,10 +24,10 @@
 </code></pre>
 </div><h2 id="a-pivot-from-the-cli-in-one-command">A pivot from the CLI, in one command</h2>
 <p><code>deciduous archaeology pivot</code> writes the observation, the revisit and the new decision, links them, and supersedes the old node. <code>--dry-run</code> shows it first:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous archaeology pivot 2465036d \
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous archaeology pivot 2465036d \
     &quot;A fixed 30s deadline fails batch jobs that legitimately wait minutes&quot; \
     &quot;Per-caller deadline passed in the request context&quot; \
-    -r &quot;One deadline cannot fit interactive and batch callers&quot; -c 75
+    -r &quot;One deadline cannot fit interactive and batch callers&quot; -c 75</span>
 === PIVOT CREATED ===
 
   #6 [observation] &quot;A fixed 30s deadline fails batch jobs that legitimately wait minutes&quot;
@@ -43,7 +43,7 @@
 </code></pre>
 </div><p>The first argument takes a local id, <code>change_id</code> prefix or server UUID. All of it reached the server; <code>remote status</code> afterwards said <code>In sync</code>. The new decision is <code>pending</code>, like any new node.</p>
 <p>The work done under the old decision is history too. <code>archaeology supersede --cascade</code> marks a node and everything below it. Run it on the old decision's actions, never on the old decision itself once a pivot hangs under it: the observation, the revisit and the new decision are all below the old decision now, and the cascade follows them. On the old decision, <code>--dry-run</code> shows it would take the replacement with it:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous archaeology supersede 2465036d --cascade --dry-run
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous archaeology supersede 2465036d --cascade --dry-run</span>
 Would supersede node #3 &quot;Use an overall deadline, not an attempt cap&quot;
   Would also supersede (cascade):
     #4 &quot;Apply a 30s deadline to the retry loop&quot;
@@ -54,7 +54,7 @@ Would supersede node #3 &quot;Use an overall deadline, not an attempt cap&quot;
   Total: 6 node(s) would be marked superseded
 </code></pre>
 </div><p>On the action under it, only the work is marked:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous archaeology supersede 04e9c57d --cascade
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous archaeology supersede 04e9c57d --cascade</span>
 Superseded node #4 &quot;Apply a 30s deadline to the retry loop&quot;
   Also superseded (cascade):
     #5 &quot;Retry loop stops at the deadline&quot;
@@ -74,11 +74,11 @@ add_node({workspace: &quot;my-app&quot;, branch: &quot;agent-api&quot;, node_typ
 update_node({workspace: &quot;my-app&quot;, branch: &quot;agent-api&quot;, node_id: &quot;&lt;old decision id&gt;&quot;, status: &quot;superseded&quot;})
 </code></pre>
 </div><p>Each call needs the id the previous one returned, so they cannot go in one batch. The CLI reads it back as a pivot once pulled (the six new nodes here are the <code>log_decision</code> that made the old decision and its two options, plus the three above):</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous remote pull
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous remote pull</span>
 Pulled: my-app &lt;- https://deciduous.example.com
   fetched 14 nodes, 12 edges, 0 deletion(s)
   imported 6 new node(s), updated 0, removed 0; imported 5 edge(s), removed 0
-$ deciduous narratives pivots -b agent-api
+<span class="cmd">$ deciduous narratives pivots -b agent-api</span>
 === PIVOTS === (1 found)
 
 Pivot #1: [revisit #9] &quot;Reconsidering the error format&quot;
@@ -88,8 +88,8 @@ Pivot #1: [revisit #9] &quot;Reconsidering the error format&quot;
 </code></pre>
 </div><p><code>ask_graph</code> follows revisits and superseded nodes when the question uses a history word (<code>changed</code>, <code>pivot</code>, <code>history</code>, <code>previously</code>, <code>replaced</code> and the like; <code>change</code> is not one). &quot;How has the retry deadline changed?&quot; takes that route and comes back with both the dead decision and its replacement. &quot;Why did we change the retry deadline?&quot; goes by the rationale route instead, because of <code>why</code> (<a href="../recovery.html#what-the-agent-is-told">Recovery</a>).</p>
 <h2 id="statuses">Statuses</h2>
-<p><code>superseded</code> means replaced by a newer approach; <code>abandoned</code> means tried and dropped with nothing replacing it. <code>deciduous status &lt;id&gt; superseded</code> and <code>abandoned</code> work. In 1.1.0, <code>add --help</code> leaves out <code>revisit</code> and <code>status --help</code> lists only four statuses; both are accepted. The next release lists them all. Over MCP, <code>update_node</code> takes all six.</p>
-<p><code>active</code> is only set when someone sets it: new nodes are <code>pending</code>, and so is the new decision <code>archaeology pivot</code> writes. So <code>query_nodes</code> with <code>status: &quot;active&quot;</code> usually returns <code>{&quot;count&quot;:0,&quot;nodes&quot;:[]}</code>, even in a workspace with a current decision. For the current state, query with no status filter and drop <code>superseded</code>, <code>abandoned</code> and <code>rejected</code> nodes, or use <code>consolidation_report</code>, which treats any decision not in those three as current. For the history, use no filter; for the pivots, <code>type: &quot;revisit&quot;</code>.</p>
+<p><code>superseded</code> means replaced by a newer approach; <code>abandoned</code> means tried and dropped with nothing replacing it. <code>deciduous status &lt;id&gt; superseded</code> and <code>abandoned</code> both work, although 1.1.0's <code>status --help</code> lists only <code>pending, active, completed, rejected</code>. Over MCP, <code>update_node</code> takes all six.</p>
+<p><code>active</code> is only set when someone sets it: new nodes are <code>pending</code>, and so is the new decision <code>archaeology pivot</code> writes. So <code>query_nodes</code> with <code>status: &quot;active&quot;</code> returns only what someone explicitly activated: the goals and actions in <a href="../workflow.html">Record the reasoning</a> are, decisions from <code>log_decision</code> are <code>completed</code>, and a pivot's new decision is <code>pending</code>. It can return <code>{&quot;count&quot;:0,&quot;nodes&quot;:[]}</code> in a workspace with a current decision. For the current state, query with no status filter and drop <code>superseded</code>, <code>abandoned</code> and <code>rejected</code> nodes, or use <code>consolidation_report</code>, which treats any decision not in those three as current. For the history, use no filter; for the pivots, <code>type: &quot;revisit&quot;</code>.</p>
 <h2 id="reconstructing-history-from-commits">Reconstructing history from commits</h2>
 <p>For a codebase that was built before anyone logged decisions, the graph can be filled in from git. Pick one bounded question (why retries have a cap, why an endpoint has two response shapes) rather than the whole repository, and read the evidence first:</p>
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">git log --oneline -- src/retry.rs
@@ -97,13 +97,13 @@ git show &lt;sha&gt; -- src/retry.rs
 </code></pre>
 </div><p>A commit proves what changed, not why. Record the author's stated reason as such, mark your inference as inference, and say what you did not look at. Record options only where the evidence shows they were considered; alternatives you can think of now are not history.</p>
 <p>The CLI can backdate a node and tie it to the commit:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous add decision &quot;Retry with exponential backoff (historical)&quot; \
-    -d &quot;Reconstructed from commit message&quot; --date 2024-03-01 --commit &lt;sha&gt;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous add decision &quot;Retry with exponential backoff (historical)&quot; \
+    -d &quot;Reconstructed from commit message&quot; --date 2024-03-01 --commit &lt;sha&gt;</span>
 Created node 9 (type: decision, ...) [commit: 64551157...] [branch: main] [date: 2024-03-01T00:00:00-05:00]
 </code></pre>
 </div><p>The date reaches the server: <code>query_nodes</code> returned <code>&quot;created_at&quot;: &quot;2024-03-01T05:00:00.000000Z&quot;</code> for it. <code>--date</code> takes <code>YYYY-MM-DD</code>, <code>YYYY-MM-DD HH:MM:SS</code> or RFC 3339, read in local time. MCP's <code>add_node</code> has no date argument; an agent reconstructing history puts the date and full hash in the description, or uses the CLI. (An older page said a backdated CLI node stays local. With a <code>[remote]</code> it does not.)</p>
 <p><code>deciduous archaeology timeline</code> lists nodes in creation order, so backdated ones sort where they belong:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous archaeology timeline -b main
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous archaeology timeline -b main</span>
 === TIMELINE === (9 nodes)
 
   2024-03-01  #9   [decision]      Retry with exponential backoff (historical) pending
@@ -117,9 +117,9 @@ Created node 9 (type: decision, ...) [commit: 64551157...] [branch: main] [date:
 </div><p>It reads the local cache; <code>remote pull</code> first. <code>-t</code> filters by type, <code>-l</code> limits to the most recent N, <code>--json</code> for scripts.</p>
 <h2 id="narratives">Narratives</h2>
 <p>A narrative is the prose version: how one part of the system got the way it is, with its pivots. <code>deciduous narratives init</code> writes <code>.deciduous/narratives.md</code> with one section per goal that is not superseded or abandoned (pending and completed goals included) to fill in:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous narratives init
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous narratives init</span>
 Created .../.deciduous/narratives.md with 1 goal section(s)
-$ deciduous narratives show
+<span class="cmd">$ deciduous narratives show</span>
 # Narratives
 ...
 ## Bound retries for failed requests
@@ -134,7 +134,9 @@ $ deciduous narratives show
 </code></pre>
 </div><p>That file is local. It is not sent to the server, and the <code>.gitignore</code> that <code>deciduous init</code> writes ignores everything in <code>.deciduous/</code> except <code>config.toml</code> and <code>graph.json</code>, so git does not carry it either. Teammates see the graph, not the narrative; put anything they need into nodes, or commit the file somewhere outside <code>.deciduous/</code> with <code>-o</code>.</p>
 <h2 id="the-commands-and-skills-init-installs">The commands and skills init installs</h2>
-<p><code>deciduous init</code> writes <code>.claude/commands/decision-graph.md</code> (<code>/decision-graph</code>: build a graph from commit history, with narratives as the source of truth and commits as evidence) and three instruction files, <code>.claude/skills/pulse.md</code>, <code>narratives.md</code> and <code>archaeology.md</code>, for mapping the current design, writing narratives, and turning them into nodes. Only <code>/decision-graph</code> is a slash command. Claude Code loads project skills from <code>.claude/skills/&lt;name&gt;/SKILL.md</code> (<a href="https://code.claude.com/docs/en/skills">Claude Code docs</a>); init writes flat <code>.md</code> files with no frontmatter, so there is no <code>/pulse</code>, <code>/narratives</code> or <code>/archaeology</code>, although the generated <code>CLAUDE.md</code> lists them as skills. Point an agent at them by path: &quot;read <code>.claude/skills/archaeology.md</code> and follow it&quot;. All of them drive the CLI (<code>deciduous add</code>, <code>link</code>, <code>status</code>, <code>--date</code>), so in a project with a <code>[remote]</code> what they write reaches the server. Review them before handing them to an agent: <code>/decision-graph</code> assumes the binary is at <code>~/.cargo/bin/deciduous</code>.</p>
+<p><code>deciduous init</code> writes <code>.claude/commands/decision-graph.md</code> (<code>/decision-graph</code>: build a graph from commit history, with narratives as the source of truth and commits as evidence) and three instruction files, <code>.claude/skills/pulse.md</code>, <code>narratives.md</code> and <code>archaeology.md</code>, for mapping the current design, writing narratives, and turning them into nodes.</p>
+<p>Only <code>/decision-graph</code> is a slash command. Claude Code loads project skills from <code>.claude/skills/&lt;name&gt;/SKILL.md</code> (<a href="https://code.claude.com/docs/en/skills">Claude Code docs</a>); init writes flat <code>.md</code> files with no frontmatter, so there is no <code>/pulse</code>, <code>/narratives</code> or <code>/archaeology</code>, although the generated <code>CLAUDE.md</code> lists them as skills. Point an agent at them by path: &quot;read <code>.claude/skills/archaeology.md</code> and follow it&quot;.</p>
+<p>All of them drive the CLI (<code>deciduous add</code>, <code>link</code>, <code>status</code>, <code>--date</code>), so in a project with a <code>[remote]</code> what they write reaches the server. Review them before handing them to an agent: <code>/decision-graph</code> assumes the binary is at <code>~/.cargo/bin/deciduous</code>.</p>
 <h2 id="check-the-result">Check the result</h2>
 <p><code>find_orphans</code> finds nodes nothing points at; an empty list says the graph is connected, not that it is true. Have a second agent check the important claims against the commits they cite.</p>
 </article><nav class="page-turn" aria-label="Previous and next guide"><a href="../evidence.html"><span>Previous</span>Documents and transcripts</a><a href="../operating.html"><span>Next</span>Backups, upgrades, tokens</a></nav><footer class="article-footer"><a href="../../index.html">deciduous.dev</a><span>Many minds. One memory.</span></footer></main>

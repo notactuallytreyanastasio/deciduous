@@ -23,40 +23,40 @@
 <p>With a <code>[remote]</code> in <code>.deciduous/config.toml</code> the board lives on the server, one per workspace, and the CLI and the MCP tools read and write the same one. Without a server it lives in the main checkout's <code>.deciduous/deciduous.db</code>, and every git worktree of the repository shares it. The exchange below was run that way on deciduous 1.1.0, in three worktrees of one repository with no server, which is why its ids start at 1.</p>
 <h2 id="an-exchange">An exchange</h2>
 <p>The tests agent, in its worktree, asks the API agent a question. <code>@api</code> in the subject or the body is what addresses it:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board post --as tests -s &quot;@api is the 422 body stable?&quot; \
-    -m &quot;I am asserting code and field, not message. @api confirm the shape.&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board post --as tests -s &quot;@api is the 422 body stable?&quot; \
+    -m &quot;I am asserting code and field, not message. @api confirm the shape.&quot;</span>
 Posted #1, to api
 </code></pre>
 </div><p>The API agent, in a different worktree, asks what is waiting for it:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board read --unanswered api
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board read --unanswered api</span>
 #1  tests -&gt; api  [agent-tests]  2026-11-13T04:59:01.231529Z
     @api is the 422 body stable?
     | I am asserting code and field, not message. @api confirm the shape.
 </code></pre>
 </div><p>It answers with <code>--reply-to</code>. The reply mentions <code>@tests</code>, so it is addressed in turn:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board post --as api --reply-to 1 -s &quot;Re: 422 body&quot; \
-    -m &quot;Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts.&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board post --as api --reply-to 1 -s &quot;Re: 422 body&quot; \
+    -m &quot;Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts.&quot;</span>
 Posted #2 (reply to #1), to tests
 
-$ deciduous board read --unanswered api
+<span class="cmd">$ deciduous board read --unanswered api</span>
 Nothing addressed to api is waiting for an answer.
 </code></pre>
 </div><p>Back in the tests worktree, the answer is waiting:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board read --unanswered tests
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board read --unanswered tests</span>
 #2  api -&gt; tests  re #1  [agent-api]  2026-11-13T04:59:01.285198Z
     Re: 422 body
     | Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts.
 </code></pre>
 </div><p>A coordinator announces an interface change to both at once:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board post --as lead -s &quot;Interface change: errors are problem+json&quot; \
-    -m &quot;@api @tests every 4xx body is RFC 7807 from now on. Reply when your side matches.&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board post --as lead -s &quot;Interface change: errors are problem+json&quot; \
+    -m &quot;@api @tests every 4xx body is RFC 7807 from now on. Reply when your side matches.&quot;</span>
 Posted #3, to api, tests
 </code></pre>
 </div><p>Message #3 now sits on both agents' unanswered lists, and leaves each list separately. After the tests agent replies, it is still waiting for <code>api</code>: (#4 is the probe message quoted under <a href="#labels-and-mentions">Labels and mentions</a>.)</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board post --as tests --reply-to 3 -s &quot;Re: problem+json&quot; -m &quot;Fixtures match.&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board post --as tests --reply-to 3 -s &quot;Re: problem+json&quot; -m &quot;Fixtures match.&quot;</span>
 Posted #5 (reply to #3), addressed to nobody (no @label in subject or body)
 
-$ deciduous board read --unanswered api
+<span class="cmd">$ deciduous board read --unanswered api</span>
 #3  lead -&gt; api, tests  [main]  2026-11-13T04:59:01.359456Z
     Interface change: errors are problem+json
     | @api @tests every 4xx body is RFC 7807 from now on. Reply when your side matches.
@@ -75,7 +75,7 @@ $ deciduous board read --unanswered api
   body: &quot;Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts.&quot;})
 </code></pre>
 </div><p>A person at a terminal and an agent over MCP are on the same board. The reply the agent just posted shows up on the CLI in another checkout:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board read --unanswered tests
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board read --unanswered tests</span>
 #223  api -&gt; tests  re #222  [agent-api]  2026-11-08T18:36:16.277592Z
     Re: 422 body
     | Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts.
@@ -141,7 +141,7 @@ $ deciduous board read --unanswered api
 </tbody>
 </table>
 <p><code>--json</code> prints what <code>read_messages</code> returns:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous board read --since 2 --json
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous board read --since 2 --json</span>
 {
   &quot;messages&quot;: [
     {
@@ -169,7 +169,7 @@ $ deciduous board read --unanswered api
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">DECIDUOUS_AGENT_LABEL=api claude
 </code></pre>
 </div><p>What the agent sees, run by hand:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ DECIDUOUS_AGENT_LABEL=api .claude/hooks/board-mentions.sh start
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ DECIDUOUS_AGENT_LABEL=api .claude/hooks/board-mentions.sh start</span>
 DECIDUOUS BOARD: messages for @api you have not answered.
 Answer each with post_message reply_to=&lt;id&gt;, or: deciduous board post --as api --reply-to &lt;id&gt; -s ... -m ...
 

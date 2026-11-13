@@ -57,7 +57,10 @@ function article(page, outputPath) {
   const defaultFence = md.renderer.rules.fence;
   md.renderer.rules.fence = (tokens, idx, options, env, self) => {
     const language = tokens[idx].info.trim().split(/\s/)[0] || 'text';
-    return `<div class="code-block"><div class="code-toolbar"><span>${escape(language)}</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div>${defaultFence(tokens, idx, options, env, self)}</div>`;
+    // In a block that shows commands and their output, mark the command lines (a `$ ` line and its
+    // backslash continuations) so the two can be told apart. Text content is unchanged, so Copy is too.
+    const body = defaultFence(tokens, idx, options, env, self).replace(/(<code[^>]*>)([\s\S]*)(<\/code>)/, (all, open, code, close) => open + code.replace(/^\$ (?:.*\\\n)*.*$/gm, line => `<span class="cmd">${line}</span>`) + close);
+    return `<div class="code-block"><div class="code-toolbar"><span>${escape(language)}</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div>${body}</div>`;
   };
   return {html: md.render(page.source), toc};
 }
