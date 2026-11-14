@@ -3372,6 +3372,16 @@
       "to_change_id": "fac0a6f8-6034-4cc2-8a7b-e13822cf45b2",
       "weight": 1.0
     },
+    "42b71b308b50963fab2e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:18:28.220552-05:00",
+      "edge_id": "42b71b308b50963fab2e",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "third chapter: the shipped instructions named arguments the local tool refused",
+      "to_change_id": "e5e96ea2-93cf-4bca-817b-4e105f834b60",
+      "weight": 1.0
+    },
     "4312996ca893e6fce699": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-10T03:56:28.620774-05:00",
@@ -10057,6 +10067,16 @@
       "to_change_id": "e7a6cfee-fe03-4b15-8dc6-6cee4752a991",
       "weight": 1.0
     },
+    "c11c491ed5908e0344c1": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:18:28.337890-05:00",
+      "edge_id": "c11c491ed5908e0344c1",
+      "edge_type": "leads_to",
+      "from_change_id": "e5e96ea2-93cf-4bca-817b-4e105f834b60",
+      "rationale": "result",
+      "to_change_id": "22efa02e-24c4-4f21-852a-b61b66e55649",
+      "weight": 1.0
+    },
     "c11ca977de7bcc309ba1": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:29:21.294433-05:00",
@@ -16367,6 +16387,19 @@
       "status": "pending",
       "title": "Git Guard module completed and merged",
       "updated_at": "2026-01-05T19:20:42.231782-05:00"
+    },
+    "22efa02e-24c4-4f21-852a-b61b66e55649": {
+      "author": "Bobby Grayson",
+      "change_id": "22efa02e-24c4-4f21-852a-b61b66e55649",
+      "created_at": "2026-11-14T17:18:28.280100-05:00",
+      "metadata": {
+        "branch": "88-local-mcp-takes-the-servers-arguments",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "708 Rust tests pass, 3 new handler tests",
+      "updated_at": "2026-11-14T17:18:28.450412-05:00"
     },
     "235a5864-0f89-411a-915c-38be358d5510": {
       "author": "Bobby Grayson",
@@ -31637,6 +31670,19 @@
       "status": "pending",
       "title": "PR #14 created for GitHub Pages site",
       "updated_at": "2025-12-12T09:22:08.055089-05:00"
+    },
+    "e5e96ea2-93cf-4bca-817b-4e105f834b60": {
+      "author": "Bobby Grayson",
+      "change_id": "e5e96ea2-93cf-4bca-817b-4e105f834b60",
+      "created_at": "2026-11-14T17:18:28.162868-05:00",
+      "metadata": {
+        "branch": "88-local-mcp-takes-the-servers-arguments",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Local MCP add_node takes parent_id, edge_type, rationale and status, checked before anything is written",
+      "updated_at": "2026-11-14T17:18:28.394517-05:00"
     },
     "e5f13fac-bd1e-4783-8b29-f15766e43be4": {
       "author": "Bobby Grayson",

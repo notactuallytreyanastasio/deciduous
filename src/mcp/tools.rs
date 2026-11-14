@@ -17,7 +17,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
         // -----------------------------------------------------------------
         ToolDefinition {
             name: "add_node".to_string(),
-            description: "Add a new node to the decision graph. Node types: goal, decision, option, action, outcome, observation, revisit.".to_string(),
+            description: "Add a new node to the decision graph. Node types: goal, decision, option, action, outcome, observation, revisit. Pass parent_id to link it under an existing node in the same call: if the parent does not exist, nothing is created. Do not send link_nodes in the same batch with an id you have not received yet.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -55,6 +55,24 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                     "commit": {
                         "type": "string",
                         "description": "Git commit to link: HEAD, a branch, a tag, origin/main or a hash (prefix); stored as the full hash. A rev this checkout cannot resolve is refused."
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Node status. Default: completed for an outcome or observation, pending otherwise",
+                        "enum": ["pending", "active", "completed", "rejected", "superseded", "abandoned"]
+                    },
+                    "parent_id": {
+                        "type": ["integer", "string"],
+                        "description": "An existing node to link this one under (edge parent -> new node): local id or change_id prefix. Checked before anything is written"
+                    },
+                    "edge_type": {
+                        "type": "string",
+                        "description": "Type of the edge from parent_id (default: leads_to). Only with parent_id",
+                        "enum": ["leads_to", "requires", "chosen", "rejected", "blocks", "enables", "took_from"]
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": "Why the parent leads to this node. Only with parent_id"
                     }
                 },
                 "required": ["node_type", "title"]
