@@ -1,9 +1,15 @@
 //! Pulse - current state health report for the decision graph
 //!
-//! Shows active goals, confidence distribution, orphan nodes,
+//! Shows open goals, confidence distribution, orphan nodes,
 //! recent activity, and coverage gaps.
+//!
+//! "Open" is `pending` or `active` ([`OPEN_STATUSES`]). A goal that is
+//! completed, rejected, superseded or abandoned is not listed, and under an
+//! open goal only the open descendants are: the closed ones are counted. The
+//! obvious version, every goal with its whole tree, is a list of everything
+//! ever done, which is the one thing this report is not for.
 
-use crate::db::{Database, DecisionEdge, DecisionNode};
+use crate::db::{Database, DecisionEdge, DecisionNode, OPEN_STATUSES};
 use colored::Colorize;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -37,11 +43,49 @@ pub struct ConfidenceDistribution {
     pub unset: usize,  // no confidence
 }
 
-/// An active goal with its child tree
+/// An open goal with the descendants that are still open
 #[derive(Debug, Serialize)]
 pub struct GoalTree {
     pub goal: NodeRef,
+    /// Open descendants, breadth first.
     pub children: Vec<NodeRef>,
+    /// How many descendants are closed and so not listed.
+    pub closed_children: usize,
+    /// The newest `created_at` in the tree: goals are ordered by it.
+    pub last_activity: String,
+}
+
+/// How much of the report [`print_pulse`] prints. The report itself is
+/// never cut: `--json` carries every open goal.
+#[derive(Debug, Clone, Copy)]
+pub struct PulseLimits {
+    pub goals: usize,
+    pub children: usize,
+    pub list: usize,
+}
+
+impl Default for PulseLimits {
+    fn default() -> Self {
+        Self {
+            goals: 10,
+            children: 8,
+            list: 15,
+        }
+    }
+}
+
+impl PulseLimits {
+    pub fn unlimited() -> Self {
+        Self {
+            goals: usize::MAX,
+            children: usize::MAX,
+            list: usize::MAX,
+        }
+    }
+}
+
+fn is_open(status: &str) -> bool {
+    OPEN_STATUSES.contains(&status)
 }
 
 /// Lightweight node reference
@@ -149,10 +193,10 @@ pub fn generate_pulse(
         confidence,
     };
 
-    // Active goal trees
+    // Open goal trees
     let active_goals: Vec<&DecisionNode> = nodes
         .iter()
-        .filter(|n| n.node_type == "goal" && n.status != "superseded" && n.status != "abandoned")
+        .filter(|n| n.node_type == "goal" && is_open(&n.status))
         .copied()
         .collect();
 
@@ -167,10 +211,12 @@ pub fn generate_pulse(
 
     let node_map: HashMap<i32, &DecisionNode> = nodes.iter().map(|n| (n.id, *n)).collect();
 
-    let goal_trees: Vec<GoalTree> = active_goals
+    let mut goal_trees: Vec<GoalTree> = active_goals
         .iter()
         .map(|goal| {
             let mut children = Vec::new();
+            let mut closed_children = 0;
+            let mut last_activity = goal.created_at.clone();
             let mut visited = HashSet::new();
             let mut queue = std::collections::VecDeque::new();
             visited.insert(goal.id);
@@ -182,7 +228,14 @@ pub fn generate_pulse(
             while let Some(nid) = queue.pop_front() {
                 if visited.insert(nid) {
                     if let Some(node) = node_map.get(&nid) {
-                        children.push(node_to_ref(node));
+                        if node.created_at > last_activity {
+                            last_activity = node.created_at.clone();
+                        }
+                        if is_open(&node.status) {
+                            children.push(node_to_ref(node));
+                        } else {
+                            closed_children += 1;
+                        }
                     }
                     if let Some(outs) = outgoing.get(&nid) {
                         for &child_id in outs {
@@ -194,9 +247,17 @@ pub fn generate_pulse(
             GoalTree {
                 goal: node_to_ref(goal),
                 children,
+                closed_children,
+                last_activity,
             }
         })
         .collect();
+    // Most recently touched first: what is being worked on leads.
+    goal_trees.sort_by(|a, b| {
+        b.last_activity
+            .cmp(&a.last_activity)
+            .then(b.goal.id.cmp(&a.goal.id))
+    });
 
     // Orphan nodes (no edges at all, excluding root goals)
     let mut nodes_with_edges: HashSet<i32> = HashSet::new();
@@ -224,9 +285,7 @@ pub fn generate_pulse(
     for node in &nodes {
         let has_outgoing = outgoing.contains_key(&node.id);
         match node.node_type.as_str() {
-            "goal"
-                if !has_outgoing && node.status != "superseded" && node.status != "abandoned" =>
-            {
+            "goal" if !has_outgoing && is_open(&node.status) => {
                 gaps.push(CoverageGap {
                     node_id: node.id,
                     node_type: node.node_type.clone(),
@@ -234,9 +293,7 @@ pub fn generate_pulse(
                     gap_type: "goal_without_options".to_string(),
                 });
             }
-            "decision"
-                if !has_outgoing && node.status != "superseded" && node.status != "abandoned" =>
-            {
+            "decision" if !has_outgoing && is_open(&node.status) => {
                 gaps.push(CoverageGap {
                     node_id: node.id,
                     node_type: node.node_type.clone(),
@@ -244,9 +301,7 @@ pub fn generate_pulse(
                     gap_type: "decision_without_actions".to_string(),
                 });
             }
-            "action"
-                if !has_outgoing && node.status != "superseded" && node.status != "abandoned" =>
-            {
+            "action" if !has_outgoing && is_open(&node.status) => {
                 gaps.push(CoverageGap {
                     node_id: node.id,
                     node_type: node.node_type.clone(),
@@ -268,7 +323,7 @@ pub fn generate_pulse(
 }
 
 /// Print the pulse report in colored terminal format
-pub fn print_pulse(report: &PulseReport, summary_only: bool) {
+pub fn print_pulse(report: &PulseReport, summary_only: bool, limits: PulseLimits) {
     println!("{}", "=== PULSE ===".bold());
     println!();
 
@@ -305,9 +360,9 @@ pub fn print_pulse(report: &PulseReport, summary_only: bool) {
     }
 
     // Status
-    let status_parts: Vec<String> = report
-        .summary
-        .by_status
+    let mut statuses: Vec<(&String, &usize)> = report.summary.by_status.iter().collect();
+    statuses.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+    let status_parts: Vec<String> = statuses
         .iter()
         .map(|(s, c)| format!("{}({})", s, c))
         .collect();
@@ -326,42 +381,62 @@ pub fn print_pulse(report: &PulseReport, summary_only: bool) {
         return;
     }
 
-    // Active goals
-    if !report.active_goals.is_empty() {
-        println!();
-        println!("{}:", "Active Goals".bold());
-        for tree in &report.active_goals {
+    // Open goals
+    println!();
+    if report.active_goals.is_empty() {
+        println!("{}: none", "Open Goals".bold());
+    } else {
+        println!("{} ({}):", "Open Goals".bold(), report.active_goals.len());
+        for tree in report.active_goals.iter().take(limits.goals) {
             let conf_str = tree
                 .goal
                 .confidence
                 .map(|c| format!(" {}%", c))
                 .unwrap_or_default();
             println!(
-                "  #{} {} {}{}",
+                "  #{} {} {} ({}){}",
                 tree.goal.id,
                 format!("[{}]", tree.goal.node_type).yellow(),
                 tree.goal.title,
+                tree.goal.status.green(),
                 conf_str.dimmed()
             );
-            for child in &tree.children {
+            for child in tree.children.iter().take(limits.children) {
                 let child_conf = child
                     .confidence
                     .map(|c| format!(" {}%", c))
                     .unwrap_or_default();
-                let status_color = match child.status.as_str() {
-                    "superseded" => child.status.dimmed().to_string(),
-                    "abandoned" => child.status.red().to_string(),
-                    _ => child.status.green().to_string(),
-                };
                 println!(
                     "    ├── #{} {} {} ({}){}",
                     child.id,
                     format!("[{}]", child.node_type).blue(),
                     child.title,
-                    status_color,
+                    child.status.green(),
                     child_conf.dimmed()
                 );
             }
+            let hidden = tree.children.len().saturating_sub(limits.children);
+            let mut tail = Vec::new();
+            if hidden > 0 {
+                tail.push(format!("{} more open", hidden));
+            }
+            if tree.closed_children > 0 {
+                tail.push(format!("{} closed", tree.closed_children));
+            }
+            if !tail.is_empty() {
+                println!("    └── {}", tail.join(", ").dimmed());
+            }
+        }
+        let hidden_goals = report.active_goals.len().saturating_sub(limits.goals);
+        if hidden_goals > 0 {
+            println!(
+                "  {}",
+                format!(
+                    "{} more open goals, least recently touched last: --all, or `deciduous nodes -t goal --open`",
+                    hidden_goals
+                )
+                .dimmed()
+            );
         }
     }
 
@@ -369,7 +444,7 @@ pub fn print_pulse(report: &PulseReport, summary_only: bool) {
     if !report.orphan_nodes.is_empty() {
         println!();
         println!("{} ({}):", "Orphan Nodes".bold(), report.orphan_nodes.len());
-        for node in &report.orphan_nodes {
+        for node in report.orphan_nodes.iter().take(limits.list) {
             println!(
                 "  #{} {} \"{}\" - {}",
                 node.id,
@@ -378,6 +453,7 @@ pub fn print_pulse(report: &PulseReport, summary_only: bool) {
                 "no connections".red()
             );
         }
+        more_line(report.orphan_nodes.len(), limits.list);
     }
 
     // Recent activity
@@ -409,7 +485,7 @@ pub fn print_pulse(report: &PulseReport, summary_only: bool) {
             "Coverage Gaps".bold(),
             report.coverage_gaps.len()
         );
-        for gap in &report.coverage_gaps {
+        for gap in report.coverage_gaps.iter().take(limits.list) {
             let gap_desc = match gap.gap_type.as_str() {
                 "goal_without_options" => "no options/decisions",
                 "decision_without_actions" => "no actions",
@@ -424,5 +500,12 @@ pub fn print_pulse(report: &PulseReport, summary_only: bool) {
                 gap_desc.red()
             );
         }
+        more_line(report.coverage_gaps.len(), limits.list);
+    }
+}
+
+fn more_line(total: usize, shown: usize) {
+    if total > shown {
+        println!("  {}", format!("{} more: --all", total - shown).dimmed());
     }
 }

@@ -258,7 +258,7 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
             node_type: "observation",
             title: obs["title"],
             description: obs["description"],
-            status: "active",
+            status: "completed",
             metadata: build_metadata(nil, branch, confidence, nil)
           })
 

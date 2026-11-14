@@ -181,6 +181,25 @@ pub const NODE_STATUSES: &[&str] = &[
     "abandoned",
 ];
 
+/// Statuses that mean a node is still open: not started, or in flight.
+/// Every other status is terminal.
+pub const OPEN_STATUSES: &[&str] = &["pending", "active"];
+
+/// Node types that record something that already happened. They are not
+/// work items, so they are born closed.
+pub const RECORD_NODE_TYPES: &[&str] = &["outcome", "observation"];
+
+/// The status a new node of this type is born with. An outcome or an
+/// observation is `completed`: left `pending` it never closes, and on a real
+/// graph those two types were more than half of everything listed as open.
+pub fn default_status(node_type: &str) -> &'static str {
+    if RECORD_NODE_TYPES.contains(&node_type) {
+        "completed"
+    } else {
+        "pending"
+    }
+}
+
 /// Edge types a new edge may have.
 pub const EDGE_TYPES: &[&str] = &[
     "leads_to",
@@ -2656,7 +2675,7 @@ impl Database {
             node_type,
             title,
             description,
-            status: "pending",
+            status: default_status(node_type),
             created_at: &now,
             updated_at: &now,
             metadata_json: metadata.as_deref(),
@@ -2720,7 +2739,7 @@ impl Database {
             node_type,
             title,
             description,
-            status: "pending",
+            status: default_status(node_type),
             created_at: &now,
             updated_at: &now,
             metadata_json: metadata.as_deref(),
@@ -2801,7 +2820,7 @@ impl Database {
             node_type,
             title,
             description,
-            status: "pending",
+            status: default_status(node_type),
             created_at,
             updated_at: created_at,
             metadata_json: metadata.as_deref(),

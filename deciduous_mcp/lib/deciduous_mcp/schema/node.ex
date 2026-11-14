@@ -121,6 +121,15 @@ defmodule DeciduousMcp.Schema.Node do
   end
 
   @doc """
+  The status a new node of this type is born with when the caller gives none.
+  An outcome or an observation records something that already happened, so it
+  is `completed`; anything else is `pending`. Kept equal to `default_status`
+  in the CLI (src/db.rs).
+  """
+  def default_status(type) when type in ["outcome", "observation"], do: "completed"
+  def default_status(_), do: "pending"
+
+  @doc """
   Nil for an acceptable confidence (absent, or a number from 0 to 100),
   otherwise the message saying what is wrong with it. Shared with the bulk
   import, which writes with insert_all and never runs a changeset.
