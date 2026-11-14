@@ -931,6 +931,19 @@ impl Database {
         get_db_path()
     }
 
+    /// Whether there is a project to open: `DECIDUOUS_DB_PATH` names a
+    /// database, or this directory or one above it has a `.deciduous`.
+    /// [`Database::open`] creates what is missing, so a command run in the
+    /// wrong directory used to succeed against a new, empty graph.
+    pub fn project_exists() -> bool {
+        if std::env::var_os("DECIDUOUS_DB_PATH").is_some() {
+            return true;
+        }
+        std::env::current_dir()
+            .map(|cwd| cwd.ancestors().any(|d| d.join(".deciduous").is_dir()))
+            .unwrap_or(false)
+    }
+
     /// Create a new database at a custom path
     pub fn new(path: &str) -> Result<Self> {
         Self::open_at(path)
@@ -5048,11 +5061,16 @@ impl Database {
                 "a theme needs a non-empty name".to_string(),
             ));
         }
+        let normalized_name = name.to_lowercase().replace(' ', "-");
+        if self.get_theme_by_name(&normalized_name)?.is_some() {
+            return Err(DbError::Validation(format!(
+                "a theme named '{normalized_name}' already exists; `deciduous themes list` shows them"
+            )));
+        }
         let _mirror = self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
         let change_id = Uuid::new_v4().to_string();
-        let normalized_name = name.to_lowercase().replace(' ', "-");
 
         let new_theme = NewTheme {
             change_id: &change_id,

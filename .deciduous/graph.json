@@ -12215,6 +12215,16 @@
       "to_change_id": "97a2abc8-cf25-4996-a45b-238937c8d476",
       "weight": 1.0
     },
+    "ebb6f2ba40c794b487ff": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:13:03.041839-05:00",
+      "edge_id": "ebb6f2ba40c794b487ff",
+      "edge_type": "leads_to",
+      "from_change_id": "faef8265-019f-4cf3-944f-55741d0f4098",
+      "rationale": "result",
+      "to_change_id": "ac78bc84-0c1a-478a-9ee6-1f202f9ea3b4",
+      "weight": 1.0
+    },
     "ebba0f3180b2024c96a1": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-11T00:29:23.432579-05:00",
@@ -13123,6 +13133,16 @@
       "from_change_id": "047162a1-a3a0-4c6f-acac-b9154350058f",
       "rationale": "possible language choice",
       "to_change_id": "9717da4b-5690-4106-852a-3792a1fbdc3f",
+      "weight": 1.0
+    },
+    "fb685009461ee5564bd6": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:13:02.923487-05:00",
+      "edge_id": "fb685009461ee5564bd6",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "second chapter: the first ten minutes",
+      "to_change_id": "faef8265-019f-4cf3-944f-55741d0f4098",
       "weight": 1.0
     },
     "fb768ca2c510fbe87b20": {
@@ -27445,6 +27465,19 @@
       "title": "Outcomes and observations are born completed",
       "updated_at": "2026-11-14T16:54:16.491983-05:00"
     },
+    "ac78bc84-0c1a-478a-9ee6-1f202f9ea3b4": {
+      "author": "Bobby Grayson",
+      "change_id": "ac78bc84-0c1a-478a-9ee6-1f202f9ea3b4",
+      "created_at": "2026-11-14T17:13:02.983302-05:00",
+      "metadata": {
+        "branch": "87-the-first-ten-minutes",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "705 Rust tests pass, 9 new; crate packages at 920 KB and builds from the package",
+      "updated_at": "2026-11-14T17:13:03.154829-05:00"
+    },
     "ac9605e5-f3d0-4573-8165-73896153d9cd": {
       "author": "Bobby Grayson",
       "change_id": "ac9605e5-f3d0-4573-8165-73896153d9cd",
@@ -33179,6 +33212,19 @@
       "status": "pending",
       "title": "Parallel subagents per module, stacked branches",
       "updated_at": "2026-03-02T19:40:56.493449-05:00"
+    },
+    "faef8265-019f-4cf3-944f-55741d0f4098": {
+      "author": "Bobby Grayson",
+      "change_id": "faef8265-019f-4cf3-944f-55741d0f4098",
+      "created_at": "2026-11-14T17:13:02.863787-05:00",
+      "metadata": {
+        "branch": "87-the-first-ten-minutes",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "init --no-server remembered in config; commands outside a project fail; DOT label, completion pipe, backup location, theme, writeup and prompt fixes; crate excludes; CI runs every test file",
+      "updated_at": "2026-11-14T17:13:03.098660-05:00"
     },
     "fb0df161-542d-410f-a926-b246d36ba502": {
       "author": "Bobby Grayson",

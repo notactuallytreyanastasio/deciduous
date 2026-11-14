@@ -50,6 +50,12 @@ enum Command {
         /// Disable automatic version checking (enabled by default)
         #[arg(long)]
         no_auto_update: bool,
+
+        /// No graph server: keep the graph in .deciduous/graph.json, committed
+        /// with the code. Nothing to install or run; `deciduous remote setup`
+        /// connects a server later
+        #[arg(long)]
+        no_server: bool,
     },
 
     /// Update AI assistant integration files to latest version
@@ -289,7 +295,8 @@ enum Command {
 
     /// Create a database backup
     Backup {
-        /// Output path (default: deciduous_backup_<timestamp>.db)
+        /// Output path (default: .deciduous/backups/deciduous_backup_<timestamp>.db,
+        /// a directory git ignores)
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -660,6 +667,10 @@ enum RemoteAction {
         /// Run this machine's server in Docker instead of as a background service
         #[arg(long, conflicts_with = "url")]
         docker: bool,
+
+        /// No server: keep the graph in .deciduous/graph.json, committed with the code
+        #[arg(long, conflicts_with_all = ["url", "local", "port", "database_url", "docker_postgres", "docker"])]
+        no_server: bool,
     },
 
     /// Store the API token outside every repository (mode 0600)
@@ -1628,6 +1639,7 @@ fn main() {
         windsurf,
         both,
         no_auto_update,
+        no_server,
     } = args.command
     {
         // Determine which assistants to set up
@@ -1648,7 +1660,14 @@ fn main() {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         if let Err(e) =
             deciduous::init::init_project(setup_claude, setup_opencode, windsurf, no_auto_update)
-                .and_then(|_| deciduous::server::ensure(&cwd, deciduous::server::Caller::Init))
+                .and_then(|_| {
+                    if no_server {
+                        println!("\n{}", "Shared graph server".cyan().bold());
+                        deciduous::server::choose_no_server(&cwd)
+                    } else {
+                        deciduous::server::ensure(&cwd, deciduous::server::Caller::Init)
+                    }
+                })
         {
             eprintln!("{} {}", "Error:".red(), e);
             exit(1);
@@ -1666,6 +1685,7 @@ fn main() {
                 database_url,
                 docker_postgres,
                 docker,
+                no_server,
             },
     } = &args.command
     {
@@ -1685,6 +1705,7 @@ fn main() {
         // Any flag about this machine's server means this machine: nothing
         // else has a port, a database or a container to choose.
         let choice = match url {
+            _ if *no_server => SetupChoice::NoServer,
             Some(u) => SetupChoice::Url(u.clone()),
             None if *local || req != LocalRequest::default() => SetupChoice::Local(req),
             None => SetupChoice::Ask,
@@ -1881,12 +1902,12 @@ fn main() {
 
     // Handle completion separately - doesn't need database
     if let Command::Completion { shell } = args.command {
-        clap_complete::generate(
-            shell,
-            &mut Args::command(),
-            "deciduous",
-            &mut std::io::stdout(),
-        );
+        // Into a buffer first: clap_complete panics when its writer fails,
+        // and `deciduous completion zsh | head -1` closes the pipe early.
+        let mut script = Vec::new();
+        clap_complete::generate(shell, &mut Args::command(), "deciduous", &mut script);
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(&script);
         return;
     }
 
@@ -1903,6 +1924,20 @@ fn main() {
     } = args.command
     {
         std::process::exit(run_api_daemon(port, data_dir, token, bind));
+    }
+
+    // Everything from here on reads or writes a project's graph. Without
+    // one, opening the database would make an empty one right here and the
+    // command would report success against it.
+    if !Database::project_exists() {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        eprintln!(
+            "{} no deciduous project here: neither {} nor any directory above it has a .deciduous.\n       \
+             `deciduous init` starts one in this directory.",
+            "Error:".red(),
+            cwd.display()
+        );
+        exit(1);
     }
 
     // `sync --check` answers "what would sync do" and changes nothing. With
@@ -2236,6 +2271,15 @@ fn main() {
 
         Command::Prompt { id, prompt } => {
             let id = resolve_node_or_exit(&db, &id);
+            // Before anything is said about the prompt's length.
+            if !matches!(db.get_node(id), Ok(Some(_))) {
+                eprintln!(
+                    "{} Node {} does not exist. Run 'deciduous nodes' to see existing nodes.",
+                    "Error:".red(),
+                    id
+                );
+                exit(1);
+            }
             // Read prompt from stdin if not provided as argument
             let effective_prompt = match prompt {
                 Some(p) => p,
@@ -4299,9 +4343,22 @@ fn main() {
                 exit(1);
             }
 
+            // Beside the database, in a directory that ignores itself: the
+            // default used to be the working directory, where every backup
+            // showed up in `git status` waiting to be committed by accident.
             let backup_path = output.unwrap_or_else(|| {
                 let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-                PathBuf::from(format!("deciduous_backup_{}.db", timestamp))
+                let dir = db_path
+                    .parent()
+                    .map(|p| p.join("backups"))
+                    .unwrap_or_else(|| PathBuf::from("."));
+                if std::fs::create_dir_all(&dir).is_ok() {
+                    let ignore = dir.join(".gitignore");
+                    if !ignore.exists() {
+                        let _ = std::fs::write(&ignore, "*\n");
+                    }
+                }
+                dir.join(format!("deciduous_backup_{}.db", timestamp))
             });
 
             // Not a file copy: in WAL mode the newest writes sit in
@@ -4487,6 +4544,13 @@ fn main() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
                     let filtered_graph = cli_export_subgraph(&db, graph, nodes, roots);
+                    if filtered_graph.nodes.is_empty() {
+                        eprintln!(
+                            "{} no nodes match, so there is nothing to write up. `deciduous nodes` lists the ids.",
+                            "Error:".red()
+                        );
+                        exit(1);
+                    }
 
                     // Auto-detect GitHub repo from git remote
                     let github_repo = ProcessCommand::new("git")

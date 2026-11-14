@@ -170,7 +170,10 @@ pub fn graph_to_dot(graph: &DecisionGraph, config: &DotConfig) -> String {
 
         if config.show_confidence {
             if let Some(conf) = extract_confidence(&node.metadata_json) {
-                w!(label, "\\n({}%)", conf);
+                // A real newline: `escape_dot` below turns it into DOT's
+                // `\n`. Written here as `\n` it was escaped a second time and
+                // drawn as the two characters.
+                w!(label, "\n({}%)", conf);
             }
         }
 
