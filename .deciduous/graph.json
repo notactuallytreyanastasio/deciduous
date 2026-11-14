@@ -4842,6 +4842,16 @@
       "to_change_id": "b64e279c-76d5-4e68-9725-750c122824b8",
       "weight": 1.0
     },
+    "5c5ac83b0c0b284c3a9b": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T18:06:58.381630-05:00",
+      "edge_id": "5c5ac83b0c0b284c3a9b",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "automatic logging, the second item of the pass",
+      "to_change_id": "5e53c70e-b440-4b59-a050-370cc3264f1c",
+      "weight": 1.0
+    },
     "5c7650e69e6dfd40e482": {
       "author": "Bobby Grayson",
       "created_at": "2026-03-18T01:18:02.505130-04:00",
@@ -8957,6 +8967,16 @@
       "to_change_id": "95e875d0-b486-4a9c-b12a-b4ca763ff338",
       "weight": 1.0
     },
+    "a964e8fb51d9987a5cbe": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T18:06:58.617445-05:00",
+      "edge_id": "a964e8fb51d9987a5cbe",
+      "edge_type": "leads_to",
+      "from_change_id": "80f31a6f-6cde-49a9-b9cc-6d7e160d7dce",
+      "rationale": "result",
+      "to_change_id": "d9a6a8c8-fcc7-4c02-a918-5f65a34d946f",
+      "weight": 1.0
+    },
     "a96ee05236b6d9173088": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-16T01:12:47.451081-05:00",
@@ -10395,6 +10415,16 @@
       "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
       "rationale": "TUI roadmap UX improvements and architecture refactor",
       "to_change_id": "696b8859-d56f-4ad8-9314-cdea3f60b8f8",
+      "weight": 1.0
+    },
+    "c7bfee82a954c19579f7": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T18:06:58.498352-05:00",
+      "edge_id": "c7bfee82a954c19579f7",
+      "edge_type": "leads_to",
+      "from_change_id": "5e53c70e-b440-4b59-a050-370cc3264f1c",
+      "rationale": "implementation",
+      "to_change_id": "80f31a6f-6cde-49a9-b9cc-6d7e160d7dce",
       "weight": 1.0
     },
     "c88ac8c6690759a71d99": {
@@ -19277,7 +19307,7 @@
       "node_type": "goal",
       "status": "active",
       "title": "Whole-product pass: what to offer next to make deciduous better",
-      "updated_at": "2026-11-14T17:06:01.545414-05:00"
+      "updated_at": "2026-11-14T17:19:10.706600-05:00"
     },
     "4483f6aa-f992-4c02-81ad-fe1a2728676f": {
       "author": "Bobby Grayson",
@@ -21126,6 +21156,20 @@
       "status": "pending",
       "title": "Creating integration tests for CLI workflow",
       "updated_at": "2025-12-12T09:22:08.066753-05:00"
+    },
+    "5e53c70e-b440-4b59-a050-370cc3264f1c": {
+      "author": "Bobby Grayson",
+      "change_id": "5e53c70e-b440-4b59-a050-370cc3264f1c",
+      "created_at": "2026-11-14T18:06:58.321629-05:00",
+      "description": "User: 'ok do it' to 'should init install a session-end hook that imports the transcript automatically?'",
+      "metadata": {
+        "branch": "89-a-session-imports-itself",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Install a SessionEnd hook that imports the transcript, with a config opt-out",
+      "updated_at": "2026-11-14T18:06:58.674025-05:00"
     },
     "5e7fd9c5-6cc7-4145-8408-07db5f59d81a": {
       "author": "Bobby Grayson",
@@ -23822,6 +23866,19 @@
       "status": "pending",
       "title": "Runtime detection of localhost vs GitHub Pages determines data source - /api/graph for local, ./graph-data.json for static",
       "updated_at": "2025-12-09T22:10:15.295988-05:00"
+    },
+    "80f31a6f-6cde-49a9-b9cc-6d7e160d7dce": {
+      "author": "Bobby Grayson",
+      "change_id": "80f31a6f-6cde-49a9-b9cc-6d7e160d7dce",
+      "created_at": "2026-11-14T18:06:58.441006-05:00",
+      "metadata": {
+        "branch": "89-a-session-imports-itself",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "transcript import --hook; init/update install it on SessionEnd; imports attach to the goal logged for the same prompt; derived actions born completed",
+      "updated_at": "2026-11-14T18:06:58.730474-05:00"
     },
     "812b8459-60e8-41a5-98bf-d25db2ea2549": {
       "author": "Bobby Grayson",
@@ -30696,6 +30753,19 @@
       "status": "pending",
       "title": "Rebase: Allow with interactive confirmation",
       "updated_at": "2025-12-18T18:36:45.591474-05:00"
+    },
+    "d9a6a8c8-fcc7-4c02-a918-5f65a34d946f": {
+      "author": "Bobby Grayson",
+      "change_id": "d9a6a8c8-fcc7-4c02-a918-5f65a34d946f",
+      "created_at": "2026-11-14T18:06:58.559106-05:00",
+      "metadata": {
+        "branch": "89-a-session-imports-itself",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "A real Claude Code 2.1.325 session in a scratch project ended with its goal, action and outcome in the graph; 713 tests pass",
+      "updated_at": "2026-11-14T18:06:58.787160-05:00"
     },
     "d9debce1-9aaf-495d-9d0c-2d17be6f2fd3": {
       "author": "Bobby Grayson",

@@ -1534,6 +1534,10 @@ pub struct ImportReport {
     /// Nodes whose change_id was already in the graph: an earlier import.
     pub already_present: usize,
     pub edges_created: usize,
+    /// Prompts whose goal the agent had already logged during the session:
+    /// what the import derived hangs under that goal, and no second one is
+    /// made. See [`LiveGoals`].
+    pub attached_to_logged_goals: usize,
     pub files_hashed: usize,
     pub skipped: Skipped,
     pub unreadable_lines: usize,
@@ -1569,8 +1573,80 @@ pub struct ImportOptions {
     pub hash_files: bool,
 }
 
+/// Goals already in the graph that carry a prompt, for recognising the goal
+/// an agent logged while the session ran.
+///
+/// The import derives a goal per prompt, with a change_id made from the
+/// session and the prompt's entry. An agent that followed its instructions
+/// logged that goal too (`add goal -p "<the prompt>"`, or `add_node` with
+/// `prompt`), under a change_id of its own, so importing the session it
+/// logged gave every prompt two goals: one with the agent's options and
+/// decisions under it, one with the transcript's actions and outcomes.
+///
+/// A logged goal is the prompt's when its `metadata.prompt` is the prompt,
+/// verbatim after trimming, and it was created after the prompt was sent
+/// and before the next one (or within a day, for the last). The window is
+/// what keeps "ok do it" in this session from claiming the goal another
+/// session logged for the same three words. Each goal is claimed once.
+struct LiveGoals {
+    /// (id, trimmed prompt, created_at)
+    goals: Vec<(i32, String, Option<chrono::DateTime<chrono::FixedOffset>>)>,
+    claimed: BTreeSet<i32>,
+}
+
+fn parse_time(s: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(s).ok()
+}
+
+impl LiveGoals {
+    fn load(db: &Database) -> Result<Self, TranscriptError> {
+        let goals = db
+            .get_all_nodes()?
+            .into_iter()
+            .filter(|n| n.node_type == "goal")
+            .filter_map(|n| {
+                let meta: Value = serde_json::from_str(n.metadata_json.as_deref()?).ok()?;
+                // A goal an import derived is found by its change_id, never here.
+                if meta.get("evidence").is_some() {
+                    return None;
+                }
+                let prompt = meta.get("prompt")?.as_str()?.trim().to_string();
+                (!prompt.is_empty()).then(|| (n.id, prompt, parse_time(&n.created_at)))
+            })
+            .collect();
+        Ok(Self {
+            goals,
+            claimed: BTreeSet::new(),
+        })
+    }
+
+    /// The logged goal for a prompt sent at `sent`, with the next prompt at
+    /// `next`. Claims it.
+    fn claim(&mut self, prompt: &str, sent: &str, next: Option<&str>) -> Option<i32> {
+        let prompt = prompt.trim();
+        let sent = parse_time(sent)?;
+        let day = sent + chrono::Duration::hours(24);
+        let until = next.and_then(parse_time).map_or(day, |n| n.min(day));
+        let id = self
+            .goals
+            .iter()
+            .filter(|(id, p, at)| {
+                p == prompt
+                    && !self.claimed.contains(id)
+                    && at.is_some_and(|at| at >= sent && at < until)
+            })
+            .map(|(id, _, at)| (*at, *id))
+            .min()
+            .map(|(_, id)| id)?;
+        self.claimed.insert(id);
+        Some(id)
+    }
+}
+
 /// Import one transcript into the database. Idempotent: nodes whose derived
-/// change_id already exists are reused, edges that exist are left alone.
+/// change_id already exists are reused, edges that exist are left alone, and
+/// a prompt whose goal was logged during the session is attached to that goal
+/// again rather than given a new one.
 pub fn import(
     db: &Database,
     path: &Path,
@@ -1597,15 +1673,38 @@ pub fn import(
         ..Default::default()
     };
 
+    let mut live = LiveGoals::load(db)?;
+    let goal_times: Vec<&str> = plan
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == "goal")
+        .map(|n| n.created_at.as_str())
+        .collect();
+    let mut goal_index = 0;
+
     let mut ids: Vec<Option<i32>> = Vec::with_capacity(plan.nodes.len());
     for (i, n) in plan.nodes.iter().enumerate() {
         let existing = db.node_id_by_change_id(&n.change_id)?;
-        let id = match existing {
-            Some(id) => {
+        let logged = if n.node_type == "goal" {
+            let next = goal_times.get(goal_index + 1).copied();
+            goal_index += 1;
+            match (existing, n.metadata.get("prompt").and_then(Value::as_str)) {
+                (None, Some(prompt)) => live.claim(prompt, &n.created_at, next),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let id = match (existing, logged) {
+            (Some(id), _) => {
                 report.already_present += 1;
                 Some(id)
             }
-            None => {
+            (None, Some(id)) => {
+                report.attached_to_logged_goals += 1;
+                Some(id)
+            }
+            (None, None) => {
                 report.created.add(n);
                 if opts.dry_run {
                     None
@@ -1632,19 +1731,20 @@ pub fn import(
             continue;
         };
         if opts.dry_run {
-            if db.node_id_by_change_id(&n.change_id)?.is_none()
-                || db
-                    .node_id_by_change_id(&plan.nodes[parent].change_id)?
-                    .is_none()
-            {
-                report.edges_created += 1;
+            match (ids[parent], ids[i]) {
+                (Some(from), Some(to)) => {
+                    if from != to && !db.edge_exists(from, to, "leads_to")? {
+                        report.edges_created += 1;
+                    }
+                }
+                _ => report.edges_created += 1,
             }
             continue;
         }
         let (Some(from), Some(to)) = (ids[parent], ids[i]) else {
             continue;
         };
-        if db.edge_exists(from, to, "leads_to")? {
+        if from == to || db.edge_exists(from, to, "leads_to")? {
             continue;
         }
         db.create_edge(from, to, "leads_to", n.edge_rationale.as_deref())?;
@@ -1703,6 +1803,15 @@ pub fn list(db: &Database, dir: &Path) -> Result<Vec<Listed>, TranscriptError> {
             continue;
         };
         let root_cid = derive_change_id(&t.session_id, "goal", &first.uuid);
+        // The root may be a goal the agent logged, which has its own
+        // change_id; then anything else the import derived says it ran.
+        let imported = db.node_id_by_change_id(&root_cid)?.is_some()
+            || plan(&t, None).is_ok_and(|p| {
+                p.nodes
+                    .iter()
+                    .skip(1)
+                    .any(|n| matches!(db.node_id_by_change_id(&n.change_id), Ok(Some(_))))
+            });
         out.push(Listed {
             path: path.clone(),
             session_id: t.session_id.clone(),
@@ -1713,7 +1822,7 @@ pub fn list(db: &Database, dir: &Path) -> Result<Vec<Listed>, TranscriptError> {
                 .unwrap_or_else(|| title_from(&first.prompt)),
             prompts: turns.len(),
             first_prompt_at: first.timestamp.clone(),
-            imported: db.node_id_by_change_id(&root_cid)?.is_some(),
+            imported,
         });
     }
     out.sort_by(|a, b| b.first_prompt_at.cmp(&a.first_prompt_at));

@@ -260,3 +260,228 @@ fn a_transcript_without_a_prompt_is_refused_by_name() {
     assert!(e.contains("no user prompt"), "{e}");
     assert!(e.contains("agent-only.jsonl"), "{e}");
 }
+
+fn graph(db: &Path) -> Value {
+    serde_json::from_str(&out(&run(&["graph"], db))).unwrap()
+}
+
+fn goals(g: &Value) -> Vec<(i64, String)> {
+    g["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|n| n["node_type"] == "goal")
+        .map(|n| {
+            (
+                n["id"].as_i64().unwrap(),
+                n["title"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+/// The agent logged the goal while the session ran, with the prompt
+/// verbatim, and a decision under it. Importing that session's transcript
+/// used to give the prompt a second goal: the transcript's actions under
+/// one, the agent's decision under the other.
+#[test]
+fn a_goal_logged_during_the_session_is_the_goal_the_import_hangs_its_work_under() {
+    let (_tmp, root, db) = project();
+    let transcript = write_transcript(root.parent().unwrap(), &root);
+
+    // Two seconds after the prompt was sent, as an agent does it.
+    let o = run(
+        &[
+            "add",
+            "goal",
+            "Blue widget",
+            "-p",
+            "add a widget to the thing\n\nit should be blue",
+            "--date",
+            "2026-10-01T10:00:02Z",
+        ],
+        &db,
+    );
+    assert!(o.status.success(), "{}", err(&o));
+    let o = run(&["add", "decision", "Blue, as asked"], &db);
+    assert!(o.status.success(), "{}", err(&o));
+    assert!(run(&["link", "1", "2", "-r", "chosen"], &db)
+        .status
+        .success());
+
+    let o = run(
+        &[
+            "transcript",
+            "import",
+            transcript.to_str().unwrap(),
+            "--json",
+        ],
+        &db,
+    );
+    assert!(o.status.success(), "{}", err(&o));
+    let report: Value = serde_json::from_str(&out(&o)).unwrap();
+    assert_eq!(report[0]["attached_to_logged_goals"], 1, "{report:#}");
+    // Only the second prompt, which nobody logged, gets a derived goal.
+    assert_eq!(report[0]["created"]["goals"], 1, "{report:#}");
+    assert_eq!(report[0]["root_id"], 1);
+
+    let g = graph(&db);
+    let all = goals(&g);
+    assert_eq!(all.len(), 2, "{all:?}");
+    assert_eq!(all[0], (1, "Blue widget".to_string()));
+
+    // The transcript's actions hang under the logged goal, beside the
+    // agent's decision, and the second prompt hangs under it too.
+    let from_logged: Vec<i64> = g["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["from_node_id"] == 1)
+        .map(|e| e["to_node_id"].as_i64().unwrap())
+        .collect();
+    assert!(from_logged.contains(&2), "{from_logged:?}");
+    assert!(from_logged.contains(&all[1].0), "{from_logged:?}");
+    assert!(from_logged.len() >= 4, "{from_logged:?}");
+
+    // Again: nothing new, and the same goal is found again.
+    let before = g["nodes"].as_array().unwrap().len();
+    let o = run(
+        &[
+            "transcript",
+            "import",
+            transcript.to_str().unwrap(),
+            "--json",
+        ],
+        &db,
+    );
+    let report: Value = serde_json::from_str(&out(&o)).unwrap();
+    assert_eq!(report[0]["attached_to_logged_goals"], 1, "{report:#}");
+    assert_eq!(report[0]["created"]["goals"], 0, "{report:#}");
+    assert_eq!(report[0]["edges_created"], 0, "{report:#}");
+    assert_eq!(graph(&db)["nodes"].as_array().unwrap().len(), before);
+
+    // And `list` knows the session is in, though its root is not derived.
+    let o = run(
+        &[
+            "transcript",
+            "list",
+            "--dir",
+            root.parent().unwrap().to_str().unwrap(),
+            "--json",
+        ],
+        &db,
+    );
+    let listed: Value = serde_json::from_str(&out(&o)).unwrap();
+    assert_eq!(listed[0]["imported"], true, "{listed:#}");
+}
+
+/// The same words under another session's goal are not this prompt's goal.
+#[test]
+fn a_goal_with_the_same_prompt_from_another_day_is_left_alone() {
+    let (_tmp, root, db) = project();
+    let transcript = write_transcript(root.parent().unwrap(), &root);
+    for date in ["2026-09-30T09:00:00Z", "2026-10-01T10:06:00Z"] {
+        let o = run(
+            &[
+                "add",
+                "goal",
+                "Earlier or later",
+                "-p",
+                "why blue?",
+                "--date",
+                date,
+            ],
+            &db,
+        );
+        assert!(o.status.success(), "{}", err(&o));
+    }
+    let o = run(
+        &[
+            "transcript",
+            "import",
+            transcript.to_str().unwrap(),
+            "--json",
+        ],
+        &db,
+    );
+    let report: Value = serde_json::from_str(&out(&o)).unwrap();
+    // "why blue?" was sent at 10:05:00. The goal from the day before is too
+    // early; the one at 10:06 is inside the window and is taken.
+    assert_eq!(report[0]["attached_to_logged_goals"], 1, "{report:#}");
+    assert_eq!(report[0]["created"]["goals"], 1, "{report:#}");
+    let from_early = graph(&db)["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["from_node_id"] == 1 || e["to_node_id"] == 1)
+        .count();
+    assert_eq!(from_early, 0);
+}
+
+fn run_hook(input: &str, db: &Path) -> std::process::Output {
+    use std::io::Write;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["transcript", "import", "--hook"])
+        .env("DECIDUOUS_DB_PATH", db)
+        .env("DECIDUOUS_QUIET_LOCAL_ONLY", "1")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+/// What Claude Code 2.1.325 sends a SessionEnd hook, cut to the fields read.
+#[test]
+fn as_a_hook_it_imports_the_transcript_the_input_names_and_says_nothing() {
+    let (tmp, root, db) = project();
+    let transcript = write_transcript(tmp.path(), &root);
+    let input = json!({
+        "session_id": "0f1e2d3c-0000-4000-8000-000000000001",
+        "transcript_path": transcript,
+        "cwd": root,
+        "hook_event_name": "SessionEnd",
+        "reason": "other"
+    })
+    .to_string();
+
+    let o = run_hook(&input, &db);
+    assert!(o.status.success(), "{}", err(&o));
+    assert_eq!(out(&o), "", "a hook's stdout is not ours to write to");
+    let g = graph(&db);
+    assert_eq!(goals(&g).len(), 2);
+    // An action the transcript recorded happened: it is not open work.
+    for n in g["nodes"].as_array().unwrap() {
+        if n["node_type"] == "action" {
+            assert_eq!(n["status"], "completed", "{n}");
+        }
+    }
+
+    // Again, as when a resumed session ends a second time.
+    let before = g["nodes"].as_array().unwrap().len();
+    assert!(run_hook(&input, &db).status.success());
+    assert_eq!(graph(&db)["nodes"].as_array().unwrap().len(), before);
+}
+
+#[test]
+fn as_a_hook_it_never_fails_the_session() {
+    let (_tmp, _root, db) = project();
+    for input in [
+        "",
+        "not json",
+        r#"{"hook_event_name":"SessionEnd"}"#,
+        r#"{"transcript_path":"/nonexistent/x.jsonl"}"#,
+    ] {
+        let o = run_hook(input, &db);
+        assert!(o.status.success(), "{input:?}: {}", err(&o));
+        assert_eq!(out(&o), "", "{input:?}");
+    }
+    assert!(graph(&db)["nodes"].as_array().unwrap().is_empty());
+}

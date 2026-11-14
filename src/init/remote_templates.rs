@@ -307,6 +307,8 @@ deciduous transcript list                 # this project's sessions: imported or
 deciduous transcript import <session-id>  # or a path to the .jsonl; --dry-run to see counts
 ```
 
+When a session ends, a `SessionEnd` hook in `.claude/settings.json` runs the import for it (`[transcript] auto_import = false` in `.deciduous/config.toml` turns that off). What it derives for a prompt hangs under the goal you logged for that prompt, when the goal carries the prompt verbatim: log the goal with `-p`, and the two meet.
+
 What the import cannot derive is a decision or an option: whether one approach was chosen over another is a judgement about prose. Log those as you make them; the import fills in what happened around them.
 
 ### Parallel Agents: The Message Board
