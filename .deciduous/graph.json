@@ -32730,9 +32730,9 @@
         "prompt": "1, 4, 2, 5, 7 in that order"
       },
       "node_type": "goal",
-      "status": "active",
+      "status": "completed",
       "title": "Make the graph get read: why, a benchmark, derived decisions, viewer, team-server basics",
-      "updated_at": "2026-11-14T19:31:46.865209-05:00"
+      "updated_at": "2026-11-14T20:24:39.252344-05:00"
     },
     "ea3876a6-5d51-4201-8f91-e2441854c09e": {
       "author": "Bobby Grayson",
