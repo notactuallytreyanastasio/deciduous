@@ -328,6 +328,20 @@ ALTER SEQUENCE public.agent_messages_id_seq OWNED BY public.agent_messages.id;
 
 
 --
+-- Name: api_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.api_tokens (
+    name text NOT NULL,
+    token_hash bytea NOT NULL,
+    created_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'UTC'::text) NOT NULL,
+    revoked_at timestamp without time zone,
+    last_used_at timestamp without time zone,
+    CONSTRAINT api_tokens_name_bounds CHECK (((char_length(name) >= 1) AND (char_length(name) <= 100)))
+);
+
+
+--
 -- Name: applied_ops; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -598,7 +612,8 @@ CREATE TABLE public.write_activity (
     client_name text,
     client_version text,
     first_seen_at timestamp without time zone NOT NULL,
-    last_seen_at timestamp without time zone NOT NULL
+    last_seen_at timestamp without time zone NOT NULL,
+    actor text
 );
 
 
@@ -622,6 +637,14 @@ ALTER TABLE ONLY public.graph_events ALTER COLUMN seq SET DEFAULT nextval('publi
 
 ALTER TABLE ONLY public.agent_messages
     ADD CONSTRAINT agent_messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: api_tokens api_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.api_tokens
+    ADD CONSTRAINT api_tokens_pkey PRIMARY KEY (name);
 
 
 --
@@ -770,6 +793,13 @@ CREATE UNIQUE INDEX agent_messages_workspace_id_id_index ON public.agent_message
 --
 
 CREATE INDEX agent_messages_workspace_id_reply_to_index ON public.agent_messages USING btree (workspace_id, reply_to);
+
+
+--
+-- Name: api_tokens_token_hash_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX api_tokens_token_hash_index ON public.api_tokens USING btree (token_hash);
 
 
 --
@@ -1332,7 +1362,8 @@ INSERT INTO public.schema_migrations (version, inserted_at) VALUES
   (20260926120000, NOW()),
   (20260926130000, NOW()),
   (20260926140000, NOW()),
-  (20260928120000, NOW());
+  (20260928120000, NOW()),
+  (20261114120000, NOW());
 
 -- Database defaults from the migrated database -------------------------------
 DO $$

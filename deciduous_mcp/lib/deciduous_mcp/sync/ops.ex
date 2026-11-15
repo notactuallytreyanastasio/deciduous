@@ -127,19 +127,21 @@ defmodule DeciduousMcp.Sync.Ops do
   # none. Against a workspace that does not exist every other op has its
   # answer already: an update or an edge names a node the server does not
   # hold, and a delete finds nothing to delete.
-  def run(%{"ops" => ops} = payload) when is_list(ops) do
+  def run(payload, actor \\ nil)
+
+  def run(%{"ops" => ops} = payload, actor) when is_list(ops) do
     raw = payload["workspace"] || ""
 
     with {:ok, name} <- workspace_name(raw),
          :ok <- check_batch(ops),
          {:ok, workspace, claim} <- workspace_for(name, ops, payload["repo_roots"]) do
       {results, _claim} = Enum.map_reduce(ops, claim, &apply_one(workspace, &1, &2))
-      record_activity(workspace, ops, results, payload["repo_roots"])
+      record_activity(workspace, ops, results, payload["repo_roots"], actor)
       {:ok, %{workspace: name, results: results}}
     end
   end
 
-  def run(_), do: {:error, "payload must contain an \"ops\" list"}
+  def run(_, _), do: {:error, "payload must contain an \"ops\" list"}
 
   # The CLI shows up in check_activity beside the MCP sessions (team probe
   # T10: its writes never appeared). One entry per branch a batch wrote a
@@ -147,9 +149,9 @@ defmodule DeciduousMcp.Sync.Ops do
   # update or an edge op carries no branch). A CLI has no session; a
   # repository's root commits name it across runs, and all 1.0.7-style
   # clients that send none share one entry.
-  defp record_activity(nil, _ops, _results, _roots), do: :ok
+  defp record_activity(nil, _ops, _results, _roots, _actor), do: :ok
 
-  defp record_activity(workspace, ops, results, roots) do
+  defp record_activity(workspace, ops, results, roots, actor) do
     applied =
       ops
       |> Enum.zip(results)
@@ -164,7 +166,11 @@ defmodule DeciduousMcp.Sync.Ops do
         _ -> "cli"
       end
 
-    Enum.each(applied, &Activity.record(workspace.id, &1, session, "deciduous CLI", nil))
+    # Two people pushing from clones of one repository share its root
+    # commits; the token's name keeps them two rows.
+    session = if actor, do: session <> ":" <> actor, else: session
+
+    Enum.each(applied, &Activity.record(workspace.id, &1, session, "deciduous CLI", nil, actor))
   end
 
   defp workspace_name(raw) do

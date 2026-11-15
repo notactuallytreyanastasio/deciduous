@@ -80,6 +80,9 @@ defmodule DeciduousMcp.MCP.Tools.CheckActivity do
       %{
         client: a.client_name,
         client_version: a.client_version,
+        # The name of the token the write came in on; null for the
+        # server's own token, which does not say who held it.
+        actor: a.actor,
         session: short_session(a.session_id),
         is_you: a.session_id == my_session,
         first_seen_at: DateTime.to_iso8601(a.first_seen_at),

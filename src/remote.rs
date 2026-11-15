@@ -666,6 +666,70 @@ impl Remote {
             .set("authorization", &format!("Bearer {}", self.token))
     }
 
+    /// Issue a named token (`POST /tokens`). The server shows it this once.
+    /// Only the server's own token may: the one in DECIDUOUS_MCP_TOKEN on
+    /// the server, which is the one a single-user setup stored here.
+    pub fn token_create(&self, name: &str) -> Result<String, String> {
+        let reply = self
+            .post("/tokens")
+            .send_json(serde_json::json!({ "name": name }))
+            .map_err(|e| self.token_error(e))?;
+        let body: Value = reply.into_json().map_err(|e| e.to_string())?;
+        body.get("token")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| "the server answered without a token".to_string())
+    }
+
+    /// Every token the server has issued: name, created, revoked, last used.
+    pub fn token_list(&self) -> Result<Vec<Value>, String> {
+        let reply = ureq::get(&format!("{}/tokens", self.url))
+            .set("authorization", &format!("Bearer {}", self.token))
+            .call()
+            .map_err(|e| self.token_error(e))?;
+        let body: Value = reply.into_json().map_err(|e| e.to_string())?;
+        Ok(body
+            .get("tokens")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    /// Revoke a named token (`DELETE /tokens/<name>`).
+    pub fn token_revoke(&self, name: &str) -> Result<(), String> {
+        ureq::delete(&format!("{}/tokens/{}", self.url, urlencode(name)))
+            .set("authorization", &format!("Bearer {}", self.token))
+            .call()
+            .map(|_| ())
+            .map_err(|e| self.token_error(e))
+    }
+
+    /// The server's own sentence when it sent one. A 404 with no JSON
+    /// error is a server from before named tokens, not a missing name.
+    fn token_error(&self, e: ureq::Error) -> String {
+        match e {
+            ureq::Error::Status(code, resp) => {
+                let body = resp.into_string().unwrap_or_default();
+                let said = serde_json::from_str::<Value>(&body)
+                    .ok()
+                    .and_then(|v| v.get("error").and_then(Value::as_str).map(str::to_string));
+                match (code, said) {
+                    (401, _) => format!("the server rejected the token (401). Check {TOKEN_ENV}."),
+                    (403, Some(said)) => format!(
+                        "{said}. This machine holds a named token; run this where the server's own token is stored."
+                    ),
+                    (_, Some(said)) => said,
+                    (404, None) => format!(
+                        "{} has no /tokens: the server is older than named tokens. Update the server.",
+                        self.url
+                    ),
+                    (code, None) => format!("the server answered {code}"),
+                }
+            }
+            other => format!("cannot reach {}: {}", self.url, describe(other)),
+        }
+    }
+
     /// Unauthenticated liveness. Separated from `check` so a failure can say
     /// whether the server is down or the token is wrong — they need different
     /// fixes and look identical from a single failed request.
