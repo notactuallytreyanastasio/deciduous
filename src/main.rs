@@ -5646,7 +5646,7 @@ fn main() {
             }
             let (path, lines) = deciduous::why::parse_target(&target.unwrap_or_default());
             let path = deciduous::why::project_relative(&root, &cwd, &path);
-            match why_report(&db, &root, &path, lines) {
+            match deciduous::why::report(&db, &root, &path, lines) {
                 Ok(report) if json => println!(
                     "{}",
                     serde_json::to_string_pretty(&report).unwrap_or_default()
@@ -7217,26 +7217,6 @@ fn run_proposals(db: &Database, action: Option<ProposalsAction>) -> Result<(), S
     Ok(())
 }
 
-/// The `why` report for a project-relative path. Git history that cannot
-/// be read (no repository, a file git has never seen with a line range) is
-/// noted in the report, and the nodes that name the file are still found.
-fn why_report(
-    db: &Database,
-    root: &std::path::Path,
-    path: &str,
-    lines: Option<(u32, u32)>,
-) -> Result<deciduous::why::WhyReport, String> {
-    let nodes = db.get_all_nodes().map_err(|e| e.to_string())?;
-    let edges = db.get_all_edges().map_err(|e| e.to_string())?;
-    let (commits, note) = match deciduous::why::commits_touching(root, path, lines) {
-        Ok(commits) => (commits, None),
-        Err(e) => (Vec::new(), Some(e)),
-    };
-    let mut report = deciduous::why::why(&nodes, &edges, path, lines, &commits);
-    report.git_note = note;
-    Ok(report)
-}
-
 /// What the PreToolUse hook adds to the session, if anything: the hook's
 /// JSON is on stdin, and `tool_input.file_path` is the file about to change.
 fn why_hook_brief(db: &Database, root: &std::path::Path, cwd: &std::path::Path) -> Option<String> {
@@ -7250,7 +7230,7 @@ fn why_hook_brief(db: &Database, root: &std::path::Path, cwd: &std::path::Path) 
     if path.starts_with('/') {
         return None;
     }
-    let report = why_report(db, root, &path, None).ok()?;
+    let report = deciduous::why::report(db, root, &path, None).ok()?;
     let text = deciduous::why::brief(&report)?;
     let session = input
         .get("session_id")

@@ -28,8 +28,13 @@ A graph written by following the shipped instructions could not say what was ope
 - **`deciduous proposals`**, `proposals accept <n>|--all`, `proposals reject <n>|--all`. Accepting writes goal -> options -> decision with `chosen` and `rejected` edges carrying the rationale, puts the decision above the turn's actions that followed the quoted words (or, when it was said in the closing report, above the actions that touched the files it names), and marks every node `evidence: inferred, source: transcript-model` with the quote. That placement is what lets `deciduous why` reach it from a file. Accepting twice adds nothing; a rejected proposal stays in the file so the same words are not proposed again.
 - **`[transcript] derive_decisions = "propose"`** (or `"accept"`) in `.deciduous/config.toml` makes the SessionEnd hook read each session for decisions, in a background process so the hook's timeout is not spent on a model call. Off unless set: it is a model call per session. `decisions_model` names the model.
 
+- **The viewer shows status, and what is open.** Every tree row has a status chip; closed nodes are dimmed and rejected, superseded and abandoned ones struck through. A narrative card shows its root's status and how many of its nodes are open, and "Open only" keeps the narratives whose root is `pending` or `active`. The viewer knew four of the six statuses.
+- **The viewer reloads when the graph changes.** Under `deciduous serve` it asks `/api/graph/version` every three seconds and loads the graph again only when the answer differs; selection, focus and what is expanded survive. A static export shows no "live" mark and asks nothing.
+- **Evidence and `why` in the viewer.** A transcript-derived node shows whether it is proven or inferred, the quote a model-proposed decision rests on, and the hashes of the files it touched. Each file a node names has a `why` button that asks the new `/api/why?path=` for the decisions behind it; every line of the answer selects its node.
+
 ### Fixed
 - **The local MCP server's `add_node` takes `parent_id`.** Every CLAUDE.md since 1.0.10 tells the agent to "create and link in one call: `add_node` with `parent_id`", which is the graph server's tool. On a project with no server the local tool had no such argument and refused the call as an unknown argument. It now takes `parent_id` (local id or change_id prefix), `edge_type`, `rationale` and `status`, and checks all four before writing: an unknown parent, edge type or status creates nothing.
+- **Selecting a node in the viewer's tree highlights that node.** Each row was handed the root's selection flag, so choosing the root lit every row and choosing any other lit none.
 - **A command run outside a project fails.** `deciduous nodes` in a directory with no `.deciduous` above it printed "No nodes found", exited 0 and left a new database behind; `add` succeeded against it. Both now exit 1 naming `deciduous init`. #208 found writes from a subdirectory of the wrong repository this way.
 - **DOT labels break the line.** A node with a confidence was drawn as `Ship it\n(90%)`: the label wrote `\n` and `escape_dot` escaped it again.
 - **`deciduous completion zsh | head -1` no longer panics** on the closed pipe.
@@ -42,7 +47,9 @@ A graph written by following the shipped instructions could not say what was ope
 ### Not done
 - Nodes already in a graph keep the status they have. `deciduous audit --close-records --close-committed` is the migration, and it is not run for you.
 - Whether an open goal with nothing open beneath it is done or dropped is a judgement; `audit` names the goals and stops.
-- The web viewer still shows status as one line of text, with no filter.
+- The viewer has no automated tests (`npm test` finds no test files). The changes here were checked by driving the built page in headless Chrome against `deciduous serve`.
+- The viewer's live reload is a poll of the local server. The graph server's WebSocket events are not used, and the static demo's `graph-data.json` is still the hand-made export from 2026-09-04.
+- The viewer is not usable on a phone, and #206 is not re-landed.
 - The guides still describe 1.1.0: `init --no-server` is not in the README or docs/ until it is released.
 - The hook is Claude Code only, and only `SessionEnd`: a session that runs for weeks is imported when it ends, not as it goes. `Stop` carries the same `transcript_path` every turn and would do it; it is not installed.
 - A logged goal is matched by its prompt, verbatim. An agent that logged a summary as the prompt still gets a second goal.
