@@ -1090,6 +1090,16 @@
       "to_change_id": "6f0bce41-9fe9-4c2c-98d3-a6eee41c9c81",
       "weight": 1.0
     },
+    "16b05dac599389e57cdc": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:15.431818-05:00",
+      "edge_id": "16b05dac599389e57cdc",
+      "edge_type": "leads_to",
+      "from_change_id": "0f86e1bc-322d-463c-8732-25cef1ea4542",
+      "rationale": "implementation",
+      "to_change_id": "7519f9bb-88fd-4d32-81f0-6f32bb3ef354",
+      "weight": 1.0
+    },
     "16fdcf8d0c028a36c718": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T02:26:55.865547-05:00",
@@ -1448,6 +1458,16 @@
       "from_change_id": "462aa105-767a-4943-a2c8-01119eff6713",
       "rationale": "Implemented",
       "to_change_id": "8a5f1a56-acf0-451b-8634-9485437d209b",
+      "weight": 1.0
+    },
+    "1c05f2a2fa30d37a2268": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:14.937105-05:00",
+      "edge_id": "1c05f2a2fa30d37a2268",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "possible approach",
+      "to_change_id": "f4684921-7e1d-44f5-b12f-a02a148367e1",
       "weight": 1.0
     },
     "1c1d911a738475d05aaf": {
@@ -2932,6 +2952,16 @@
       "to_change_id": "e349f61b-346c-48ec-ad93-b4d1212da18f",
       "weight": 1.0
     },
+    "3a5c35d613c077a5dbf4": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:01:27.801370-05:00",
+      "edge_id": "3a5c35d613c077a5dbf4",
+      "edge_type": "leads_to",
+      "from_change_id": "7519f9bb-88fd-4d32-81f0-6f32bb3ef354",
+      "rationale": "result",
+      "to_change_id": "d07f16b2-d7b6-4d48-b527-acfd48e411f0",
+      "weight": 1.0
+    },
     "3a6c8d969424026755a7": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-18T21:21:22.458358-05:00",
@@ -4380,6 +4410,16 @@
       "from_change_id": "753aacf3-f281-44a7-97e1-e92ddc7f6d59",
       "rationale": "Deep links",
       "to_change_id": "a959d83d-1baa-4b74-90e4-f57e3090b065",
+      "weight": 1.0
+    },
+    "54e268220310e0219b43": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:14.998292-05:00",
+      "edge_id": "54e268220310e0219b43",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "possible approach",
+      "to_change_id": "f3bab02d-6846-4b0d-8327-4edbad7a2023",
       "weight": 1.0
     },
     "54ee1274c48cfc528492": {
@@ -7667,6 +7707,16 @@
       "to_change_id": "8551fca5-755a-415e-a27a-38c50a3ada9c",
       "weight": 1.0
     },
+    "900320ce0c5448911f1d": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:15.059956-05:00",
+      "edge_id": "900320ce0c5448911f1d",
+      "edge_type": "rejected",
+      "from_change_id": "f4684921-7e1d-44f5-b12f-a02a148367e1",
+      "rationale": "any record beats none; the question is whether the graph beats a markdown file",
+      "to_change_id": "0f86e1bc-322d-463c-8732-25cef1ea4542",
+      "weight": 1.0
+    },
     "904ad75ebe357a2b98a9": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:23:03.942476-05:00",
@@ -10177,6 +10227,16 @@
       "to_change_id": "165a54f5-e60d-432b-8fb9-e7882453b0ef",
       "weight": 1.0
     },
+    "c17253d3a486e647e617": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:01:27.922413-05:00",
+      "edge_id": "c17253d3a486e647e617",
+      "edge_type": "leads_to",
+      "from_change_id": "d07f16b2-d7b6-4d48-b527-acfd48e411f0",
+      "rationale": "what the result leaves open",
+      "to_change_id": "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697",
+      "weight": 1.0
+    },
     "c1a07a43d04f6ce2fff4": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-13T19:06:10.229304-05:00",
@@ -10915,6 +10975,16 @@
       "from_change_id": "e827397b-1ed0-4131-bb49-c49fdd3f5976",
       "rationale": "Proceeding with flag implementation",
       "to_change_id": "ec76505d-6d11-47ac-a06f-6ca54761670e",
+      "weight": 1.0
+    },
+    "d2ac0206112bc08f47d3": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:15.119910-05:00",
+      "edge_id": "d2ac0206112bc08f47d3",
+      "edge_type": "chosen",
+      "from_change_id": "f3bab02d-6846-4b0d-8327-4edbad7a2023",
+      "rationale": "ADR files are what a team would use instead",
+      "to_change_id": "0f86e1bc-322d-463c-8732-25cef1ea4542",
       "weight": 1.0
     },
     "d2b676195f7462745a62": {
@@ -14805,6 +14875,19 @@
       "status": "pending",
       "title": "Fix NULL change_id migration bug",
       "updated_at": "2025-12-11T00:29:13.455360-05:00"
+    },
+    "0f86e1bc-322d-463c-8732-25cef1ea4542": {
+      "author": "Bobby Grayson",
+      "change_id": "0f86e1bc-322d-463c-8732-25cef1ea4542",
+      "created_at": "2026-11-14T19:47:09.868883-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Four arms with ADR files as the competitor: that a record beats no record is not news",
+      "updated_at": "2026-11-14T19:47:15.306416-05:00"
     },
     "0f9d957a-ff9a-479d-83ff-b275d409991d": {
       "author": "Bobby Grayson",
@@ -23059,6 +23142,19 @@
       "title": "Approach B detects cliff via decorrelation",
       "updated_at": "2025-12-05T17:11:18.722242-05:00"
     },
+    "7519f9bb-88fd-4d32-81f0-6f32bb3ef354": {
+      "author": "Bobby Grayson",
+      "change_id": "7519f9bb-88fd-4d32-81f0-6f32bb3ef354",
+      "created_at": "2026-11-14T19:47:15.368652-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "bench/: four scenarios, four arms, a runner that scores real Claude Code sessions",
+      "updated_at": "2026-11-14T20:01:27.679621-05:00"
+    },
     "751e50fd-3857-422b-8d98-c02c9ddbf709": {
       "author": "Bobby Grayson",
       "change_id": "751e50fd-3857-422b-8d98-c02c9ddbf709",
@@ -24085,6 +24181,20 @@
       "status": "pending",
       "title": "Linked 35 nodes to commits, increased coverage from 31 to 66 nodes",
       "updated_at": "2025-12-12T09:29:14.708323-05:00"
+    },
+    "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697": {
+      "author": "Bobby Grayson",
+      "change_id": "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697",
+      "created_at": "2026-11-14T20:01:27.862735-05:00",
+      "description": "ADR files matched the graph on outcome and beat it on cost. The untested premise is that somebody wrote the ADR. Deriving decisions from transcripts is the part of the product that bears on that.",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 80
+      },
+      "node_type": "observation",
+      "status": "completed",
+      "title": "The benchmark hands every arm its record ready-made; what separates the graph from ADR files is whether the record gets written at all, which it does not test",
+      "updated_at": "2026-11-14T20:01:27.862735-05:00"
     },
     "81ccbce5-24ff-4087-a465-22ed698c7149": {
       "author": "Bobby Grayson",
@@ -30337,6 +30447,19 @@
       "title": "Cross-branch links: when one premise depends on another, link them explicitly with rationale",
       "updated_at": "2026-01-10T03:56:15.420848-05:00"
     },
+    "d07f16b2-d7b6-4d48-b527-acfd48e411f0": {
+      "author": "Bobby Grayson",
+      "change_id": "d07f16b2-d7b6-4d48-b527-acfd48e411f0",
+      "created_at": "2026-11-14T20:01:27.741346-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "Benchmark, 96 Sonnet sessions: with any record every landed session followed the decision (ADR 20/20, graph 24/24, hook 22/22), 13/19 without; graph arms cost 1.6-1.9x ADR; the hook changed nothing measurable",
+      "updated_at": "2026-11-14T20:01:27.741346-05:00"
+    },
     "d0899cdd-4b2e-4f4a-9898-0daec0591ed8": {
       "author": "Bobby Grayson",
       "change_id": "d0899cdd-4b2e-4f4a-9898-0daec0591ed8",
@@ -33086,6 +33209,19 @@
       "title": "Create pre-publish validation script",
       "updated_at": "2025-12-12T00:16:09.180137-05:00"
     },
+    "f3bab02d-6846-4b0d-8327-4edbad7a2023": {
+      "author": "Bobby Grayson",
+      "change_id": "f3bab02d-6846-4b0d-8327-4edbad7a2023",
+      "created_at": "2026-11-14T19:47:09.805518-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Benchmark: four arms (nothing, ADR files, graph, graph with the pre-edit hook) on tasks where the rejected approach is the obvious one",
+      "updated_at": "2026-11-14T19:47:15.245586-05:00"
+    },
     "f3cfd345-0939-4b99-8210-1ebc0ccb5630": {
       "author": "Bobby Grayson",
       "change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
@@ -33140,6 +33276,19 @@
       "status": "pending",
       "title": "Fix foo/quota user message filtering",
       "updated_at": "2026-03-06T22:37:03.575624-05:00"
+    },
+    "f4684921-7e1d-44f5-b12f-a02a148367e1": {
+      "author": "Bobby Grayson",
+      "change_id": "f4684921-7e1d-44f5-b12f-a02a148367e1",
+      "created_at": "2026-11-14T19:47:09.741373-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 40
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Benchmark: graph against no record at all",
+      "updated_at": "2026-11-14T19:47:15.181980-05:00"
     },
     "f4b5a75a-6d43-4ab8-b3fa-166c188380df": {
       "author": "Bobby Grayson",

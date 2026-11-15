@@ -58,3 +58,4 @@ deciduous_mcp/.env
 
 # PR bodies, passed to gh with --body-file
 .prs/
+bench/__pycache__/

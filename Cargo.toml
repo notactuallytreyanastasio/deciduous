@@ -19,6 +19,8 @@ exclude = [
     "docs/**",
     # Example files - large demo files
     "examples/**",
+    # The benchmark: scenarios, a runner and its results
+    "bench/**",
     # Database files
     "*.db",
     ".deciduous/**",
