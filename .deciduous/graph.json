@@ -1899,6 +1899,26 @@
       "to_change_id": "b82ca7e1-ab80-4ef3-9da9-abb755277ab3",
       "weight": 1.0
     },
+    "245d0b6c172c6cd8ce17": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:10.083489-05:00",
+      "edge_id": "245d0b6c172c6cd8ce17",
+      "edge_type": "rejected",
+      "from_change_id": "7dfe8ced-a705-4c2a-b8a5-6e2dfb04687a",
+      "rationale": "the user: get rid of it",
+      "to_change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
+      "weight": 1.0
+    },
+    "24929bcc4c7b5f452cd8": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:10.027163-05:00",
+      "edge_id": "24929bcc4c7b5f452cd8",
+      "edge_type": "rejected",
+      "from_change_id": "6d67c528-68d4-452a-96c5-3cdb4bdff131",
+      "rationale": "no measured benefit, a process spawn on every first edit",
+      "to_change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
+      "weight": 1.0
+    },
     "250a8a6799faf912363d": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-06T12:23:28.734273-05:00",
@@ -3068,6 +3088,16 @@
       "from_change_id": "ab5a10aa-9656-441b-babe-a2ade405e79f",
       "rationale": "Documentation work complete",
       "to_change_id": "e638127a-03b9-4fc3-ab22-a3d1e1075c65",
+      "weight": 1.0
+    },
+    "3cd22bf7ad76449e03fd": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:09.854849-05:00",
+      "edge_id": "3cd22bf7ad76449e03fd",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "possible approach",
+      "to_change_id": "6d67c528-68d4-452a-96c5-3cdb4bdff131",
       "weight": 1.0
     },
     "3ce46aca194cb98bc6a6": {
@@ -4649,6 +4679,16 @@
       "to_change_id": "1a57484d-eb1a-4b55-9c02-049ebe960b02",
       "weight": 1.0
     },
+    "584294136d4397a89459": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:50:20.624185-05:00",
+      "edge_id": "584294136d4397a89459",
+      "edge_type": "leads_to",
+      "from_change_id": "85a8b5c0-bb98-49fe-97a4-4205f44c870c",
+      "rationale": "result",
+      "to_change_id": "b98a5632-90a1-4c94-b5b3-35444f1876a8",
+      "weight": 1.0
+    },
     "586bbc73607bf381f87c": {
       "author": "Bobby Grayson",
       "created_at": "2026-03-04T01:37:55.356953-05:00",
@@ -5656,6 +5696,16 @@
       "from_change_id": "0b8bd117-2bcd-430e-b0e7-923263fb6ce4",
       "rationale": "User chose bidirectional sync",
       "to_change_id": "dc48220a-2672-4c56-8f7c-f229ff1f7d80",
+      "weight": 1.0
+    },
+    "6a0e29a451a2e5a40e9a": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:46:25.374120-05:00",
+      "edge_id": "6a0e29a451a2e5a40e9a",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "first half of the request",
+      "to_change_id": "85a8b5c0-bb98-49fe-97a4-4205f44c870c",
       "weight": 1.0
     },
     "6a4fcb5f6d9be5f4211c": {
@@ -9083,6 +9133,16 @@
       "to_change_id": "6b7b04bd-ef6e-4be7-9031-a712d8f6a40c",
       "weight": 1.0
     },
+    "a786500c69629abb97d1": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:10.196501-05:00",
+      "edge_id": "a786500c69629abb97d1",
+      "edge_type": "leads_to",
+      "from_change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
+      "rationale": "implementation",
+      "to_change_id": "85a8b5c0-bb98-49fe-97a4-4205f44c870c",
+      "weight": 1.0
+    },
     "a7925bc4f5d6f652aafa": {
       "author": "Bobby Grayson",
       "created_at": "2026-03-04T01:37:55.617098-05:00",
@@ -9421,6 +9481,16 @@
       "from_change_id": "0f673ba5-6014-498c-b5e3-1d09c60202d2",
       "rationale": "Follow-up fix",
       "to_change_id": "51eb3d8f-9690-4e94-a08c-c1590883a6e1",
+      "weight": 1.0
+    },
+    "b0b8ec5498d7096e53e9": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:09.913471-05:00",
+      "edge_id": "b0b8ec5498d7096e53e9",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "possible approach",
+      "to_change_id": "7dfe8ced-a705-4c2a-b8a5-6e2dfb04687a",
       "weight": 1.0
     },
     "b1285b184932157efb68": {
@@ -10891,6 +10961,16 @@
       "from_change_id": "4caa7d48-9b36-45c1-a9e4-80d02790cc90",
       "rationale": "implementation",
       "to_change_id": "96555df9-5176-4647-992b-5be31148b27c",
+      "weight": 1.0
+    },
+    "cd30f091e8e8d5c5bf6c": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:10.140075-05:00",
+      "edge_id": "cd30f091e8e8d5c5bf6c",
+      "edge_type": "chosen",
+      "from_change_id": "b5416da7-09a1-4706-9681-d89a1abc962e",
+      "rationale": "the user: get rid of it and remove it from tests",
+      "to_change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
       "weight": 1.0
     },
     "cd318ec148967fb023d5": {
@@ -12559,6 +12639,16 @@
       "from_change_id": "654b0629-7882-42f4-a928-a9e8f4fdff5a",
       "rationale": "Implementation complete",
       "to_change_id": "1fa73c05-672c-4905-a96d-69746fb5f729",
+      "weight": 1.0
+    },
+    "ec7e3106d87600654103": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:09.969798-05:00",
+      "edge_id": "ec7e3106d87600654103",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "possible approach",
+      "to_change_id": "b5416da7-09a1-4706-9681-d89a1abc962e",
       "weight": 1.0
     },
     "ec82d31831e368d6cc2a": {
@@ -22834,6 +22924,19 @@
       "title": "Adding 30-second auto-refresh to useGraphData hook for local server",
       "updated_at": "2025-12-10T14:39:11.766789-05:00"
     },
+    "6d67c528-68d4-452a-96c5-3cdb4bdff131": {
+      "author": "Bobby Grayson",
+      "change_id": "6d67c528-68d4-452a-96c5-3cdb4bdff131",
+      "created_at": "2026-11-14T21:48:02.439417-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 40
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Keep the pre-edit hook on by default",
+      "updated_at": "2026-11-14T21:48:10.252902-05:00"
+    },
     "6d891f4e-4c76-4204-b63a-6ceb8a8e44b8": {
       "author": "Bobby Grayson",
       "change_id": "6d891f4e-4c76-4204-b63a-6ceb8a8e44b8",
@@ -23997,6 +24100,19 @@
       "title": "Implemented github.commit_repo config and web viewer integration",
       "updated_at": "2025-12-15T22:30:11.670987-05:00"
     },
+    "7dfe8ced-a705-4c2a-b8a5-6e2dfb04687a": {
+      "author": "Bobby Grayson",
+      "change_id": "7dfe8ced-a705-4c2a-b8a5-6e2dfb04687a",
+      "created_at": "2026-11-14T21:48:02.500799-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 50
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Leave it in, off by default",
+      "updated_at": "2026-11-14T21:48:10.308713-05:00"
+    },
     "7e219094-267c-4bb2-bed6-c630f9e1753e": {
       "author": "Bobby Grayson",
       "change_id": "7e219094-267c-4bb2-bed6-c630f9e1753e",
@@ -24761,6 +24877,27 @@
       "title": "Investigate ts-rs suitability",
       "updated_at": "2025-12-12T17:23:48.646924-05:00"
     },
+    "85a8b5c0-bb98-49fe-97a4-4205f44c870c": {
+      "author": "Bobby Grayson",
+      "change_id": "85a8b5c0-bb98-49fe-97a4-4205f44c870c",
+      "created_at": "2026-11-14T21:46:25.312001-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 90,
+        "files": [
+          "src/init/mod.rs",
+          "src/init/templates.rs",
+          "src/main.rs",
+          "src/why.rs",
+          "tests/why.rs",
+          "bench/run.py"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Remove the pre-edit hook: MANAGED_HOOKS entry, settings template, why --hook, brief/first_ask, [why] hook, the bench hook arm, their tests",
+      "updated_at": "2026-11-14T21:50:20.680684-05:00"
+    },
     "85b32a7d-7077-41c6-abff-c234db4c200a": {
       "author": "Bobby Grayson",
       "change_id": "85b32a7d-7077-41c6-abff-c234db4c200a",
@@ -25091,6 +25228,19 @@
       "status": "pending",
       "title": "Add node metadata system (Key-Value approach)",
       "updated_at": "2025-12-18T21:02:49.777500-05:00"
+    },
+    "8a1bf545-9df5-45cb-b943-9956ccd05ed0": {
+      "author": "Bobby Grayson",
+      "change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
+      "created_at": "2026-11-14T21:48:02.618703-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 90
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Remove the pre-edit hook rather than keep it off by default: the benchmark showed nothing for it",
+      "updated_at": "2026-11-14T21:48:10.419909-05:00"
     },
     "8a22cbd4-7710-4337-8833-9704205fd95d": {
       "author": "Bobby Grayson",
@@ -28634,6 +28784,19 @@
       "title": "Add commit hash linking to decision graph nodes - store commit SHAs in metadata_json for full code-decision traceability",
       "updated_at": "2025-12-05T23:32:51.908132-05:00"
     },
+    "b5416da7-09a1-4706-9681-d89a1abc962e": {
+      "author": "Bobby Grayson",
+      "change_id": "b5416da7-09a1-4706-9681-d89a1abc962e",
+      "created_at": "2026-11-14T21:48:02.559719-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Remove the hook and its tests",
+      "updated_at": "2026-11-14T21:48:10.364402-05:00"
+    },
     "b592516d-5646-404e-9e9c-f0686aea8aa7": {
       "author": "Bobby Grayson",
       "change_id": "b592516d-5646-404e-9e9c-f0686aea8aa7",
@@ -28995,6 +29158,20 @@
       "status": "pending",
       "title": "Code organization: consider splitting large files",
       "updated_at": "2025-12-05T17:15:24.716327-05:00"
+    },
+    "b98a5632-90a1-4c94-b5b3-35444f1876a8": {
+      "author": "Bobby Grayson",
+      "change_id": "b98a5632-90a1-4c94-b5b3-35444f1876a8",
+      "created_at": "2026-11-14T21:50:20.561424-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "commit": "a0e84cea93d099eac38374f8fc52b84a965cf376",
+        "confidence": 95
+      },
+      "node_type": "outcome",
+      "status": "pending",
+      "title": "Hook removed: 735 tests pass, clippy clean, release builds; bench has three arms and still rescoring the old files",
+      "updated_at": "2026-11-14T21:50:20.561424-05:00"
     },
     "b9aed3dd-8d40-4fc1-a1bd-150a8bce692d": {
       "author": "Bobby Grayson",
@@ -34276,6 +34453,20 @@
       "status": "pending",
       "title": "product_manager_deciduous graph adapter had drifted from deciduous edge types and bundled paths",
       "updated_at": "2026-03-07T00:03:47.279630-05:00"
+    },
+    "ff3eb5a1-3c1f-477a-97be-1558c86bb30a": {
+      "author": "Bobby Grayson",
+      "change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "created_at": "2026-11-14T21:45:05.759938-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 90,
+        "prompt": "ok lets get rid of it and remove it from tests. 2 is fine go with your guy, ill fix CI later im busy"
+      },
+      "node_type": "goal",
+      "status": "active",
+      "title": "Remove the pre-edit why hook; harden the benchmark scenarios, then rerun",
+      "updated_at": "2026-11-14T21:48:10.475582-05:00"
     },
     "ff54b327-6672-4c08-89c7-96b73bd6f4bc": {
       "author": "Bobby Grayson",
