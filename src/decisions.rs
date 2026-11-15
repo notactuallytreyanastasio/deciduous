@@ -33,6 +33,8 @@ const SAID_CHARS: usize = 4_000;
 const MIN_QUOTE_CHARS: usize = 20;
 /// Set in the environment of the model call, so a hook that fires inside
 /// it does not start another.
+/// (The name is from when `transcript decisions` was the only caller: every
+/// `claude -p` deciduous spawns sets it now.)
 pub const GUARD_ENV: &str = "DECIDUOUS_DERIVING";
 /// A command to run instead of `claude -p`: the prompt arrives on stdin and
 /// the reply is read from stdout. For tests, and for another model.

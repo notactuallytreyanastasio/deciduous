@@ -95,7 +95,7 @@ fn import_derives_the_graph_and_is_idempotent() {
     let text = out(&first);
     assert!(text.contains("Imported Add the widget"), "{text}");
     assert!(
-        text.contains("goals 2 · actions 2 · outcomes 1 proven, 1 inferred · observations 1"),
+        text.contains("goals 1 · actions 2 · outcomes 1 proven, 1 inferred · observations 0"),
         "{text}"
     );
     assert!(text.contains("1 files hashed"), "{text}");
@@ -108,17 +108,28 @@ fn import_derives_the_graph_and_is_idempotent() {
         "cargo test passed",
         "Committed: feat: blue widget",
         "Done. The widget is in and all 5 tests pass.",
-        "why blue?",
-        "You asked for blue.",
     ] {
         assert!(
             listing.contains(expected),
             "missing {expected:?} in\n{listing}"
         );
     }
+    // The second prompt is a question answered in prose. It changed
+    // nothing, so it is not a goal and its answer is not in the graph.
+    assert!(text.contains("1 prompts changed nothing"), "{text}");
+    for absent in ["why blue?", "You asked for blue."] {
+        assert!(!listing.contains(absent), "{absent:?} in\n{listing}");
+    }
+    // A goal the import made is a record of work that happened: closed.
+    assert_eq!(
+        out(&run(&["nodes", "--open"], &db))
+            .matches("Add the widget")
+            .count(),
+        0
+    );
 
     // Edges: root -> action, action -> test outcome, root -> commit,
-    // root -> closing, root -> second goal, second goal -> observation.
+    // root -> closing.
     let edges = run(&["edges"], &db);
     let edge_text = out(&edges);
     assert!(
@@ -129,7 +140,6 @@ fn import_derives_the_graph_and_is_idempotent() {
         edge_text.contains("command run in this turn"),
         "{edge_text}"
     );
-    assert!(edge_text.contains("prompt 2 of the session"), "{edge_text}");
 
     let second = run(&["transcript", "import", transcript.to_str().unwrap()], &db);
     assert!(second.status.success(), "{}", err(&second));
@@ -140,7 +150,7 @@ fn import_derives_the_graph_and_is_idempotent() {
         ),
         "{text2}"
     );
-    assert!(text2.contains("7 already present"), "{text2}");
+    assert!(text2.contains("5 already present"), "{text2}");
     let nodes_after = run(&["nodes"], &db);
     assert_eq!(
         out(&nodes),
@@ -321,17 +331,17 @@ fn a_goal_logged_during_the_session_is_the_goal_the_import_hangs_its_work_under(
     assert!(o.status.success(), "{}", err(&o));
     let report: Value = serde_json::from_str(&out(&o)).unwrap();
     assert_eq!(report[0]["attached_to_logged_goals"], 1, "{report:#}");
-    // Only the second prompt, which nobody logged, gets a derived goal.
-    assert_eq!(report[0]["created"]["goals"], 1, "{report:#}");
+    // The second prompt changed nothing and gets no goal.
+    assert_eq!(report[0]["created"]["goals"], 0, "{report:#}");
     assert_eq!(report[0]["root_id"], 1);
 
     let g = graph(&db);
     let all = goals(&g);
-    assert_eq!(all.len(), 2, "{all:?}");
+    assert_eq!(all.len(), 1, "{all:?}");
     assert_eq!(all[0], (1, "Blue widget".to_string()));
 
     // The transcript's actions hang under the logged goal, beside the
-    // agent's decision, and the second prompt hangs under it too.
+    // agent's decision.
     let from_logged: Vec<i64> = g["edges"]
         .as_array()
         .unwrap()
@@ -340,7 +350,6 @@ fn a_goal_logged_during_the_session_is_the_goal_the_import_hangs_its_work_under(
         .map(|e| e["to_node_id"].as_i64().unwrap())
         .collect();
     assert!(from_logged.contains(&2), "{from_logged:?}");
-    assert!(from_logged.contains(&all[1].0), "{from_logged:?}");
     assert!(from_logged.len() >= 4, "{from_logged:?}");
 
     // Again: nothing new, and the same goal is found again.
@@ -380,14 +389,14 @@ fn a_goal_logged_during_the_session_is_the_goal_the_import_hangs_its_work_under(
 fn a_goal_with_the_same_prompt_from_another_day_is_left_alone() {
     let (_tmp, root, db) = project();
     let transcript = write_transcript(root.parent().unwrap(), &root);
-    for date in ["2026-09-30T09:00:00Z", "2026-10-01T10:06:00Z"] {
+    for date in ["2026-09-30T09:00:00Z", "2026-10-01T10:01:00Z"] {
         let o = run(
             &[
                 "add",
                 "goal",
                 "Earlier or later",
                 "-p",
-                "why blue?",
+                "add a widget to the thing\n\nit should be blue",
                 "--date",
                 date,
             ],
@@ -405,10 +414,11 @@ fn a_goal_with_the_same_prompt_from_another_day_is_left_alone() {
         &db,
     );
     let report: Value = serde_json::from_str(&out(&o)).unwrap();
-    // "why blue?" was sent at 10:05:00. The goal from the day before is too
-    // early; the one at 10:06 is inside the window and is taken.
+    // The prompt was sent at 10:00:00 and the next at 10:05:00. The goal
+    // from the day before is too early; the one at 10:01 is inside the
+    // window and is taken.
     assert_eq!(report[0]["attached_to_logged_goals"], 1, "{report:#}");
-    assert_eq!(report[0]["created"]["goals"], 1, "{report:#}");
+    assert_eq!(report[0]["created"]["goals"], 0, "{report:#}");
     let from_early = graph(&db)["edges"]
         .as_array()
         .unwrap()
@@ -456,10 +466,11 @@ fn as_a_hook_it_imports_the_transcript_the_input_names_and_says_nothing() {
     assert!(o.status.success(), "{}", err(&o));
     assert_eq!(out(&o), "", "a hook's stdout is not ours to write to");
     let g = graph(&db);
-    assert_eq!(goals(&g).len(), 2);
-    // An action the transcript recorded happened: it is not open work.
+    assert_eq!(goals(&g).len(), 1);
+    // An action the transcript recorded happened, and so did the work of
+    // the goal the import made for its prompt: neither is open work.
     for n in g["nodes"].as_array().unwrap() {
-        if n["node_type"] == "action" {
+        if n["node_type"] == "action" || n["node_type"] == "goal" {
             assert_eq!(n["status"], "completed", "{n}");
         }
     }
@@ -468,6 +479,29 @@ fn as_a_hook_it_imports_the_transcript_the_input_names_and_says_nothing() {
     let before = g["nodes"].as_array().unwrap().len();
     assert!(run_hook(&input, &db).status.success());
     assert_eq!(graph(&db)["nodes"].as_array().unwrap().len(), before);
+}
+
+/// A settings.json somebody else committed still runs the hook. The
+/// project's config is what turns the import off, not the absence of the
+/// hook entry.
+#[test]
+fn as_a_hook_it_imports_nothing_when_the_project_turned_the_import_off() {
+    let (tmp, root, db) = project();
+    let transcript = write_transcript(tmp.path(), &root);
+    fs::write(
+        root.join(".deciduous/config.toml"),
+        "[transcript]\nauto_import = false\n",
+    )
+    .unwrap();
+    let input = json!({"transcript_path": transcript, "cwd": root}).to_string();
+    let o = run_hook(&input, &db);
+    assert!(o.status.success(), "{}", err(&o));
+    assert_eq!(out(&o), "");
+    assert!(graph(&db)["nodes"].as_array().unwrap().is_empty());
+    // Asked for by hand, it still imports.
+    let o = run(&["transcript", "import", transcript.to_str().unwrap()], &db);
+    assert!(o.status.success(), "{}", err(&o));
+    assert_eq!(goals(&graph(&db)).len(), 1);
 }
 
 #[test]
@@ -559,7 +593,7 @@ fn a_decision_the_model_quotes_is_proposed_and_one_it_invents_is_dropped() {
             .count()
     };
     assert_eq!(count(&g, "decision"), 0);
-    assert_eq!(goals(&g).len(), 2, "the session was imported first");
+    assert_eq!(goals(&g).len(), 1, "the session was imported first");
 
     // The same session again is not read again.
     let o = run_with_model(&["transcript", "decisions", path], &db, &reply);

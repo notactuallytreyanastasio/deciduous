@@ -2834,8 +2834,9 @@ impl Database {
             title,
             description,
             // A derived action is an edit or a commit the transcript
-            // recorded: it happened, so it is not open work.
-            status: if node_type == "action" {
+            // recorded, and a derived goal is a prompt whose work is in the
+            // same transcript: both happened, so neither is open work.
+            status: if node_type == "action" || node_type == "goal" {
                 "completed"
             } else {
                 default_status(node_type)

@@ -868,6 +868,18 @@ pub fn ensure_board_hook_settings(path: &Path) -> Result<(), String> {
     let raw = match fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // The template runs the SessionEnd import; a project that
+            // turned it off gets the template without it.
+            let project = path.parent().and_then(|p| p.parent());
+            if project.is_some_and(|p| !transcript_hook_wanted(p)) {
+                let mut v: serde_json::Value = serde_json::from_str(CLAUDE_SETTINGS_JSON)
+                    .map_err(|e| format!("the settings template is not JSON: {e}"))?;
+                if let Some(hooks) = v["hooks"].as_object_mut() {
+                    hooks.remove("SessionEnd");
+                }
+                let body = render_in_original_order(&v, CLAUDE_SETTINGS_JSON) + "\n";
+                return write_file_if_missing(path, &body, ".claude/settings.json");
+            }
             return write_file_if_missing(path, CLAUDE_SETTINGS_JSON, ".claude/settings.json");
         }
         Err(e) => return Err(format!("Could not read {}: {}", path.display(), e)),
@@ -2060,6 +2072,29 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(&p).unwrap()).unwrap();
         assert!(v["hooks"]["SessionEnd"].is_null(), "{v:#}");
         assert!(!v["hooks"]["SessionStart"].is_null(), "{v:#}");
+    }
+
+    /// With no settings.json, `update` writes the template, and the
+    /// template runs the import. A project that turned it off must not get
+    /// it back that way.
+    #[test]
+    fn a_missing_settings_file_is_written_without_the_import_hook_when_it_is_off() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
+        fs::write(
+            tmp.path().join(".deciduous/config.toml"),
+            "[transcript]\nauto_import = false\n",
+        )
+        .unwrap();
+        let p = tmp.path().join(".claude/settings.json");
+        ensure_board_hook_settings(&p).unwrap();
+        let text = fs::read_to_string(&p).unwrap();
+        assert!(!text.contains("transcript import"), "{text}");
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert!(v["hooks"]["SessionEnd"].is_null(), "{v:#}");
+        assert!(!v["hooks"]["SessionStart"].is_null(), "{v:#}");
+        assert!(!v["hooks"]["PreToolUse"].is_null(), "{v:#}");
     }
 
     #[test]

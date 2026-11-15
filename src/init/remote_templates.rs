@@ -301,7 +301,7 @@ git status                # Current state
 
 ### The Transcript Is the Log
 
-Logging in real time is the rule, and the transcript is the backstop. Claude Code writes every prompt, edit, command and result of a session to a JSONL file; `deciduous transcript import` derives goals (the prompt, verbatim), actions (edit runs, commits) and outcomes (test and build runs with their exit, the closing report) from it, each node carrying `metadata.evidence` as `proven` (a tool call and its result) or `inferred` (the assistant said so). Importing twice adds nothing.
+Logging in real time is the rule, and the transcript is the backstop. Claude Code writes every prompt, edit, command and result of a session to a JSONL file; `deciduous transcript import` derives from it a goal for each prompt that changed something (the prompt verbatim, already `completed`: a prompt that led to no edit, commit or test run is not a goal), actions (edit runs, commits) and outcomes (test and build runs with their exit, the closing report), each node carrying `metadata.evidence` as `proven` (a tool call and its result) or `inferred` (the assistant said so). Importing twice adds nothing.
 
 ```bash
 deciduous transcript list                 # this project's sessions: imported or new
