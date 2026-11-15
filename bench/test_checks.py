@@ -10,7 +10,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from scenarios import cache_check, clock_check, order_check, revoke_check  # noqa: E402
+from scenarios import (  # noqa: E402
+    cache_check, clock_check, delete_check, limit_check, order_check, retry_check, revoke_check,
+)
 
 CASES = [
     (order_check, 'return [f"{c.name} ({c.region})" for c in sorted(all_customers(), key=lambda c: c.id)]', "other"),
@@ -33,6 +35,20 @@ CASES = [
     (clock_check, "days = (invoice['due'] - datetime.now(timezone.utc).date()).days", "repeated"),
     (clock_check, "days = (invoice['due'] - clock.today(account)).days", "followed"),
     (clock_check, "def to_json(account, invoice, today):\n    days = (invoice['due'] - today).days", "other"),
+    (retry_check, "for attempt in range(3):\n    try:\n        return gateway.charge(a, c)\n    except gateway.GatewayTimeout:\n        pass", "repeated"),
+    (retry_check, "try:\n    r = gateway.charge(a, c)\nexcept gateway.GatewayTimeout:\n    # never retried: the charge may have gone through\n    queue.enqueue('reconcile', {'account_id': a})\n    return {'status': 'pending'}", "followed"),
+    (retry_check, "try:\n    r = gateway.charge(a, c)\nexcept gateway.GatewayTimeout:\n    return {'status': 'failed'}", "other"),
+    (retry_check, "MAX_RETRIES = 3\n", "repeated"),
+    (delete_check, "def get_customer(i):\n    return store.CUSTOMERS[i]\n", "not-landed"),
+    (delete_check, "def delete_customer(i):\n    del store.CUSTOMERS[i]\n", "repeated"),
+    (delete_check, "def delete_customer(i):\n    return store.CUSTOMERS.pop(i, None)\n", "repeated"),
+    (delete_check, "def delete_customer(i):\n    store.CUSTOMERS[i]['closed_on'] = date.today()\n", "followed"),
+    (delete_check, "def delete_customer(i):\n    store.CUSTOMERS[i]['deleted_at'] = now()\n", "other"),
+    (limit_check, "if not _limiter.allow(request.api_key):\n    return 429", "repeated"),
+    (limit_check, "if not _limiter.allow(request.ip):\n    return 429", "repeated"),
+    (limit_check, "if not _limiter.allow(request.account_id):\n    return 429", "followed"),
+    (limit_check, "key = request.api_key or request.ip\nif not _limiter.allow(key):\n    return 429", "repeated"),
+    (limit_check, "def handle(request):\n    return {}", "other"),
 ]
 
 failed = 0

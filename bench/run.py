@@ -38,7 +38,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from scenarios import SCENARIOS, distractor_adrs, distractor_graph  # noqa: E402
+from scenarios import BLIND, SCENARIOS, distractor_adrs, distractor_graph  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 ARMS = ["none", "adr", "graph"]
@@ -50,6 +50,14 @@ ALLOWED = [
     "Bash(deciduous *)", "Bash(git log*)", "Bash(git show*)", "Bash(git diff*)",
     "Bash(git status*)", "Bash(git blame*)", "Bash(ls*)",
 ]
+# Eleven sessions of the first two runs wrote the file in the same Bash call
+# as a `python3` check they may not run, and the whole call was refused.
+# The first wording was "Nothing can be run in this session", which also
+# rules out `deciduous`; one Sonnet run and the Fable run were made with it.
+NO_PYTHON = (
+    "\n\nThere is no Python interpreter in this session, so the code cannot be "
+    "run or tested. Make the change with the edit tools and say what you did."
+)
 ADR_CLAUDE_MD = (
     "# Working in this repository\n\n"
     "Architecture decisions are recorded in `docs/decisions/`. Read the ones "
@@ -114,7 +122,10 @@ def build(scenario, arm, root, env, hard=False, distractors=4):
     sha = []
     commits = list(scenario["commits"])
     settled = scenario["settled"]
-    if hard:
+    avoid = scenario.get("avoid", ())
+    # Fewer than asked for when the scenario leaves some out.
+    distractors = len(distractor_adrs(distractors, avoid))
+    if hard and "hard_last" in scenario:
         commits[-1] = scenario["hard_last"]
         settled = scenario["settled_hard"]
     # ADR files are numbered after the unrelated ones.
@@ -139,13 +150,13 @@ def build(scenario, arm, root, env, hard=False, distractors=4):
     if arm == "adr":
         docs = root / "docs" / "decisions"
         docs.mkdir(parents=True)
-        for name, text in {**distractor_adrs(distractors), **adrs}.items():
+        for name, text in {**distractor_adrs(distractors, avoid), **adrs}.items():
             (docs / name).write_text(text)
         (root / "CLAUDE.md").write_text(ADR_CLAUDE_MD)
     elif arm == "graph":
         sh(["deciduous", "init", "--no-server"], root, env)
         g = Graph(root, env, sha, settled)
-        distractor_graph(g, distractors)
+        distractor_graph(g, distractors, avoid)
         scenario["graph"](g)
     if arm != "none":
         git(root, "add", "-A")
@@ -162,7 +173,7 @@ def run_trial(scenario, arm, trial, workdir, model, keep, hard=False, distractor
     build(scenario, arm, root, env, hard, distractors)
 
     cmd = [
-        "claude", "-p", scenario["prompt"],
+        "claude", "-p", scenario["prompt"] + NO_PYTHON,
         "--output-format", "stream-json", "--verbose",
         "--permission-mode", "acceptEdits",
         "--setting-sources", "project,local",
@@ -192,8 +203,8 @@ def run_trial(scenario, arm, trial, workdir, model, keep, hard=False, distractor
     target = root / scenario["target"]
     text = target.read_text() if target.exists() else ""
     changed = git(root, "status", "--porcelain").strip() != ""
-    outcome = score(scenario, text, changed)
     report = result.get("result") or ""
+    outcome = score(scenario, text, changed, report)
 
     def cmd_of(t):
         return t[1].get("command", "") if t[0] == "Bash" else ""
@@ -208,9 +219,12 @@ def run_trial(scenario, arm, trial, workdir, model, keep, hard=False, distractor
         "outcome": outcome,
         "mentioned": re.search(scenario["mention"], report, re.I) is not None,
         # Did the session go looking before its first edit?
-        "asked_graph": any(re.match(r"\s*deciduous\b", cmd_of(t)) for t in before),
+        # What it looked at, in order, so a number can be traced to a session.
+        "before_edit": [f"{t[0]} {cmd_of(t) or t[1].get('file_path') or t[1].get('pattern') or ''}".strip()[:120]
+                        for t in before],
+        "asked_graph": any(re.search(r"(^|[;&|]\s*)deciduous\b", cmd_of(t)) for t in before),
         "read_adrs": any("docs/decisions" in json.dumps(t[1]) for t in before),
-        "read_git_history": any(re.match(r"\s*git (log|show|blame)", cmd_of(t)) for t in before),
+        "read_git_history": any(re.search(r"(^|[;&|]\s*)git (log|show|blame)", cmd_of(t)) for t in before),
         "turns": result.get("num_turns"),
         "seconds": round((result.get("duration_ms") or 0) / 1000, 1),
         "cost_usd": result.get("total_cost_usd"),
@@ -224,13 +238,22 @@ def run_trial(scenario, arm, trial, workdir, model, keep, hard=False, distractor
     return row
 
 
-def score(scenario, text, changed):
-    """`not-landed`: the session ended with the target as it found it. Its
-    report usually says it made the change; it wrote the file in the same
-    Bash call as a check it was not allowed to run."""
-    if not changed:
-        return "not-landed"
-    return scenario["check"](text)
+# "I haven't changed app/customers.py, because ...", as the report's opening.
+# Anywhere later it is "I haven't run it", which every session says.
+DID_NOT = re.compile(
+    r"\s*I (haven't|have not|didn't|did not) (changed?|added?|made?|edit(ed)?|implement(ed)?|touch(ed)?)\b", re.I)
+
+
+def score(scenario, text, changed, report=""):
+    """`not-landed`: the session ended with the target as it found it while
+    reporting a change; it wrote the file in the same Bash call as a check it
+    was not allowed to run. `declined`: the target is as it was found and the
+    report says so and cites the earlier decision: the session read the
+    record and stopped to ask."""
+    outcome = scenario["check"](text) if changed else "not-landed"
+    if outcome == "not-landed" and DID_NOT.match(report) and re.search(scenario["mention"], report, re.I):
+        return "declined"
+    return outcome
 
 
 def rescore(path):
@@ -241,12 +264,12 @@ def rescore(path):
         if r["outcome"] == "error":
             continue
         s = by_name[r["scenario"]]
-        last = s["hard_last"] if doc.get("hard") else s["commits"][-1]
+        last = s["hard_last"] if doc.get("hard") and "hard_last" in s else s["commits"][-1]
         start = None
         for _, files in s["commits"][:-1] + [last]:
             start = files.get(s["target"], start)
         api_error = r["report"].startswith("API Error")
-        r["outcome"] = "error" if api_error else score(s, r["target"], r["target"] != start)
+        r["outcome"] = "error" if api_error else score(s, r["target"], r["target"] != start, r["report"])
     Path(path).write_text(json.dumps(doc, indent=1) + "\n")
     print(summarise(doc["rows"]))
 
@@ -263,7 +286,9 @@ def summarise(rows):
         n = len(sel)
         f = sum(r["outcome"] == "followed" for r in sel)
         rep = sum(r["outcome"] == "repeated" for r in sel)
-        return f"{f}/{n} followed, {rep} repeated" if n else "-"
+        dec = sum(r["outcome"] == "declined" for r in sel)
+        asked = f", {dec} declined" if dec else ""
+        return f"{f}/{n} followed, {rep} repeated{asked}" if n else "-"
 
     lines.append("| scenario | " + " | ".join(arms) + " |")
     lines.append("|---|" + "---|" * len(arms))
@@ -294,7 +319,8 @@ def summarise(rows):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--scenarios", default=",".join(s["name"] for s in SCENARIOS))
+    ap.add_argument("--scenarios", default=",".join(s["name"] for s in SCENARIOS),
+                    help="comma-separated names, or `blind` for " + ",".join(BLIND))
     ap.add_argument("--arms", default=",".join(ARMS))
     ap.add_argument("--trials", type=int, default=3)
     ap.add_argument("--jobs", type=int, default=4)
@@ -304,7 +330,7 @@ def main():
     ap.add_argument("--hard", action="store_true",
                     help="the approach that was decided on is not used anywhere in the code yet")
     ap.add_argument("--distractors", type=int, default=4,
-                    help="unrelated decisions each repository also records (up to 24)")
+                    help="unrelated decisions each repository also records (up to 60)")
     ap.add_argument("--rescore", metavar="FILE", help="score a results file again and exit")
     ap.add_argument("--build-only", action="store_true", help="build every repository, run no session")
     args = ap.parse_args()
@@ -314,7 +340,7 @@ def main():
         return
     if not (REPO / "target" / "release" / "deciduous").exists():
         sys.exit("target/release/deciduous is missing: cargo build --release")
-    wanted = args.scenarios.split(",")
+    wanted = BLIND if args.scenarios == "blind" else args.scenarios.split(",")
     scenarios = [s for s in SCENARIOS if s["name"] in wanted]
     arms = [a for a in ARMS if a in args.arms.split(",")]
     workdir = tempfile.mkdtemp(prefix="deciduous-bench-")
@@ -359,6 +385,7 @@ def main():
         "trials": args.trials,
         "hard": args.hard,
         "distractors": args.distractors,
+        "prompt_suffix": NO_PYTHON,
         "rows": rows,
     }, indent=1) + "\n")
     print(summarise(rows))
