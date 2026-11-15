@@ -116,20 +116,6 @@ pub struct WhyReport {
     pub threads: Vec<Thread>,
 }
 
-impl WhyReport {
-    /// True when the report holds something an agent about to edit the file
-    /// should weigh: a decision on the path, or a node that was rejected,
-    /// superseded or abandoned. A goal with an action and an outcome under
-    /// it says what happened, which the file already shows.
-    pub fn worth_interrupting(&self) -> bool {
-        self.threads.iter().any(|t| {
-            !t.choices.is_empty()
-                || t.hits.iter().any(|h| is_reversed(&h.node.status))
-                || t.goal.as_ref().is_some_and(|g| is_reversed(&g.status))
-        })
-    }
-}
-
 fn is_reversed(status: &str) -> bool {
     matches!(status, "rejected" | "superseded" | "abandoned")
 }
@@ -632,110 +618,6 @@ pub fn render(report: &WhyReport, limit: usize, hits: usize) -> String {
     out
 }
 
-/// What the pre-edit hook says: the decisions only, a few lines, and where
-/// the rest is. `None` when the report holds nothing worth interrupting an
-/// edit for.
-pub fn brief(report: &WhyReport) -> Option<String> {
-    const MAX: usize = 4;
-    if !report.worth_interrupting() {
-        return None;
-    }
-    let mut lines: Vec<String> = Vec::new();
-    for t in &report.threads {
-        let under = t
-            .goal
-            .as_ref()
-            .map(|g| format!(" (goal {}: {})", g.id, clip(&g.title, 70)))
-            .unwrap_or_default();
-        for c in &t.choices {
-            let mut s = format!(
-                "- decision {} [{}]: {}{under}",
-                c.decision.id,
-                c.decision.status,
-                clip(&c.decision.title, 110)
-            );
-            for (label, set) in [("chose", &c.chosen), ("rejected", &c.rejected)] {
-                for o in set {
-                    s.push_str(&format!("; {label} {}: {}", o.id, clip(&o.title, 90)));
-                    if let Some(r) = &o.rationale {
-                        s.push_str(&format!(" ({})", clip(r, 90)));
-                    }
-                }
-            }
-            for o in &c.replaced_by {
-                s.push_str(&format!(
-                    "; replaced by decision {}: {}",
-                    o.id,
-                    clip(&o.title, 110)
-                ));
-            }
-            lines.push(s);
-        }
-        for h in t.hits.iter().filter(|h| is_reversed(&h.node.status)) {
-            lines.push(format!(
-                "- {} {} is {}: {}{under}",
-                h.node.node_type,
-                h.node.id,
-                h.node.status,
-                clip(&h.node.title, 110)
-            ));
-        }
-        if let Some(g) = t.goal.as_ref().filter(|g| is_reversed(&g.status)) {
-            if t.choices.is_empty() {
-                lines.push(format!(
-                    "- goal {} is {}: {}",
-                    g.id,
-                    g.status,
-                    clip(&g.title, 110)
-                ));
-            }
-        }
-    }
-    if lines.is_empty() {
-        return None;
-    }
-    let more = lines.len().saturating_sub(MAX);
-    lines.truncate(MAX);
-    let mut out = format!(
-        "deciduous: decisions already made about {} (`deciduous why {}` shows all of it):\n{}",
-        report.path,
-        report.path,
-        lines.join("\n")
-    );
-    if more > 0 {
-        out.push_str(&format!("\n… and {more} more"));
-    }
-    Some(out)
-}
-
-/// True the first time `path` is asked about in `session`, false after:
-/// the hook speaks once per file per session. The record is a file in the
-/// system temp directory, so it leaves nothing in the project.
-pub fn first_ask(session: &str, path: &str) -> bool {
-    let safe: String = session
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
-        .take(64)
-        .collect();
-    if safe.is_empty() {
-        return true;
-    }
-    let record = std::env::temp_dir().join(format!("deciduous-why-{safe}"));
-    let seen = std::fs::read_to_string(&record).unwrap_or_default();
-    if seen.lines().any(|l| l == path) {
-        return false;
-    }
-    use std::io::Write;
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&record)
-    {
-        let _ = writeln!(f, "{path}");
-    }
-    true
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -829,12 +711,6 @@ mod tests {
             c.rejected[0].rationale.as_deref(),
             Some("an office is one IP")
         );
-        assert!(r.worth_interrupting());
-        let b = brief(&r).unwrap();
-        assert!(
-            b.contains("rejected 4: Per-IP buckets (an office is one IP)"),
-            "{b}"
-        );
     }
 
     #[test]
@@ -870,11 +746,7 @@ mod tests {
         let r = why(&nodes, &edges, "src/a.rs", None, &[]);
         let ids: Vec<i32> = r.threads[0].hits.iter().map(|h| h.node.id).collect();
         assert_eq!(ids, vec![3, 2]);
-        assert!(
-            !r.worth_interrupting(),
-            "a goal and its actions are not news"
-        );
-        assert!(brief(&r).is_none());
+        assert!(r.threads[0].choices.is_empty());
     }
 
     #[test]
@@ -988,17 +860,12 @@ mod tests {
             c.replaced_by.iter().map(|n| n.id).collect::<Vec<_>>(),
             vec![5]
         );
-        let b = brief(&r).unwrap();
-        assert!(b.contains("decision 1 [superseded]"), "{b}");
-        assert!(
-            b.contains("replaced by decision 5: Sessions store is the truth"),
-            "{b}"
-        );
+        assert_eq!(c.decision.status, "superseded");
         assert!(render(&r, 0, 0).contains("    replaced by 5 Sessions store is the truth"));
     }
 
     #[test]
-    fn a_cycle_ends_and_a_superseded_node_is_worth_saying() {
+    fn a_cycle_ends() {
         let nodes = vec![
             node(1, "action", "a", "superseded", r#"{"commit":"abc1234"}"#),
             node(2, "action", "b", "completed", "{}"),
@@ -1015,7 +882,6 @@ mod tests {
             &[commit("abc1234", "2026-03-01")],
         );
         assert_eq!(r.threads.len(), 1);
-        assert!(brief(&r).unwrap().contains("action 1 is superseded"));
     }
 
     #[test]
@@ -1088,15 +954,5 @@ mod tests {
             "web/a.ts"
         );
         assert_eq!(project_relative(root, root, "./src/db.rs"), "src/db.rs");
-    }
-
-    #[test]
-    fn the_hook_speaks_once_per_file_per_session() {
-        let session = format!("test-{}", std::process::id());
-        let _ = std::fs::remove_file(std::env::temp_dir().join(format!("deciduous-why-{session}")));
-        assert!(first_ask(&session, "src/a.rs"));
-        assert!(!first_ask(&session, "src/a.rs"));
-        assert!(first_ask(&session, "src/b.rs"));
-        let _ = std::fs::remove_file(std::env::temp_dir().join(format!("deciduous-why-{session}")));
     }
 }

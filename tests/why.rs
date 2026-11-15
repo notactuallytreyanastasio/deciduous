@@ -1,7 +1,7 @@
 //! `deciduous why <file>` end to end: a real git repository, a graph whose
 //! action carries the commit, and the binary asked about the file.
 
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -168,79 +168,4 @@ fn a_file_the_graph_knows_nothing_about_says_so() {
     // A file git has never seen is not an error either.
     let text = ok(&root, &["why", "src/never.rs"]);
     assert!(text.starts_with("src/never.rs: 0 of 0 commits"), "{text}");
-}
-
-/// What Claude Code 2.1.325 sends a PreToolUse hook, cut to the fields read.
-fn hook_input(session: &str, file: &Path) -> String {
-    json!({
-        "session_id": session,
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Edit",
-        "tool_input": {"file_path": file, "old_string": "a", "new_string": "b"}
-    })
-    .to_string()
-}
-
-#[test]
-fn as_a_hook_it_names_the_decision_once_per_file_per_session() {
-    let (_tmp, root) = project();
-    let session = format!("why-hook-test-{}", std::process::id());
-    let record = std::env::temp_dir().join(format!("deciduous-why-{session}"));
-    let _ = fs::remove_file(&record);
-    let input = hook_input(&session, &root.join("src/limit.rs"));
-
-    let o = deciduous(&root, &["why", "--hook"], Some(&input));
-    assert!(o.status.success());
-    let v: Value = serde_json::from_slice(&o.stdout).expect("the hook's reply is JSON");
-    assert_eq!(v["hookSpecificOutput"]["hookEventName"], "PreToolUse");
-    let said = v["hookSpecificOutput"]["additionalContext"]
-        .as_str()
-        .unwrap();
-    assert!(
-        said.contains("decision 2 [pending]: Limit by token, not by IP"),
-        "{said}"
-    );
-    assert!(
-        said.contains("rejected 4: Per-IP buckets (an office is one IP)"),
-        "{said}"
-    );
-
-    // The second edit of the same file in the session: nothing.
-    let again = deciduous(&root, &["why", "--hook"], Some(&input));
-    assert!(again.status.success());
-    assert!(again.stdout.is_empty());
-
-    // A file with no decision behind it: nothing, the first time too.
-    let other = hook_input(&session, &root.join("src/other.rs"));
-    let o = deciduous(&root, &["why", "--hook"], Some(&other));
-    assert!(o.status.success());
-    assert!(o.stdout.is_empty());
-    let _ = fs::remove_file(&record);
-}
-
-#[test]
-fn as_a_hook_it_never_fails_the_edit() {
-    let (_tmp, root) = project();
-    for input in [
-        "",
-        "not json",
-        r#"{"tool_input":{}}"#,
-        r#"{"tool_input":{"file_path":"/somewhere/else/entirely.rs"}}"#,
-    ] {
-        let o = deciduous(&root, &["why", "--hook"], Some(input));
-        assert!(o.status.success(), "{input:?}");
-        assert!(o.stdout.is_empty(), "{input:?}");
-    }
-    // Outside any project: silent, exit 0, and no .deciduous made.
-    let bare = TempDir::new().unwrap();
-    let o = Command::new(env!("CARGO_BIN_EXE_deciduous"))
-        .current_dir(bare.path())
-        .args(["why", "--hook"])
-        .env_remove("DECIDUOUS_DB_PATH")
-        .stdin(Stdio::null())
-        .output()
-        .unwrap();
-    assert!(o.status.success());
-    assert!(o.stdout.is_empty() && o.stderr.is_empty());
-    assert!(!bare.path().join(".deciduous").exists());
 }
