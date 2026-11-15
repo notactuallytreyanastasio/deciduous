@@ -485,6 +485,13 @@ enum Command {
         hook: bool,
     },
 
+    /// Decisions a model proposed from session transcripts, waiting for a
+    /// yes or a no (see `transcript decisions`). With no action, lists them
+    Proposals {
+        #[command(subcommand)]
+        action: Option<ProposalsAction>,
+    },
+
     /// Manage evolution narratives (.deciduous/narratives.md)
     Narratives {
         #[command(subcommand)]
@@ -1062,6 +1069,33 @@ enum TranscriptAction {
         json: bool,
     },
 
+    /// Read a session for the decisions made in it: a model reads the
+    /// transcript and proposes each choice between approaches, with a quote
+    /// from the turn it was made in. A proposal whose quote is not in the
+    /// transcript is dropped. What is left waits in
+    /// .deciduous/proposals.json for `deciduous proposals accept`
+    Decisions {
+        /// Transcript files or session ids
+        #[arg(required = true)]
+        transcripts: Vec<String>,
+
+        /// Write the proposals into the graph without waiting for review
+        #[arg(long)]
+        accept: bool,
+
+        /// Read a session again that was already read
+        #[arg(long)]
+        again: bool,
+
+        /// Model for the `claude -p` call (default: the account's)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Print the report as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// List this project's transcripts and whether each is already imported
     List {
         /// Directory holding the transcripts (default: this project's
@@ -1072,6 +1106,42 @@ enum TranscriptAction {
         /// Print as JSON
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ProposalsAction {
+    /// The proposals waiting for review
+    List {
+        /// Also show the ones already accepted or rejected
+        #[arg(long)]
+        all: bool,
+
+        /// Print as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Write proposals into the graph: goal -> options -> decision -> the
+    /// actions that followed it
+    Accept {
+        /// Proposal numbers, as `proposals` prints them
+        numbers: Vec<usize>,
+
+        /// Every proposal still waiting
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Turn proposals down. They stay in the file, so the same words are
+    /// not proposed again
+    Reject {
+        /// Proposal numbers, as `proposals` prints them
+        numbers: Vec<usize>,
+
+        /// Every proposal still waiting
+        #[arg(long)]
+        all: bool,
     },
 }
 
@@ -5543,6 +5613,13 @@ fn main() {
             );
         }
 
+        Command::Proposals { action } => {
+            if let Err(e) = run_proposals(&db, action) {
+                eprintln!("{} {}", "Error:".red(), e);
+                exit(1);
+            }
+        }
+
         Command::Why {
             target,
             goals,
@@ -5678,6 +5755,11 @@ fn main() {
                     hash_files: !no_hash,
                 };
                 if hook {
+                    // The session ending is the model call `transcript
+                    // decisions` made: it has nothing to import.
+                    if std::env::var_os(deciduous::decisions::GUARD_ENV).is_some() {
+                        return;
+                    }
                     use std::io::Read;
                     let mut input = String::new();
                     let _ = std::io::stdin().read_to_string(&mut input);
@@ -5689,7 +5771,7 @@ fn main() {
                             "deciduous: the hook input names no transcript_path; nothing imported"
                         ),
                         Some(path) => match deciduous::transcript::import(&db, &path, &opts) {
-                            Ok(_) => {}
+                            Ok(_) => read_for_decisions_in_background(&db, &path),
                             // A session that never got a prompt has nothing to import.
                             Err(deciduous::transcript::TranscriptError::Empty(_)) => {}
                             Err(e) => eprintln!("deciduous: transcript not imported: {e}"),
@@ -5712,6 +5794,46 @@ fn main() {
                         Ok(report) => {
                             if !json {
                                 print_transcript_report(&report);
+                            }
+                            reports.push(report);
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            failed = true;
+                        }
+                    }
+                }
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&reports).unwrap_or_default()
+                    );
+                }
+                if failed {
+                    exit(1);
+                }
+            }
+            TranscriptAction::Decisions {
+                transcripts,
+                accept,
+                again,
+                model,
+                json,
+            } => {
+                let opts = deciduous::decisions::DeriveOptions {
+                    accept,
+                    again,
+                    model,
+                };
+                let mut failed = false;
+                let mut reports = Vec::new();
+                for arg in &transcripts {
+                    let report = deciduous::transcript::locate(&db, arg)
+                        .and_then(|path| deciduous::decisions::derive(&db, &path, &opts));
+                    match report {
+                        Ok(report) => {
+                            if !json {
+                                print_decisions_report(&db, &report);
                             }
                             reports.push(report);
                         }
@@ -6940,6 +7062,161 @@ fn node_json_row(n: &deciduous::db::DecisionNode) -> serde_json::Value {
 
 /// `deciduous audit` without `--associate-commits`: the report, or one of
 /// the two fixes that need no judgement.
+/// After a session's import, when the project asks for it
+/// (`[transcript] derive_decisions`): read the session for decisions in a
+/// process of its own. The hook that called us has a timeout and a model
+/// call does not fit in it.
+fn read_for_decisions_in_background(db: &Database, transcript: &std::path::Path) {
+    let Some(opts) = db.project_root().and_then(deciduous::decisions::configured) else {
+        return;
+    };
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let mut cmd = ProcessCommand::new(exe);
+    cmd.args(["transcript", "decisions"]).arg(transcript);
+    if opts.accept {
+        cmd.arg("--accept");
+    }
+    if let Some(model) = &opts.model {
+        cmd.args(["--model", model]);
+    }
+    let _ = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
+fn print_decisions_report(db: &Database, report: &deciduous::decisions::DeriveReport) {
+    let session: String = report.session_id.chars().take(8).collect();
+    if report.skipped {
+        println!(
+            "session {session}: already read ({} turns); --again reads it again",
+            report.turns
+        );
+        return;
+    }
+    println!(
+        "session {session}: {} turns read in {} model call(s); {} proposed, {} already proposed, {} dropped",
+        report.turns,
+        report.model_calls,
+        report.proposed.len(),
+        report.already_proposed,
+        report.dropped.len()
+    );
+    if let Ok(store) = deciduous::decisions::Store::load(&deciduous::decisions::Store::path(db)) {
+        for n in &report.proposed {
+            if let Some(p) = store.proposals.get(n - 1) {
+                print!("\n{}", deciduous::decisions::render(*n, p));
+            }
+        }
+    }
+    for d in &report.dropped {
+        println!("\n{} {}\n    {}", "dropped".yellow(), d.title, d.reason);
+    }
+    if !report.accepted.is_empty() {
+        let ids: Vec<String> = report.accepted.iter().map(|i| i.to_string()).collect();
+        println!("\nIn the graph as decision {}", ids.join(", "));
+    } else if !report.proposed.is_empty() {
+        println!("\n`deciduous proposals accept <n>` writes one into the graph; `reject <n>` turns it down.");
+    }
+}
+
+fn run_proposals(db: &Database, action: Option<ProposalsAction>) -> Result<(), String> {
+    use deciduous::decisions::{State, Store};
+    let path = Store::path(db);
+    let mut store = Store::load(&path)?;
+    let waiting = |store: &Store| -> Vec<usize> {
+        store
+            .proposals
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.state == State::Proposed)
+            .map(|(i, _)| i + 1)
+            .collect()
+    };
+    let pick = |store: &Store, numbers: Vec<usize>, all: bool| -> Result<Vec<usize>, String> {
+        if all {
+            return Ok(waiting(store));
+        }
+        if numbers.is_empty() {
+            return Err("name the proposals by number, or pass --all".into());
+        }
+        for n in &numbers {
+            if *n == 0 || *n > store.proposals.len() {
+                return Err(format!(
+                    "there is no proposal {n}; `deciduous proposals --all` lists the {} there are",
+                    store.proposals.len()
+                ));
+            }
+        }
+        Ok(numbers)
+    };
+    match action.unwrap_or(ProposalsAction::List {
+        all: false,
+        json: false,
+    }) {
+        ProposalsAction::List { all, json } => {
+            let shown: Vec<usize> = if all {
+                (1..=store.proposals.len()).collect()
+            } else {
+                waiting(&store)
+            };
+            if json {
+                let rows: Vec<serde_json::Value> = shown
+                    .iter()
+                    .map(|n| {
+                        let mut v = serde_json::to_value(&store.proposals[n - 1])
+                            .unwrap_or(serde_json::Value::Null);
+                        v["number"] = serde_json::json!(n);
+                        v
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&rows).unwrap_or_default()
+                );
+                return Ok(());
+            }
+            if shown.is_empty() {
+                println!(
+                    "No proposals waiting. `deciduous transcript decisions <session>` reads a session for them."
+                );
+                return Ok(());
+            }
+            for n in shown {
+                println!(
+                    "{}",
+                    deciduous::decisions::render(n, &store.proposals[n - 1])
+                );
+            }
+        }
+        ProposalsAction::Accept { numbers, all } => {
+            for n in pick(&store, numbers, all)? {
+                let id = deciduous::decisions::accept(db, &mut store.proposals[n - 1])
+                    .map_err(|e| e.to_string())?;
+                println!("#{n} is decision {id}: {}", store.proposals[n - 1].title);
+            }
+            store.save(&path)?;
+        }
+        ProposalsAction::Reject { numbers, all } => {
+            for n in pick(&store, numbers, all)? {
+                let p = &mut store.proposals[n - 1];
+                if p.state == State::Accepted {
+                    return Err(format!(
+                        "proposal {n} is already in the graph; `deciduous delete` removes its nodes"
+                    ));
+                }
+                p.state = State::Rejected;
+                println!("#{n} rejected: {}", p.title);
+            }
+            store.save(&path)?;
+        }
+    }
+    Ok(())
+}
+
 /// The `why` report for a project-relative path. Git history that cannot
 /// be read (no repository, a file git has never seen with a line range) is
 /// noted in the report, and the nodes that name the file are still found.
