@@ -2660,6 +2660,16 @@
       "to_change_id": "17c0e3fb-f0b1-484e-bfd7-b9a3f4de1800",
       "weight": 1.0
     },
+    "344e44a4ee5666dd1632": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:27:52.210598-05:00",
+      "edge_id": "344e44a4ee5666dd1632",
+      "edge_type": "leads_to",
+      "from_change_id": "a8231efa-5e4f-4873-8f7c-1cfcf849fc45",
+      "rationale": "result",
+      "to_change_id": "9e40b8d6-087e-4cb6-acd9-2a7ae32d1ced",
+      "weight": 1.0
+    },
     "3494ae3468e9e3297e4c": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:38:46.573644-05:00",
@@ -4328,6 +4338,16 @@
       "from_change_id": "b1b3d525-ee90-4ad2-89ea-73800207905b",
       "rationale": "built and embedded",
       "to_change_id": "bc256db2-b893-48e2-b1f8-c034ec6d7a75",
+      "weight": 1.0
+    },
+    "51a8c5757a42fa6c8f28": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:17:32.737343-05:00",
+      "edge_id": "51a8c5757a42fa6c8f28",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "second half: harder scenarios first, then the run",
+      "to_change_id": "a8231efa-5e4f-4873-8f7c-1cfcf849fc45",
       "weight": 1.0
     },
     "5251c61593fc1e5395a0": {
@@ -26956,6 +26976,20 @@
       "title": "Exempt outcome and observation from status entirely",
       "updated_at": "2026-11-14T16:54:16.547527-05:00"
     },
+    "9e40b8d6-087e-4cb6-acd9-2a7ae32d1ced": {
+      "author": "Bobby Grayson",
+      "change_id": "9e40b8d6-087e-4cb6-acd9-2a7ae32d1ced",
+      "created_at": "2026-11-14T22:27:52.146339-05:00",
+      "metadata": {
+        "branch": "96-harder-scenarios",
+        "commit": "09b19f9c6e3412023a7c6a2bc65a360b606ee126",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "pending",
+      "title": "Blind runs: no record, Sonnet followed 1 of 24 and Fable 6 of 12; ADR files and the graph both 72 of 72 with a record (2 declined); graph costs 1.2-1.5x ADR",
+      "updated_at": "2026-11-14T22:27:52.146339-05:00"
+    },
     "9e7aeafb-a2b1-4077-a480-e182da9b27d5": {
       "author": "Bobby Grayson",
       "change_id": "9e7aeafb-a2b1-4077-a480-e182da9b27d5",
@@ -27813,6 +27847,24 @@
       "status": "pending",
       "title": "Creating story.html standalone page with OG tags",
       "updated_at": "2025-12-15T02:11:00.125916-05:00"
+    },
+    "a8231efa-5e4f-4873-8f7c-1cfcf849fc45": {
+      "author": "Bobby Grayson",
+      "change_id": "a8231efa-5e4f-4873-8f7c-1cfcf849fc45",
+      "created_at": "2026-11-14T22:17:32.673993-05:00",
+      "metadata": {
+        "branch": "96-harder-scenarios",
+        "confidence": 85,
+        "files": [
+          "bench/scenarios.py",
+          "bench/run.py",
+          "bench/test_checks.py"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "bench: three blind scenarios (retry, delete, limit), 60 unrelated decisions, sessions told nothing can be run",
+      "updated_at": "2026-11-14T22:27:52.267906-05:00"
     },
     "a8b0f118-5c10-4158-a2ed-e8bd49be1508": {
       "author": "Bobby Grayson",
@@ -34464,9 +34516,9 @@
         "prompt": "ok lets get rid of it and remove it from tests. 2 is fine go with your guy, ill fix CI later im busy"
       },
       "node_type": "goal",
-      "status": "active",
+      "status": "completed",
       "title": "Remove the pre-edit why hook; harden the benchmark scenarios, then rerun",
-      "updated_at": "2026-11-14T21:48:10.475582-05:00"
+      "updated_at": "2026-11-14T22:27:52.324441-05:00"
     },
     "ff54b327-6672-4c08-89c7-96b73bd6f4bc": {
       "author": "Bobby Grayson",
