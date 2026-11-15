@@ -458,6 +458,33 @@ enum Command {
         all: bool,
     },
 
+    /// The decisions behind a file: the commits that touched it, the nodes
+    /// that carry them, and the decisions and goal above those
+    Why {
+        /// A file, a line of it (`src/db.rs:120`) or a range
+        /// (`src/db.rs:120-180`, as the lines stand in HEAD)
+        #[arg(required_unless_present = "hook")]
+        target: Option<String>,
+
+        /// Goals to show, most recently touched first
+        #[arg(long, default_value = "5")]
+        goals: usize,
+
+        /// Show every goal and every node under it
+        #[arg(long)]
+        all: bool,
+
+        /// Print the report as JSON
+        #[arg(long)]
+        json: bool,
+
+        /// Run as a Claude Code PreToolUse hook: read the hook's JSON from
+        /// stdin and, the first time a session edits a file that has
+        /// decisions behind it, say so in a few lines. Never fails.
+        #[arg(long, hide = true)]
+        hook: bool,
+    },
+
     /// Manage evolution narratives (.deciduous/narratives.md)
     Narratives {
         #[command(subcommand)]
@@ -1606,6 +1633,7 @@ fn records_itself(command: &Command) -> bool {
             | Command::Dot { .. }
             | Command::Writeup { .. }
             | Command::Pulse { .. }
+            | Command::Why { .. }
             | Command::Completion { .. }
             | Command::DemoSwarm { .. }
             | Command::Mcp { .. }
@@ -1931,6 +1959,12 @@ fn main() {
     } = args.command
     {
         std::process::exit(run_api_daemon(port, data_dir, token, bind));
+    }
+
+    // A hook runs wherever Claude Code does. Outside a project it has
+    // nothing to say and must not fail the edit it runs before.
+    if matches!(args.command, Command::Why { hook: true, .. }) && !Database::project_exists() {
+        return;
     }
 
     // Everything from here on reads or writes a project's graph. Without
@@ -5509,6 +5543,48 @@ fn main() {
             );
         }
 
+        Command::Why {
+            target,
+            goals,
+            all,
+            json,
+            hook,
+        } => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let root = db
+                .project_root()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| cwd.clone());
+            if hook {
+                if let Some(text) = why_hook_brief(&db, &root, &cwd) {
+                    println!(
+                        "{}",
+                        serde_json::json!({"hookSpecificOutput": {
+                            "hookEventName": "PreToolUse",
+                            "additionalContext": text,
+                        }})
+                    );
+                }
+                return;
+            }
+            let (path, lines) = deciduous::why::parse_target(&target.unwrap_or_default());
+            let path = deciduous::why::project_relative(&root, &cwd, &path);
+            match why_report(&db, &root, &path, lines) {
+                Ok(report) if json => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).unwrap_or_default()
+                ),
+                Ok(report) => {
+                    let (goals, hits) = if all { (0, 0) } else { (goals, 8) };
+                    print!("{}", deciduous::why::render(&report, goals, hits));
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    exit(1);
+                }
+            }
+        }
+
         Command::Pulse {
             branch,
             recent,
@@ -6864,6 +6940,48 @@ fn node_json_row(n: &deciduous::db::DecisionNode) -> serde_json::Value {
 
 /// `deciduous audit` without `--associate-commits`: the report, or one of
 /// the two fixes that need no judgement.
+/// The `why` report for a project-relative path. Git history that cannot
+/// be read (no repository, a file git has never seen with a line range) is
+/// noted in the report, and the nodes that name the file are still found.
+fn why_report(
+    db: &Database,
+    root: &std::path::Path,
+    path: &str,
+    lines: Option<(u32, u32)>,
+) -> Result<deciduous::why::WhyReport, String> {
+    let nodes = db.get_all_nodes().map_err(|e| e.to_string())?;
+    let edges = db.get_all_edges().map_err(|e| e.to_string())?;
+    let (commits, note) = match deciduous::why::commits_touching(root, path, lines) {
+        Ok(commits) => (commits, None),
+        Err(e) => (Vec::new(), Some(e)),
+    };
+    let mut report = deciduous::why::why(&nodes, &edges, path, lines, &commits);
+    report.git_note = note;
+    Ok(report)
+}
+
+/// What the PreToolUse hook adds to the session, if anything: the hook's
+/// JSON is on stdin, and `tool_input.file_path` is the file about to change.
+fn why_hook_brief(db: &Database, root: &std::path::Path, cwd: &std::path::Path) -> Option<String> {
+    use std::io::Read;
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input).ok()?;
+    let input: serde_json::Value = serde_json::from_str(&input).ok()?;
+    let file = input.get("tool_input")?.get("file_path")?.as_str()?;
+    let path = deciduous::why::project_relative(root, cwd, file);
+    // A path that is still absolute is outside the project.
+    if path.starts_with('/') {
+        return None;
+    }
+    let report = why_report(db, root, &path, None).ok()?;
+    let text = deciduous::why::brief(&report)?;
+    let session = input
+        .get("session_id")
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+    deciduous::why::first_ask(session, &path).then_some(text)
+}
+
 fn run_audit(
     db: &Database,
     close_records: bool,

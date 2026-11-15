@@ -642,6 +642,7 @@ Open is `pending` or `active`. Everything else is closed.
 deciduous nodes --open    # what is still open (--status <s>, --json)
 deciduous pulse           # open goals, each with its open work
 deciduous audit           # what drifted: records left open, committed actions never closed, orphans
+deciduous why src/db.rs   # the decisions behind a file (or src/db.rs:120-180): what was chosen, what was rejected
 ```
 
 Edge types say what a link means; `leads_to` is the fallback, not the answer to everything:
@@ -2000,6 +2001,16 @@ pub const CLAUDE_SETTINGS_JSON: &str = r#"{
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/version-check.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v deciduous >/dev/null 2>&1 && deciduous why --hook 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionStart": [
@@ -2360,6 +2371,7 @@ Open is `pending` or `active`. Everything else is closed.
 deciduous nodes --open    # what is still open (--status <s>, --json)
 deciduous pulse           # open goals, each with its open work
 deciduous audit           # what drifted: records left open, committed actions never closed, orphans
+deciduous why src/db.rs   # the decisions behind a file (or src/db.rs:120-180): what was chosen, what was rejected
 ```
 
 Edge types say what a link means; `leads_to` is the fallback, not the answer to everything:
