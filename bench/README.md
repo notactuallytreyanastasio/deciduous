@@ -3,14 +3,18 @@
 Four small repositories, each with a history: something was tried, it went
 wrong for a reason the code does not show, and it was taken back out. A real
 Claude Code session is then asked for work where the approach that went wrong
-is the obvious one. Each repository is built four ways:
+is the obvious one. Each repository is built three ways:
 
 | arm | what the session finds |
 |---|---|
 | `none` | the code and its git history |
 | `adr` | plus `docs/decisions/*.md` and a two-line CLAUDE.md that says to read them |
-| `graph` | plus `deciduous init` and the decision in the graph, without the pre-edit hook |
-| `hook` | the same, with the pre-edit hook `init` installs |
+| `graph` | plus `deciduous init` and the decision in the graph |
+
+The runs below had a fourth arm, `hook`: the graph plus a `PreToolUse` hook
+that ran `deciduous why` on the first edit of each file. It measured the same
+as `graph`, and the hook has been removed from deciduous; the arm cannot be
+built any more and its rows stay in the result files.
 
 The ADR arm is the point. That a record beats no record is not news; the
 question is whether the graph beats the markdown file a team would otherwise

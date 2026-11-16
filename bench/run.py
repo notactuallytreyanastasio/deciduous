@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """Does the record of a decision change what an agent does?
 
-Each scenario (scenarios.py) is built four ways, and a real Claude Code
+Each scenario (scenarios.py) is built three ways, and a real Claude Code
 session is given the same task in each:
 
   none   the code and its git history, nothing else
   adr    plus docs/decisions/*.md holding the decision, and a CLAUDE.md that
          says to read the relevant ones before changing behaviour
-  graph  plus `deciduous init` and the decision in the graph; no pre-edit hook
-  hook   the same as graph, with the pre-edit hook `init` installs
+  graph  plus `deciduous init` and the decision in the graph
+
+The first two result files have a fourth arm, `hook`: the graph plus a
+pre-edit hook that ran `deciduous why`. It measured the same as `graph` and
+the hook was removed from deciduous; `--rescore` still reads those rows.
 
 The session's working tree is then scored by the scenario's check:
 followed the decision, repeated what was rejected, or something else.
 
     python3 bench/run.py --trials 3 --jobs 4
-    python3 bench/run.py --scenarios cache --arms none,hook --trials 1 --keep
+    python3 bench/run.py --scenarios cache --arms none,graph --trials 1 --keep
 
 Every trial is one `claude -p` session on the account that is logged in.
 Sessions run with no MCP servers and project settings only, in a directory
@@ -38,7 +41,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from scenarios import SCENARIOS, distractor_adrs, distractor_graph  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
-ARMS = ["none", "adr", "graph", "hook"]
+ARMS = ["none", "adr", "graph"]
+# Arms in old result files that can no longer be built.
+PAST_ARMS = ["hook"]
+REPORTED = ARMS + PAST_ARMS
 ALLOWED = [
     "Read", "Edit", "Write", "Glob", "Grep",
     "Bash(deciduous *)", "Bash(git log*)", "Bash(git show*)", "Bash(git diff*)",
@@ -136,21 +142,11 @@ def build(scenario, arm, root, env, hard=False, distractors=4):
         for name, text in {**distractor_adrs(distractors), **adrs}.items():
             (docs / name).write_text(text)
         (root / "CLAUDE.md").write_text(ADR_CLAUDE_MD)
-    elif arm in ("graph", "hook"):
+    elif arm == "graph":
         sh(["deciduous", "init", "--no-server"], root, env)
         g = Graph(root, env, sha, settled)
         distractor_graph(g, distractors)
         scenario["graph"](g)
-        if arm == "graph":
-            settings = root / ".claude" / "settings.json"
-            doc = json.loads(settings.read_text())
-            doc["hooks"]["PreToolUse"] = [
-                e for e in doc["hooks"]["PreToolUse"]
-                if not any("why --hook" in h.get("command", "") for h in e["hooks"])
-            ]
-            settings.write_text(json.dumps(doc, indent=2) + "\n")
-            with open(root / ".deciduous" / "config.toml", "a") as f:
-                f.write("\n[why]\nhook = false\n")
     if arm != "none":
         git(root, "add", "-A")
         git(root, "commit", "-q", "-m", "record decisions")
@@ -258,7 +254,7 @@ def rescore(path):
 def summarise(rows):
     lines = []
     scenarios = sorted({r["scenario"] for r in rows}, key=[s["name"] for s in SCENARIOS].index)
-    arms = [a for a in ARMS if any(r["arm"] == a for r in rows)]
+    arms = [a for a in REPORTED if any(r["arm"] == a for r in rows)]
 
     def cell(sel):
         # A session whose edit never landed, or that never ran, says
@@ -351,7 +347,7 @@ def main():
             rows.append(row)
             print(f"{name:8} {arm:6} {trial}  {row['outcome']}", file=sys.stderr)
 
-    rows.sort(key=lambda r: (r["scenario"], ARMS.index(r["arm"]), r["trial"]))
+    rows.sort(key=lambda r: (r["scenario"], REPORTED.index(r["arm"]), r["trial"]))
     version = sh(["claude", "--version"], REPO).strip()
     out = Path(args.out) if args.out else REPO / "bench" / "results" / (
         datetime.datetime.now().strftime("%Y-%m-%dT%H%M") + ".json")

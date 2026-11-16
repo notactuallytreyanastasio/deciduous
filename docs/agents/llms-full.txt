@@ -3479,7 +3479,7 @@ Tests that run `deciduous init` in a temporary directory need `DECIDUOUS_NO_SERV
 
 ### Templates
 
-`deciduous init` and `update` write files from templates in `src/init/`. `src/init/known_templates.rs` is generated: the sha256 of every template ever shipped, which is how `update` tells a file deciduous wrote from one a user edited. It is built from every template text in the repository's git history, so regenerate it after a template change is committed: `python3 scripts/gen_known_templates.py > src/init/known_templates.rs`. A template text missing from the list is one `update` will treat as the user's and keep.
+`deciduous init` and `update` write files from templates in `src/init/`. `src/init/known_templates.rs` is generated: the sha256 of every template ever shipped, which is how `update` tells a file deciduous wrote from one a user edited. It is built from every template text in the repository's git history, so regenerate it after a template change is committed: `python3 scripts/gen_known_templates.py --write`. A template text missing from the list is one `update` will treat as the user's and keep.
 
 ## The graph server
 

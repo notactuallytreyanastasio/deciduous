@@ -2001,16 +2001,6 @@ pub const CLAUDE_SETTINGS_JSON: &str = r#"{
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/version-check.sh\""
           }
         ]
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "command -v deciduous >/dev/null 2>&1 && deciduous why --hook 2>/dev/null || true",
-            "timeout": 5
-          }
-        ]
       }
     ],
     "SessionStart": [

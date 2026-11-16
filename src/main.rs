@@ -463,8 +463,7 @@ enum Command {
     Why {
         /// A file, a line of it (`src/db.rs:120`) or a range
         /// (`src/db.rs:120-180`, as the lines stand in HEAD)
-        #[arg(required_unless_present = "hook")]
-        target: Option<String>,
+        target: String,
 
         /// Goals to show, most recently touched first
         #[arg(long, default_value = "5")]
@@ -477,12 +476,6 @@ enum Command {
         /// Print the report as JSON
         #[arg(long)]
         json: bool,
-
-        /// Run as a Claude Code PreToolUse hook: read the hook's JSON from
-        /// stdin and, the first time a session edits a file that has
-        /// decisions behind it, say so in a few lines. Never fails.
-        #[arg(long, hide = true)]
-        hook: bool,
     },
 
     /// Decisions a model proposed from session transcripts, waiting for a
@@ -2056,12 +2049,6 @@ fn main() {
     } = args.command
     {
         std::process::exit(run_api_daemon(port, data_dir, token, bind));
-    }
-
-    // A hook runs wherever Claude Code does. Outside a project it has
-    // nothing to say and must not fail the edit it runs before.
-    if matches!(args.command, Command::Why { hook: true, .. }) && !Database::project_exists() {
-        return;
     }
 
     // Everything from here on reads or writes a project's graph. Without
@@ -5708,26 +5695,13 @@ fn main() {
             goals,
             all,
             json,
-            hook,
         } => {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let root = db
                 .project_root()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| cwd.clone());
-            if hook {
-                if let Some(text) = why_hook_brief(&db, &root, &cwd) {
-                    println!(
-                        "{}",
-                        serde_json::json!({"hookSpecificOutput": {
-                            "hookEventName": "PreToolUse",
-                            "additionalContext": text,
-                        }})
-                    );
-                }
-                return;
-            }
-            let (path, lines) = deciduous::why::parse_target(&target.unwrap_or_default());
+            let (path, lines) = deciduous::why::parse_target(&target);
             let path = deciduous::why::project_relative(&root, &cwd, &path);
             match deciduous::why::report(&db, &root, &path, lines) {
                 Ok(report) if json => println!(
@@ -7298,28 +7272,6 @@ fn run_proposals(db: &Database, action: Option<ProposalsAction>) -> Result<(), S
         }
     }
     Ok(())
-}
-
-/// What the PreToolUse hook adds to the session, if anything: the hook's
-/// JSON is on stdin, and `tool_input.file_path` is the file about to change.
-fn why_hook_brief(db: &Database, root: &std::path::Path, cwd: &std::path::Path) -> Option<String> {
-    use std::io::Read;
-    let mut input = String::new();
-    std::io::stdin().read_to_string(&mut input).ok()?;
-    let input: serde_json::Value = serde_json::from_str(&input).ok()?;
-    let file = input.get("tool_input")?.get("file_path")?.as_str()?;
-    let path = deciduous::why::project_relative(root, cwd, file);
-    // A path that is still absolute is outside the project.
-    if path.starts_with('/') {
-        return None;
-    }
-    let report = deciduous::why::report(db, root, &path, None).ok()?;
-    let text = deciduous::why::brief(&report)?;
-    let session = input
-        .get("session_id")
-        .and_then(|s| s.as_str())
-        .unwrap_or("");
-    deciduous::why::first_ask(session, &path).then_some(text)
 }
 
 fn run_audit(

@@ -464,7 +464,6 @@ pub fn update_tooling() -> Result<(), String> {
             "  - No hooks that make the agent log: the ones earlier versions installed are removed"
         );
         println!("  - SessionEnd hook: a session's transcript is imported when it ends ([transcript] auto_import = false in .deciduous/config.toml turns it off)");
-        println!("  - Pre-edit hook: the first time a session edits a file with decisions behind it, `deciduous why` says which ([why] hook = false turns it off)");
         println!("  - Board-mentions hook (silent unless DECIDUOUS_AGENT_LABEL is set)");
     }
     if has_opencode {
@@ -816,12 +815,7 @@ pub fn strip_retired_hook_settings(path: &Path) -> Result<(), String> {
 /// (`transcript_path` in the hook's input; checked against Claude Code
 /// 2.1.325). It is not one of the logging hooks 1.0.3 retired: those blocked
 /// an edit until the agent had logged, and this one asks nothing of the agent.
-///
-/// The PreToolUse one runs `deciduous why --hook` before an edit and adds
-/// the decisions behind the file to the session, once per file (the
-/// `additionalContext` reply; checked against Claude Code 2.1.325). It
-/// cannot block: the command ends in `|| true`, and exit 2 is what blocks.
-const MANAGED_HOOKS: [(&str, &str, &str, u32, Option<&str>); 4] = [
+const MANAGED_HOOKS: [(&str, &str, &str, u32, Option<&str>); 3] = [
     (
         "SessionStart",
         "board-mentions.sh",
@@ -843,26 +837,7 @@ const MANAGED_HOOKS: [(&str, &str, &str, u32, Option<&str>); 4] = [
         60,
         None,
     ),
-    (
-        "PreToolUse",
-        WHY_HOOK_NEEDLE,
-        WHY_HOOK_COMMAND,
-        5,
-        Some(WHY_HOOK_MATCHER),
-    ),
 ];
-
-const WHY_HOOK_NEEDLE: &str = "why --hook";
-pub const WHY_HOOK_MATCHER: &str = "Edit|Write|MultiEdit";
-/// Silent without deciduous on the PATH, and with one too old to know
-/// `why`: stderr is dropped and the exit is always 0.
-pub const WHY_HOOK_COMMAND: &str =
-    "command -v deciduous >/dev/null 2>&1 && deciduous why --hook 2>/dev/null || true";
-
-/// False when the project's config says `[why] hook = false`.
-pub fn why_hook_wanted(project: &Path) -> bool {
-    config_flag(project, "why", "hook")
-}
 
 const TRANSCRIPT_HOOK_NEEDLE: &str = "transcript import --hook";
 /// Silent when deciduous is not on the hook's PATH: a session must end the
@@ -920,12 +895,9 @@ pub fn ensure_board_hook_settings(path: &Path) -> Result<(), String> {
     };
     let project = path.parent().and_then(|p| p.parent());
     let import_wanted = project.is_none_or(transcript_hook_wanted);
-    let why_wanted = project.is_none_or(why_hook_wanted);
     let mut added = Vec::new();
     for (event, needle, command, timeout, matcher) in MANAGED_HOOKS {
-        if (needle == TRANSCRIPT_HOOK_NEEDLE && !import_wanted)
-            || (needle == WHY_HOOK_NEEDLE && !why_wanted)
-        {
+        if needle == TRANSCRIPT_HOOK_NEEDLE && !import_wanted {
             continue;
         }
         let list = events.entry(event).or_insert_with(|| serde_json::json!([]));
@@ -2073,13 +2045,13 @@ mod tests {
     }
 
     #[test]
-    fn the_import_and_why_hooks_are_not_added_or_put_back_when_the_project_turned_them_off() {
+    fn the_import_hook_is_not_added_or_put_back_when_the_project_turned_it_off() {
         let tmp = TempDir::new().unwrap();
         fs::create_dir_all(tmp.path().join(".claude")).unwrap();
         fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
         fs::write(
             tmp.path().join(".deciduous/config.toml"),
-            "[transcript]\nauto_import = false\n\n[why]\nhook = false\n",
+            "[transcript]\nauto_import = false\n",
         )
         .unwrap();
         let p = tmp.path().join(".claude/settings.json");
@@ -2087,7 +2059,6 @@ mod tests {
         ensure_board_hook_settings(&p).unwrap();
         let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(&p).unwrap()).unwrap();
         assert!(v["hooks"]["SessionEnd"].is_null(), "{v:#}");
-        assert!(v["hooks"]["PreToolUse"].is_null(), "{v:#}");
         assert!(!v["hooks"]["SessionStart"].is_null(), "{v:#}");
     }
 
@@ -2135,10 +2106,9 @@ mod tests {
             .unwrap()
             .contains("deciduous transcript import --hook"));
 
-        // The why hook runs before an edit and nothing else.
-        let pre = &v["hooks"]["PreToolUse"][0];
-        assert_eq!(pre["matcher"], WHY_HOOK_MATCHER);
-        assert_eq!(pre["hooks"][0]["command"], WHY_HOOK_COMMAND);
+        // No hook runs before an edit: the one that ran `deciduous why`
+        // there was measured in bench/ and changed nothing.
+        assert!(v["hooks"]["PreToolUse"].is_null(), "{v:#}");
 
         // "{}" (what earlier updates left once they stripped the logging
         // hooks) gets every managed entry.
@@ -2157,8 +2127,6 @@ mod tests {
     fn the_settings_template_runs_every_managed_hook_as_update_would_add_it() {
         let v: serde_json::Value = serde_json::from_str(CLAUDE_SETTINGS_JSON).unwrap();
         for (event, _, command, timeout, matcher) in MANAGED_HOOKS {
-            // PreToolUse also holds the version check, which update does
-            // not manage here.
             let entry = v["hooks"][event]
                 .as_array()
                 .unwrap()
