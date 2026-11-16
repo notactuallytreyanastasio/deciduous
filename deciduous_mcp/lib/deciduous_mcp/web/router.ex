@@ -70,6 +70,44 @@ defmodule DeciduousMcp.Web.Router do
     init_opts: [server: DeciduousMcp.MCP.Server]
   )
 
+  # Named tokens. Only the server's own token reaches these: a named token
+  # that could issue another would make revoking it pointless.
+  post "/tokens" do
+    conn = conn |> Auth.call([]) |> master_only()
+
+    if conn.halted do
+      conn
+    else
+      with {:ok, body, conn} <- read_whole_body(conn),
+           {:ok, %{"name" => name}} <- Jason.decode(body),
+           {:ok, token} <- DeciduousMcp.Tokens.create(name) do
+        # The one time the token is shown. The server keeps its hash.
+        json(conn, 201, %{name: name, token: token})
+      else
+        {:error, message} when is_binary(message) -> json(conn, 422, %{error: message})
+        _ -> json(conn, 400, %{error: "the body must be JSON with a \"name\""})
+      end
+    end
+  end
+
+  get "/tokens" do
+    conn = conn |> Auth.call([]) |> master_only()
+    if conn.halted, do: conn, else: json(conn, 200, %{tokens: DeciduousMcp.Tokens.list()})
+  end
+
+  delete "/tokens/:name" do
+    conn = conn |> Auth.call([]) |> master_only()
+
+    if conn.halted do
+      conn
+    else
+      case DeciduousMcp.Tokens.revoke(name) do
+        :ok -> json(conn, 200, %{name: name, revoked: true})
+        {:error, message} -> json(conn, 404, %{error: message})
+      end
+    end
+  end
+
   post "/import" do
     conn = Auth.call(conn, [])
 
@@ -469,10 +507,12 @@ defmodule DeciduousMcp.Web.Router do
     end
   end
 
+  defp master_only(conn), do: if(conn.halted, do: conn, else: Auth.require_master(conn))
+
   defp handle_ops(conn, body) do
     with {:ok, payload} <- Jason.decode(body),
          {:ok, payload} <- held_to_pin(conn, payload),
-         {:ok, report} <- Ops.run(payload) do
+         {:ok, report} <- Ops.run(payload, conn.assigns[:actor]) do
       json(conn, 200, report)
     else
       {:error, %Jason.DecodeError{} = err} ->

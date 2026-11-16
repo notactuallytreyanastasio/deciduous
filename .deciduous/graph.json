@@ -1139,6 +1139,15 @@
       "to_change_id": "fdbb2313-92a4-481f-9c0e-7212d76a3ef9",
       "weight": 1.0
     },
+    "17775b409d0779d728a8": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.949149-05:00",
+      "edge_id": "17775b409d0779d728a8",
+      "edge_type": "leads_to",
+      "from_change_id": "0dd409b6-4693-41ed-840e-0907cd8d7455",
+      "to_change_id": "b6489176-aa93-4154-9480-47d9e907ae1e",
+      "weight": 1.0
+    },
     "17990a2b505c372f4cc3": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:40:33.903914-05:00",
@@ -4521,6 +4530,15 @@
       "to_change_id": "e32b0b0b-fbcc-4964-9e04-994cd5f57f74",
       "weight": 1.0
     },
+    "5652b05206fa1d3d02e8": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.775606-05:00",
+      "edge_id": "5652b05206fa1d3d02e8",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "to_change_id": "89936090-e56f-46ff-982c-9bb6efa84d08",
+      "weight": 1.0
+    },
     "5656116d68e198d31415": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-05T21:47:05.732-05:00",
@@ -5399,6 +5417,15 @@
       "from_change_id": "f074b0dc-26c6-4be8-b863-6507204e1220",
       "rationale": "Reintroduce mmap selectively",
       "to_change_id": "a039e333-b4de-41d2-bed8-c8b144056171",
+      "weight": 1.0
+    },
+    "66448ac8d35fbd119b86": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.717075-05:00",
+      "edge_id": "66448ac8d35fbd119b86",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "to_change_id": "d2aa994e-f27d-4883-aa85-c61823ac9924",
       "weight": 1.0
     },
     "66459c71d4f6917258e5": {
@@ -6596,6 +6623,16 @@
       "from_change_id": "6f5e23ac-c4e5-4797-9335-15b4c0c0b66d",
       "rationale": "Chosen approach",
       "to_change_id": "690348fb-c6ee-4c63-84a7-1462aced3993",
+      "weight": 1.0
+    },
+    "7c2d7cb56013ee932954": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.833302-05:00",
+      "edge_id": "7c2d7cb56013ee932954",
+      "edge_type": "rejected",
+      "from_change_id": "d2aa994e-f27d-4883-aa85-c61823ac9924",
+      "rationale": "identity has to exist before a history can name anyone, and writes reach the database by five paths",
+      "to_change_id": "0dd409b6-4693-41ed-840e-0907cd8d7455",
       "weight": 1.0
     },
     "7c4e46d8aa6179fb64f5": {
@@ -12803,6 +12840,16 @@
       "to_change_id": "7b72ec57-3192-48ab-9582-4acb703f3bf1",
       "weight": 1.0
     },
+    "f2243cd9b08d3b90ff67": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.891335-05:00",
+      "edge_id": "f2243cd9b08d3b90ff67",
+      "edge_type": "chosen",
+      "from_change_id": "89936090-e56f-46ff-982c-9bb6efa84d08",
+      "rationale": "Activity.record is already called by every MCP write and every CLI batch",
+      "to_change_id": "0dd409b6-4693-41ed-840e-0907cd8d7455",
+      "weight": 1.0
+    },
     "f25ecd139b42c9c5dcec": {
       "author": "Bobby Grayson",
       "created_at": "2026-09-02T18:11:49.966875-04:00",
@@ -13481,6 +13528,15 @@
       "from_change_id": "18dd00f5-803a-4977-bc14-40d986d16aa6",
       "rationale": "Ancestry breadcrumb implemented",
       "to_change_id": "2619b9ad-4f3d-459b-a03b-29527440ba30",
+      "weight": 1.0
+    },
+    "fc9e0294d6e51cce56b3": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:32.007766-05:00",
+      "edge_id": "fc9e0294d6e51cce56b3",
+      "edge_type": "leads_to",
+      "from_change_id": "b6489176-aa93-4154-9480-47d9e907ae1e",
+      "to_change_id": "7a12da4a-b820-4dea-a92b-7ce290f029f1",
       "weight": 1.0
     },
     "fcb35b78c6e423e583ad": {
@@ -14862,6 +14918,19 @@
       "status": "pending",
       "title": "Add deciduous update command to sync tooling files to latest",
       "updated_at": "2025-12-10T16:26:41.496415-05:00"
+    },
+    "0dd409b6-4693-41ed-840e-0907cd8d7455": {
+      "author": "Bobby Grayson",
+      "change_id": "0dd409b6-4693-41ed-840e-0907cd8d7455",
+      "created_at": "2026-11-14T20:24:31.536302-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 80
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Named tokens and an actor on write activity first; the audit history waits",
+      "updated_at": "2026-11-14T20:24:32.178758-05:00"
     },
     "0de8ad57-90d9-4c83-bd59-d7b36cd8d1f5": {
       "author": "Bobby Grayson",
@@ -23575,6 +23644,19 @@
       "title": "Implemented silent binary skip on NUL detection",
       "updated_at": "2026-01-12T22:40:32.534139-05:00"
     },
+    "7a12da4a-b820-4dea-a92b-7ce290f029f1": {
+      "author": "Bobby Grayson",
+      "change_id": "7a12da4a-b820-4dea-a92b-7ce290f029f1",
+      "created_at": "2026-11-14T20:24:31.658382-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "Against a server run from source: ada's token wrote and was named in write_activity, could not issue tokens (403), and got 401 after revoke; 459 server and 738 Rust tests pass; hex.audit clean",
+      "updated_at": "2026-11-14T20:24:31.658382-05:00"
+    },
     "7a3c4e5d-5e92-439e-8478-b47e00472c12": {
       "author": "Bobby Grayson",
       "change_id": "7a3c4e5d-5e92-439e-8478-b47e00472c12",
@@ -24954,6 +25036,19 @@
       "status": "pending",
       "title": "Ruby: class-based with plain data, hash-based test cases, zero dependencies",
       "updated_at": "2026-03-18T11:51:36.465827-04:00"
+    },
+    "89936090-e56f-46ff-982c-9bb6efa84d08": {
+      "author": "Bobby Grayson",
+      "change_id": "89936090-e56f-46ff-982c-9bb6efa84d08",
+      "created_at": "2026-11-14T20:24:31.475403-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 80
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Named tokens, with the name recorded on write_activity where every write path already reports",
+      "updated_at": "2026-11-14T20:24:32.121782-05:00"
     },
     "89bd62fb-2da1-4393-816d-f873dbf181d0": {
       "author": "Bobby Grayson",
@@ -28608,6 +28703,19 @@
       "title": "Add Codex CLI support for deciduous initialization",
       "updated_at": "2026-01-05T23:10:22.288547-05:00"
     },
+    "b6489176-aa93-4154-9480-47d9e907ae1e": {
+      "author": "Bobby Grayson",
+      "change_id": "b6489176-aa93-4154-9480-47d9e907ae1e",
+      "created_at": "2026-11-14T20:24:31.597178-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Server: api_tokens, Auth accepts named tokens, /tokens routes, actor on write_activity; CLI: remote token create/list/revoke",
+      "updated_at": "2026-11-14T20:24:32.236045-05:00"
+    },
     "b64d44a1-6fe6-4bd5-8e48-509946133953": {
       "author": "Bobby Grayson",
       "change_id": "b64d44a1-6fe6-4bd5-8e48-509946133953",
@@ -30775,6 +30883,19 @@
       "title": "Adding animated quickstart guide with 5 terminal demos",
       "updated_at": "2025-12-15T10:23:00.863004-05:00"
     },
+    "d2aa994e-f27d-4883-aa85-c61823ac9924": {
+      "author": "Bobby Grayson",
+      "change_id": "d2aa994e-f27d-4883-aa85-c61823ac9924",
+      "created_at": "2026-11-14T20:24:31.413480-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 50
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Fill the existing audit_log and users tables: a full history of who changed what",
+      "updated_at": "2026-11-14T20:24:32.064612-05:00"
+    },
     "d2e20fe3-bea1-4f07-bc14-959e43e6ac43": {
       "author": "Bobby Grayson",
       "change_id": "d2e20fe3-bea1-4f07-bc14-959e43e6ac43",
@@ -32609,9 +32730,9 @@
         "prompt": "1, 4, 2, 5, 7 in that order"
       },
       "node_type": "goal",
-      "status": "active",
+      "status": "completed",
       "title": "Make the graph get read: why, a benchmark, derived decisions, viewer, team-server basics",
-      "updated_at": "2026-11-14T19:31:46.865209-05:00"
+      "updated_at": "2026-11-14T20:24:39.252344-05:00"
     },
     "ea3876a6-5d51-4201-8f91-e2441854c09e": {
       "author": "Bobby Grayson",

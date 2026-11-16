@@ -247,8 +247,11 @@ defmodule DeciduousMcp.MCP.Scope do
   defp record_activity(workspace_id, frame, args) do
     client = client_info(frame)
 
+    actor = frame.assigns |> Map.new() |> Map.get(:actor)
+
     entry =
-      {workspace_id, Map.get(args, "branch"), session_id(frame), client.name, client.version}
+      {workspace_id, Map.get(args, "branch"), session_id(frame), client.name, client.version,
+       actor}
 
     Process.put(@pending, [entry | Process.get(@pending, [])])
     {:ok, workspace_id}
@@ -265,8 +268,8 @@ defmodule DeciduousMcp.MCP.Scope do
     (Process.delete(@pending) || [])
     |> Enum.reverse()
     |> Enum.uniq()
-    |> Enum.each(fn {ws, branch, session, name, version} ->
-      :ok = Activity.record(ws, branch, session, name, version)
+    |> Enum.each(fn {ws, branch, session, name, version, actor} ->
+      :ok = Activity.record(ws, branch, session, name, version, actor)
     end)
   end
 

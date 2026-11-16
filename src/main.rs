@@ -799,6 +799,14 @@ enum RemoteAction {
         dry_run: bool,
     },
 
+    /// Named tokens: one per person or agent, so the server can say who
+    /// wrote and one holder's access can be taken away. Needs the server's
+    /// own token (DECIDUOUS_MCP_TOKEN on the server)
+    Token {
+        #[command(subcommand)]
+        action: TokenAction,
+    },
+
     /// Stream this project's writes live, one line per event, as they happen
     ///
     /// Connects to the server's event socket and prints each node write as
@@ -1107,6 +1115,25 @@ enum TranscriptAction {
         #[arg(long)]
         json: bool,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum TokenAction {
+    /// Issue a token for a name. It is printed once and never again
+    Create {
+        /// Who it is for: letters, digits, '.', '_', '@', '+', '-'
+        name: String,
+    },
+
+    /// Every token issued: when, last used, revoked or not
+    List {
+        /// Print as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Stop a token working. Its name is not issued again
+    Revoke { name: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -3132,6 +3159,62 @@ fn main() {
                             eprintln!("\nNothing was written; the project is unchanged.");
                             exit(1);
                         }
+                    }
+                }
+
+                RemoteAction::Token { action } => {
+                    let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
+                    let done = match action {
+                        TokenAction::Create { name } => remote.token_create(&name).map(|token| {
+                            println!("{token}");
+                            eprintln!(
+                                "\nThat is {name}'s token, shown this once. They store it with:\n    deciduous remote login {}",
+                                remote.url
+                            );
+                        }),
+                        TokenAction::List { json } => remote.token_list().map(|tokens| {
+                            if json {
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&tokens).unwrap_or_default()
+                                );
+                            } else if tokens.is_empty() {
+                                println!("No named tokens. Everyone is using the server's own.");
+                            } else {
+                                let day = |v: &serde_json::Value| {
+                                    v.as_str()
+                                        .map(|s| s.chars().take(10).collect::<String>())
+                                        .unwrap_or_else(|| "never".to_string())
+                                };
+                                println!("{:<32} {:<12} {:<12} STATE", "NAME", "CREATED", "LAST USED");
+                                for t in &tokens {
+                                    println!(
+                                        "{:<32} {:<12} {:<12} {}",
+                                        t["name"].as_str().unwrap_or("?"),
+                                        day(&t["created_at"]),
+                                        day(&t["last_used_at"]),
+                                        if t["revoked_at"].is_null() {
+                                            "live".to_string()
+                                        } else {
+                                            format!("revoked {}", day(&t["revoked_at"]))
+                                        }
+                                    );
+                                }
+                            }
+                        }),
+                        TokenAction::Revoke { name } => remote
+                            .token_revoke(&name)
+                            .map(|()| println!("{name}'s token no longer works.")),
+                    };
+                    if let Err(e) = done {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        exit(1);
                     }
                 }
 

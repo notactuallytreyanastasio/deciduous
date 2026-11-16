@@ -32,9 +32,14 @@ A graph written by following the shipped instructions could not say what was ope
 - **The viewer reloads when the graph changes.** Under `deciduous serve` it asks `/api/graph/version` every three seconds and loads the graph again only when the answer differs; selection, focus and what is expanded survive. A static export shows no "live" mark and asks nothing.
 - **Evidence and `why` in the viewer.** A transcript-derived node shows whether it is proven or inferred, the quote a model-proposed decision rests on, and the hashes of the files it touched. Each file a node names has a `why` button that asks the new `/api/why?path=` for the decisions behind it; every line of the answer selects its node.
 
+- **A token per person on the graph server.** The server had one bearer token, shared by everyone, so nothing it recorded could say who wrote and taking one person's access away meant changing it for all. `deciduous remote token create <name>` issues a named token (printed once; the server keeps its SHA-256), `remote token list` shows each with when it was last used, and `remote token revoke <name>` stops one working. Only the server's own token, the one in `DECIDUOUS_MCP_TOKEN`, can do those three; a named token is refused with 403. A revoked name is never issued again, because the name is what the record carries.
+- **`check_activity` says who.** Every MCP write and every CLI batch is recorded with the name of the token it came in on (`actor`; null for the server's own token). Two people pushing from clones of one repository used to be one row, keyed by the repository's root commit; they are two.
+- Migration `20261114120000_named_tokens` adds `api_tokens` and `write_activity.actor`. `STRUCTURE.sql` carries both.
+
 ### Fixed
 - **The local MCP server's `add_node` takes `parent_id`.** Every CLAUDE.md since 1.0.10 tells the agent to "create and link in one call: `add_node` with `parent_id`", which is the graph server's tool. On a project with no server the local tool had no such argument and refused the call as an unknown argument. It now takes `parent_id` (local id or change_id prefix), `edge_type`, `rationale` and `status`, and checks all four before writing: an unknown parent, edge type or status creates nothing.
 - **Selecting a node in the viewer's tree highlights that node.** Each row was handed the root's selection flag, so choosing the root lit every row and choosing any other lit none.
+- **`mix hex.audit` is clean again.** bandit 1.13.1 to 1.14.1 (EEF-CVE-2026-110499) and ecto 3.14.2 to 3.14.3 (EEF-CVE-2026-118391); either would have failed the server build at the next release.
 - **A command run outside a project fails.** `deciduous nodes` in a directory with no `.deciduous` above it printed "No nodes found", exited 0 and left a new database behind; `add` succeeded against it. Both now exit 1 naming `deciduous init`. #208 found writes from a subdirectory of the wrong repository this way.
 - **DOT labels break the line.** A node with a confidence was drawn as `Ship it\n(90%)`: the label wrote `\n` and `escape_dot` escaped it again.
 - **`deciduous completion zsh | head -1` no longer panics** on the closed pipe.
@@ -45,6 +50,10 @@ A graph written by following the shipped instructions could not say what was ope
 - **The crate carries what builds it.** `deciduous_demo` (a 13 MB recording), `decid_demo.cast`, `Formula/`, `deploy/`, `bindings/`, `tester/` and the harness directories are excluded; the package is 920 KB. `homepage` is deciduous.dev, not the GitHub Pages site that still teaches 0.x.
 
 ### Not done
+- A named token is an identity, not a permission: it can read and write every workspace the server's own token can. There are no per-workspace or read-only tokens.
+- `actor` is on `write_activity`, which `check_activity` reads for the last five minutes and which keeps one row per branch and session. It is not a history: a node does not record who created it, and the `audit_log` and `users` tables the server has had since its first migration are still written by nothing.
+- `remote token` is checked by a run against a server started from source, not by a test in the Rust suite. `DEPLOY.md` does not describe named tokens until they are released.
+- Backup is still `pg_dump`, as `DEPLOY.md` describes. There is no `deciduous remote backup`.
 - Nodes already in a graph keep the status they have. `deciduous audit --close-records --close-committed` is the migration, and it is not run for you.
 - Whether an open goal with nothing open beneath it is done or dropped is a judgement; `audit` names the goals and stops.
 - The viewer has no automated tests (`npm test` finds no test files). The changes here were checked by driving the built page in headless Chrome against `deciduous serve`.
