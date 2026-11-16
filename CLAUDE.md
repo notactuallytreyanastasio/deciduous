@@ -609,7 +609,7 @@ cargo test
 cargo build --release
 ```
 
-The viewer does not yet show `metadata.evidence` or `file_hashes` on transcript-derived nodes; `deciduous show` does.
+The viewer has no tests of its own (`npm test` finds no test files): check a change by running `deciduous serve` and looking.
 
 ## CLI Commands
 

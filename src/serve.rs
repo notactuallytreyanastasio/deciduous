@@ -125,6 +125,59 @@ fn handle_request(request: Request) -> std::io::Result<()> {
         }
 
         // API: Get sync status (event-based sync)
+        // API: something that changes whenever the graph does, cheap
+        // enough for the viewer to ask every few seconds
+        (&Method::Get, "/api/graph/version") => {
+            let json = serde_json::to_string(&ApiResponse::success(graph_version()))?;
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            request.respond(response)
+        }
+
+        // API: the decisions behind a file (`deciduous why <path>`)
+        (&Method::Get, "/api/why") => {
+            // Not parse_query_params: it decodes %20 and nothing else, and
+            // a path arrives with its slashes as %2F.
+            let path = url
+                .split_once('?')
+                .map(|(_, q)| q)
+                .unwrap_or("")
+                .split('&')
+                .find_map(|pair| pair.strip_prefix("path="))
+                .map(percent_decode);
+            let report = match path.as_ref().filter(|p| !p.is_empty()) {
+                None => Err("Missing query parameter 'path'".to_string()),
+                Some(path) => Database::open().map_err(|e| e.to_string()).and_then(|db| {
+                    let cwd = std::env::current_dir().unwrap_or_default();
+                    let root = db
+                        .project_root()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| cwd.clone());
+                    let (path, lines) = crate::why::parse_target(path);
+                    let path = crate::why::project_relative(&root, &cwd, &path);
+                    crate::why::report(&db, &root, &path, lines)
+                }),
+            };
+            let (status, json) = match report {
+                Ok(report) => (200, serde_json::to_string(&ApiResponse::success(report))?),
+                Err(e) => (
+                    400,
+                    serde_json::to_string(&ApiResponse::<()> {
+                        ok: false,
+                        data: None,
+                        error: Some(e),
+                    })?,
+                ),
+            };
+            let response = Response::from_string(json)
+                .with_status_code(status)
+                .with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
+            request.respond(response)
+        }
+
         (&Method::Get, "/api/sync-status") => {
             let status = get_sync_status();
             let json = serde_json::to_string(&ApiResponse::success(status))?;
@@ -148,6 +201,59 @@ fn handle_request(request: Request) -> std::io::Result<()> {
             request.respond(response)
         }
     }
+}
+
+/// `%2F` to `/`, and so on. Bytes that are not valid escapes are kept.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = (bytes[i] == b'%')
+            .then(|| s.get(i + 1..i + 3))
+            .flatten()
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match hex {
+            Some(b) => {
+                out.push(b);
+                i += 3;
+            }
+            None => {
+                out.push(bytes[i]);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// A hash of every node's id, status, title and `updated_at`, and of every
+/// edge: different after any write the viewer could show.
+///
+/// The first version was the counts and the latest `updated_at`. Nodes a
+/// transcript import writes carry UTC timestamps (`...Z`) and the CLI
+/// writes local ones (`...-05:00`), so the string maximum was an imported
+/// node's for hours and a status change moved nothing.
+fn graph_version() -> String {
+    use std::hash::{Hash, Hasher};
+    let Ok(db) = Database::open() else {
+        return String::new();
+    };
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for n in db.get_all_nodes().unwrap_or_default() {
+        (n.id, &n.status, &n.title, &n.updated_at, &n.metadata_json).hash(&mut h);
+    }
+    for e in db.get_all_edges().unwrap_or_default() {
+        (
+            e.id,
+            e.from_node_id,
+            e.to_node_id,
+            &e.edge_type,
+            &e.rationale,
+        )
+            .hash(&mut h);
+    }
+    format!("{:016x}", h.finish())
 }
 
 fn get_decision_graph() -> DecisionGraph {
@@ -1145,6 +1251,16 @@ fn handle_document_file(request: Request, path: &str) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_path_in_a_query_comes_back_with_its_slashes() {
+        assert_eq!(
+            super::percent_decode("src%2Fdb.rs%3A12-40"),
+            "src/db.rs:12-40"
+        );
+        assert_eq!(super::percent_decode("a%20b%zz%2"), "a b%zz%2");
+        assert_eq!(super::percent_decode("caf%C3%A9.md"), "café.md");
+    }
+
     use super::*;
 
     // === ApiResponse Tests ===

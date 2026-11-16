@@ -242,6 +242,27 @@ pub fn commits_touching(
         .collect())
 }
 
+/// The report for a project-relative path, read from the database and
+/// from git. History that cannot be read (no repository, a line range of a
+/// file git has never seen) is noted in the report, and the nodes that
+/// name the file are still found.
+pub fn report(
+    db: &crate::db::Database,
+    root: &Path,
+    path: &str,
+    lines: Option<(u32, u32)>,
+) -> Result<WhyReport, String> {
+    let nodes = db.get_all_nodes().map_err(|e| e.to_string())?;
+    let edges = db.get_all_edges().map_err(|e| e.to_string())?;
+    let (commits, note) = match commits_touching(root, path, lines) {
+        Ok(commits) => (commits, None),
+        Err(e) => (Vec::new(), Some(e)),
+    };
+    let mut report = why(&nodes, &edges, path, lines, &commits);
+    report.git_note = note;
+    Ok(report)
+}
+
 fn same_file(named: &str, rel: &str) -> bool {
     let named = named.trim_start_matches("./").replace('\\', "/");
     named == rel || (named.starts_with('/') && named.ends_with(&format!("/{rel}")))

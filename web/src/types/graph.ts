@@ -16,7 +16,7 @@
 export const NODE_TYPES = ['goal', 'decision', 'option', 'action', 'outcome', 'observation', 'revisit'] as const;
 export type NodeType = typeof NODE_TYPES[number];
 
-export const NODE_STATUSES = ['pending', 'active', 'completed', 'rejected'] as const;
+export const NODE_STATUSES = ['pending', 'active', 'completed', 'rejected', 'superseded', 'abandoned'] as const;
 export type NodeStatus = typeof NODE_STATUSES[number];
 
 // =============================================================================

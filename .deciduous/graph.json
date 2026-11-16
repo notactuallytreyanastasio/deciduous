@@ -10646,6 +10646,16 @@
       "to_change_id": "eed900d7-f520-4ce8-9650-4b9325797cc4",
       "weight": 1.0
     },
+    "c9b5fef1650f0f391b49": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:16:50.111157-05:00",
+      "edge_id": "c9b5fef1650f0f391b49",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "item 5",
+      "to_change_id": "54b336eb-c546-4000-b4f7-18769d65a866",
+      "weight": 1.0
+    },
     "ca1abd6cca7d4d2cdccd": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T01:20:02.281417-05:00",
@@ -13143,6 +13153,16 @@
       "to_change_id": "67c7536a-5431-4291-83d1-253a6e91a477",
       "weight": 1.0
     },
+    "f886d4b19bb6233d89bd": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:16:50.230169-05:00",
+      "edge_id": "f886d4b19bb6233d89bd",
+      "edge_type": "leads_to",
+      "from_change_id": "54b336eb-c546-4000-b4f7-18769d65a866",
+      "rationale": "result",
+      "to_change_id": "10eb71c9-24c8-452b-9731-1ce9327216ae",
+      "weight": 1.0
+    },
     "f8d34d495f510c4a4bb5": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-09T17:57:28.378747-05:00",
@@ -15087,6 +15107,19 @@
       "status": "pending",
       "title": "Add edges, graph, show, commands Elixir commands",
       "updated_at": "2026-03-04T01:37:48.325631-05:00"
+    },
+    "10eb71c9-24c8-452b-9731-1ce9327216ae": {
+      "author": "Bobby Grayson",
+      "change_id": "10eb71c9-24c8-452b-9731-1ce9327216ae",
+      "created_at": "2026-11-14T20:16:50.170821-05:00",
+      "metadata": {
+        "branch": "93-the-viewer-shows-open-work",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "Driven in headless Chrome against deciduous serve: status column, one selected row, why panel, live reload of a CLI write, open-only filter all hold; 738 tests pass",
+      "updated_at": "2026-11-14T20:16:50.170821-05:00"
     },
     "11055d65-bd75-4187-a444-cc1704dfa640": {
       "author": "Bobby Grayson",
@@ -20880,6 +20913,23 @@
       "status": "pending",
       "title": "Search all files (grep default)",
       "updated_at": "2026-01-12T22:40:21.992421-05:00"
+    },
+    "54b336eb-c546-4000-b4f7-18769d65a866": {
+      "author": "Bobby Grayson",
+      "change_id": "54b336eb-c546-4000-b4f7-18769d65a866",
+      "created_at": "2026-11-14T20:16:50.050539-05:00",
+      "metadata": {
+        "branch": "93-the-viewer-shows-open-work",
+        "confidence": 85,
+        "files": [
+          "web/src/App.tsx",
+          "src/serve.rs"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Viewer: status chips and an open-only filter, live reload, evidence, a why panel per file",
+      "updated_at": "2026-11-14T20:16:50.287258-05:00"
     },
     "5525e4d3-9b25-4e07-8946-4aec48417038": {
       "author": "Bobby Grayson",

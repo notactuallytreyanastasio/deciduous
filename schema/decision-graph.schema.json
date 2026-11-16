@@ -14,7 +14,7 @@
 
     "NodeStatus": {
       "type": "string",
-      "enum": ["pending", "active", "completed", "rejected"],
+      "enum": ["pending", "active", "completed", "rejected", "superseded", "abandoned"],
       "description": "Valid node statuses"
     },
 
