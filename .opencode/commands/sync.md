@@ -1,5 +1,5 @@
 ---
-description: Sync decision graph with teammates - pull events, rebuild, push
+description: Sync decision graph with teammates - reconcile .deciduous/graph.json with the local database
 arguments: []
 ---
 

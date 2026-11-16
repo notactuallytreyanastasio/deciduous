@@ -8,7 +8,7 @@ argument-hint: <goal title>
 
 **USE THIS BEFORE STARTING ANY IMPLEMENTATION.**
 
-This skill creates the required deciduous nodes BEFORE you write any code. The Edit/Write hooks will BLOCK you if you don't have a recent node.
+This skill creates the deciduous nodes BEFORE you write any code, so the work has a goal to hang from. Nothing blocks you if you skip it; the graph is just missing the why.
 
 ## Step 1: Create the Goal Node
 
@@ -50,8 +50,8 @@ When the work is done:
 deciduous add outcome "What was accomplished" -c 95 --commit HEAD
 deciduous link <action_id> <outcome_id> -r "Implementation complete"
 
-# Anything the graph server has not got?
-deciduous remote status
+# Sync the graph
+deciduous sync
 ```
 
 Before you report the work finished, check the board once more (`deciduous board read --unanswered <your-label>`) and answer what is there with `--reply-to <id>`.
@@ -84,7 +84,7 @@ Outcome node with --commit HEAD (links to action)
     |
 Attach supporting documents (optional)
     |
-deciduous remote status
+deciduous sync
 ```
 
 ## What NOT to Log
@@ -123,8 +123,8 @@ deciduous doc attach <goal> diagram.png -d "Description"
 deciduous board read --unanswered <label>
 deciduous board post --as <label> -s "subject" -m "@other body" [--reply-to <id>]
 
-# Before finishing: anything the server has not got?
-deciduous remote status
+# Always sync
+deciduous sync
 ```
 
 **Now create the goal node for: $ARGUMENTS**

@@ -21,6 +21,17 @@
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "command -v deciduous >/dev/null 2>&1 && deciduous transcript import --hook || true",
+            "timeout": 60,
+            "type": "command"
+          }
+        ]
+      }
     ]
   }
 }
