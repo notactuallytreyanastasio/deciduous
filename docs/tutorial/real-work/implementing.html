@@ -37,7 +37,7 @@
   &quot;created&quot;: true, &quot;status&quot;: &quot;active&quot;, &quot;message&quot;: &quot;Node created successfully&quot; }
 </code></pre>
 </div><p>CLI (the branch is detected from git; <code>--prompt-stdin</code> takes a multi-line message from a heredoc):</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous add goal &quot;Bound retries for failed requests&quot; -c 90 -p &quot;Stop retrying forever when the upstream API is down.&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous add goal &quot;Bound retries for failed requests&quot; -c 90 -p &quot;Stop retrying forever when the upstream API is down.&quot;</span>
 Warning: Prompt is only 52 chars. This looks like a summary, not a full prompt.
          Capture the verbatim user message for better context recovery.
 Created node 1 (type: goal, title: Bound retries for failed requests) [confidence: 90%] [prompt: 52 chars] [branch: main]
@@ -68,20 +68,21 @@ decision: {title: &quot;Shared enum over string literals&quot;, rationale: &quot
 </code></pre>
 </div><p>With <code>options_considered: [&quot;RFC 7807 problem+json&quot;, &quot;Ad-hoc {error: string}&quot;]</code> (plain strings) both options came back with <code>&quot;chosen&quot;: null</code> and both got a <code>rejected</code> edge from the decision, including the one that was picked.</p>
 <p>The CLI writes one node per command and links them by hand, so it writes the flow in the canonical direction, option -&gt; decision:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous add option &quot;Cap the attempt count&quot; -c 70
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous add option &quot;Cap the attempt count&quot; -c 70</span>
 Created node 2 (type: option, title: Cap the attempt count) [confidence: 70%] [branch: main]
-$ deciduous add option &quot;Use an overall deadline&quot; -c 80
+<span class="cmd">$ deciduous add option &quot;Use an overall deadline&quot; -c 80</span>
 Created node 3 (type: option, title: Use an overall deadline) [confidence: 80%] [branch: main]
-$ deciduous link 1 2 -r &quot;possible approach&quot;
-$ deciduous link 1 3 -r &quot;possible approach&quot;
-$ deciduous add decision &quot;Use an overall deadline, not an attempt cap&quot; -c 80 -d &quot;A slow attempt can exceed the wait budget under an attempt cap.&quot;
+<span class="cmd">$ deciduous link 1 2 -r &quot;possible approach&quot;</span>
+<span class="cmd">$ deciduous link 1 3 -r &quot;possible approach&quot;</span>
+<span class="cmd">$ deciduous add decision &quot;Use an overall deadline, not an attempt cap&quot; -c 80 -d &quot;A slow attempt can exceed the wait budget under an attempt cap.&quot;</span>
 Created node 4 (type: decision, ...)
-$ deciduous link 3 4 -t chosen -r &quot;bounds total wait even when attempts are slow&quot;
+<span class="cmd">$ deciduous link 3 4 -t chosen -r &quot;bounds total wait even when attempts are slow&quot;</span>
 Created edge 3 (3 -&gt; 4 via chosen)
-$ deciduous link 2 4 -t rejected -r &quot;a slow attempt can exceed the budget&quot;
+<span class="cmd">$ deciduous link 2 4 -t rejected -r &quot;a slow attempt can exceed the budget&quot;</span>
 Created edge 4 (2 -&gt; 4 via rejected)
 </code></pre>
-</div><p>The numbers are local ids, valid only in this checkout's cache. To refer to a node someone else wrote, use the 8-character <code>CHANGE</code> column from <code>deciduous nodes</code> or the server's UUID; <code>link</code>, <code>status</code>, <code>show</code> and <code>doc attach</code> accept all three.</p>
+</div><p>The two shapes are not interchangeable everywhere. <code>deciduous writeup</code> builds a decision's &quot;Options considered&quot; list only from edges that run decision -&gt; option, the shape <code>log_decision</code> writes, so a decision linked option -&gt; decision as above appears in a writeup without its options.</p>
+<p>The numbers are local ids, valid only in this checkout's cache. To refer to a node someone else wrote, use the 8-character <code>CHANGE</code> column from <code>deciduous nodes</code> or the server's UUID; <code>link</code>, <code>status</code>, <code>show</code> and <code>doc attach</code> accept all three.</p>
 <h2 id="the-action-before-you-edit">The action: before you edit</h2>
 <p>MCP: <code>parent_id</code> creates the node and its incoming edge in one transaction.</p>
 <div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">add_node({
@@ -102,8 +103,8 @@ to add_node instead; an id must come from a previous answer, not be written ahea
 </code></pre>
 </div><p>A non-goal written without <code>parent_id</code> is accepted, and the reply carries <code>suggested_parents</code>: up to five ranked guesses with the signals behind each (type fit, text similarity, same branch, shared files, recency, open status), and <code>suggested_parents_hint</code> names the <code>add_edge</code> call that would link one. Nothing is linked for you.</p>
 <p>CLI:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous add action &quot;Apply a 30s deadline to the retry loop&quot; -c 85 -f &quot;src/retry.rs,tests/retry.rs&quot;
-$ deciduous link 4 5 -r &quot;implement the chosen option&quot;
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous add action &quot;Apply a 30s deadline to the retry loop&quot; -c 85 -f &quot;src/retry.rs,tests/retry.rs&quot;</span>
+<span class="cmd">$ deciduous link 4 5 -r &quot;implement the chosen option&quot;</span>
 </code></pre>
 </div><p><code>--commit</code> takes <code>HEAD</code>, a branch, a tag or a hash prefix and stores the full hash; a rev git cannot resolve is refused. The server cannot see your checkout, so over MCP pass the real hash in <code>commit</code>; it stores whatever string you send.</p>
 <h2 id="observations-what-changes-the-plan">Observations: what changes the plan</h2>
@@ -130,9 +131,9 @@ $ deciduous link 4 5 -r &quot;implement the chosen option&quot;
 </code></pre>
 </div><p><code>success: true</code> writes a <code>completed</code> outcome under the parent; <code>success: false</code> writes a <code>rejected</code> one. Each <code>lessons_learned</code> entry becomes an observation under the outcome; each <code>next_steps</code> entry becomes a <code>pending</code> goal linked under the outcome. <code>next_steps</code> entries must be objects (<code>{&quot;title&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot;}</code>); unlike <code>lessons_learned</code>, a plain string is refused with <code>next_steps[0] must be an object ... nothing was written</code>. <code>goal_node_id</code> marks that goal <code>completed</code> unless <code>success</code> is <code>false</code>, so pass it only when the whole goal is done, not when your part is.</p>
 <p>CLI:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous add outcome &quot;Retry loop stops at the deadline&quot; -c 90 -d &quot;cargo test retry: 4 passed&quot;
-$ deciduous link 5 6 -r &quot;test result&quot;
-$ deciduous status 6 completed
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous add outcome &quot;Retry loop stops at the deadline&quot; -c 90 -d &quot;cargo test retry: 4 passed&quot;</span>
+<span class="cmd">$ deciduous link 5 6 -r &quot;test result&quot;</span>
+<span class="cmd">$ deciduous status 6 completed</span>
 </code></pre>
 </div><p><code>deciduous status</code> accepts <code>pending, active, completed, rejected, superseded, abandoned</code>. Its 1.1.0 <code>--help</code> lists only the first four; main's lists all six. Either way a wrong value is refused with the full list: <code>unknown status 'bogus'; expected one of: pending, active, completed, rejected, superseded, abandoned</code>.</p>
 <h2 id="one-step-one-call">One step, one call</h2>
@@ -169,7 +170,7 @@ title, workspace; nothing was written
 </code></pre>
 </div><p>Link each orphan to its real cause, not to whichever root makes the list empty. <code>suggest_parents: true</code> adds ranked guesses for the first 25.</p>
 <p>From the CLI, <code>deciduous remote status</code> is the check: it exits 0 and prints <code>In sync</code> when every write reached the server, and exits 1 listing what differs otherwise. Writes are sent before each command exits, so it normally says:</p>
-<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous remote status
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console"><span class="cmd">$ deciduous remote status</span>
 Remote: https://deciduous.example.com
 Workspace: my-app
 Log: 0 write(s) waiting, 0 rejected  (.../.deciduous/remote-log.jsonl)

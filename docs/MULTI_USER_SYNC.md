@@ -6,7 +6,11 @@ There are two fallbacks for when nobody runs a server you can join. `deciduous r
 
 ## A server on this machine
 
-`remote setup --local` looks for a server this machine already has, and installs one if there is none. On a machine that has one, it reuses it and changes nothing about it:
+`remote setup --local` looks for a server this machine already has, and installs one if there is none.
+
+> **On Linux, 1.1.0's `--local` does not finish on its own.** With apt's PostgreSQL it needs a role with a password and `--database-url`, and the systemd unit it writes is refused until one line is edited; both are under [What a fresh install does](#what-a-fresh-install-does). The fix for the unit is PR #330, not yet released. `remote setup --docker-postgres` avoids both.
+
+ On a machine that has one, it reuses it and changes nothing about it:
 
 ```text
 $ deciduous remote setup --local
@@ -69,7 +73,11 @@ The native install, in order:
 
 1. Downloads `deciduous-mcp-<os>-<arch>` for the CLI's own version, checks it against the release's `checksums.txt`, and installs it as `~/.config/deciduous/server/bin/deciduous-mcp`.
 2. Picks the bearer token. If the machine already has one (`DECIDUOUS_MCP_TOKEN`, else `~/.config/deciduous/credentials`) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.
-3. Runs the executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`: it connects, creates the database if missing (the role needs `CREATEDB`), migrates, and exits. A refusal usually comes back in PostgreSQL's words (`role "x" does not exist`, `password authentication failed`). Two exceptions were seen on Linux: no password in the URL against a server that wants one gives the `key :password not found` keyword list above; and on a machine where another user ran the server executable first, it prints only `Error: error: AccessDenied`, because the executable unpacks `/tmp/libc-musl-<hash>.so` owned by that user and a second user cannot replace it (moving the file away fixed it). If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing `brew install postgresql@17 && brew services start postgresql@17` / `sudo apt install postgresql`.
+3. Runs the executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`: it connects, creates the database if missing (the role needs `CREATEDB`), migrates, and exits. A refusal usually comes back in PostgreSQL's words (`role "x" does not exist`, `password authentication failed`). Two exceptions were seen on Linux:
+   - No password in the URL against a server that wants one gives the `key :password not found` keyword list above.
+   - On a machine where another user ran the server executable first, it prints only `Error: error: AccessDenied`, because the executable unpacks `/tmp/libc-musl-<hash>.so` owned by that user and a second user cannot replace it (moving the file away fixed it).
+
+   If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing `brew install postgresql@17 && brew services start postgresql@17` / `sudo apt install postgresql`.
 4. Writes `~/.config/deciduous/server/.env`, mode 600. This machine's file has these keys (values other than the secrets shown):
 
    ```text
@@ -158,7 +166,7 @@ Warning: the local write succeeded but the server refused it: the server rejecte
 
 The ordering also matters the first time. A brand-new local server adopts whatever token the machine already holds (step 2 above), so installing a local server after `remote login` to a team server gives the local server the team's token. Both then accept the same secret, and rotating the team token later breaks the local server's projects too. Run `remote setup --local` with `DECIDUOUS_MCP_TOKEN` unset and the credentials file empty if you want the two kept apart. (This ordering was read from `machine_token()` in `src/server.rs`, not run.)
 
-Claude Code has the same shape of problem: one user-scope `deciduous` entry. For a second server, add a project-scoped `.mcp.json` in the repositories that use it; see [Connect your agents](content/clients.md).
+Claude Code has the same shape of problem: one user-scope `deciduous` entry. For a second server, register it at local scope in the repositories that use it, or in a project `.mcp.json`, which needs `DECIDUOUS_MCP_TOKEN` exported where `claude` starts; see [Connect your agents](content/clients.md).
 
 ## No server at all
 
@@ -262,7 +270,7 @@ $ cat .mcp.json
 
 ### Moving to a server later
 
-Point the project at a server with `deciduous remote init https://deciduous.example.com --workspace my-app` (or `remote setup --url`, or `--local`). The history written before the project had a remote goes up with it. From a clone of the two-clone repository above, pointed at an empty workspace:
+Point the project at a server with `deciduous remote init https://deciduous.example.com --workspace my-app` (or `remote setup --url`, or `--local`). If you registered the stdio server above, remove it first (`claude mcp remove deciduous -s project`, and commit the `.mcp.json` change): while any server called `deciduous` is registered, `remote setup` prints `Unchanged` and leaves it, and `remote init` registers nothing with Claude Code at all. The history written before the project had a remote goes up with it. From a clone of the two-clone repository above, pointed at an empty workspace:
 
 ```text
 $ deciduous remote init http://127.0.0.1:4000 --workspace docsref-seed2

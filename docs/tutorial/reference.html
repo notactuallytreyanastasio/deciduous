@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CLI reference · Deciduous docs</title>
-<meta name="description" content="The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project with a [remote], every write command writes the loca">
+<meta name="description" content="The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project connected to a server (one whose .deciduous/config.t">
 <link rel="canonical" href="https://deciduous.dev/tutorial/reference.html">
 <meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
-<meta property="og:title" content="CLI reference · Deciduous docs"><meta property="og:description" content="The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project with a [remote], every write command writes the loca"><meta property="og:url" content="https://deciduous.dev/tutorial/reference.html">
+<meta property="og:title" content="CLI reference · Deciduous docs"><meta property="og:description" content="The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project connected to a server (one whose .deciduous/config.t"><meta property="og:url" content="https://deciduous.dev/tutorial/reference.html">
 <meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
 <meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,13 +18,13 @@
 <header class="docs-header"><a class="brand" href="../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
 <div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get started</h2><ul><li><a href="index.html">What deciduous is</a></li><li><a href="quickstart.html">Join a server</a></li><li><a href="run-a-server.html">Run a server</a></li><li><a href="clients.html">Connect your agents</a></li><li><a href="for-agents.html">For agents</a></li></ul></section><section class="nav-group"><h2>Work in the graph</h2><ul><li><a href="workflow.html">Record the reasoning</a></li><li><a href="teams.html">Many agents, one graph</a></li><li><a href="board.html">The message board</a></li><li><a href="recovery.html">Recover context</a></li><li><a href="evidence.html">Documents and transcripts</a></li><li><a href="history.html">Design history</a></li></ul></section><section class="nav-group"><h2>Operate</h2><ul><li><a href="operating.html">Backups, upgrades, tokens</a></li><li><a href="local.html">Without a shared server</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="concepts.html">Graph concepts</a></li><li><a href="reference.html" aria-current="page">CLI reference</a></li><li><a href="mcp.html">MCP tools</a></li><li><a href="architecture.html">Architecture and trust</a></li><li><a href="developer.html">Develop deciduous</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.1.0</span></div></aside>
 <main id="content"><div class="article-meta"><span>Reference</span><a href="../content/reference.md">Read as Markdown</a></div><article><h1 id="cli-reference">CLI reference</h1>
-<p>The <code>deciduous</code> commands people actually use, grouped by what you are trying to do, with flags as <code>deciduous &lt;command&gt; --help</code> prints them in 1.1.0. In a project with a <code>[remote]</code>, every write command writes the local database, queues an op in <code>.deciduous/remote-log.jsonl</code>, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by <code>remote pull</code>. Commands marked <strong>server</strong> need a <code>[remote]</code>; commands marked <strong>no server</strong> only matter without one.</p>
+<p>The <code>deciduous</code> commands people actually use, grouped by what you are trying to do, with flags as <code>deciduous &lt;command&gt; --help</code> prints them in 1.1.0. In a project connected to a server (one whose <code>.deciduous/config.toml</code> has a <code>[remote]</code> table), every write command writes the local database, queues a record of the change (an op) in <code>.deciduous/remote-log.jsonl</code>, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by <code>remote pull</code>. Commands marked <strong>server</strong> need a <code>[remote]</code>; commands marked <strong>no server</strong> only matter without one.</p>
 <p>Anywhere a command takes a node, it accepts a local number or a change_id prefix. In a project with a <code>[remote]</code> it also accepts a server UUID, once the node is in the local cache.</p>
 <p>Any deciduous command run where no <code>.deciduous</code> exists in the current directory or above it creates <code>.deciduous/deciduous.db</code> in the current directory and exits 0: <code>deciduous nodes</code> in an empty directory does this. From then on that directory is a project, and it captures every repository below it that has no <code>.deciduous</code> of its own, worktrees included: their writes go to that file, not to their own server. Delete a stray <code>.deciduous</code> when you find one.</p>
 <h2 id="connect-a-project-to-a-server">Connect a project to a server</h2>
 <h3 id="remote-setup-server"><code>remote setup</code> (server)</h3>
 <p>Connect this project to a shared graph server, step by step. In a terminal it asks; flags answer for scripts. Ends by writing <code>[remote]</code>, storing the token if needed, and registering Claude Code (only if Claude Code has no <code>deciduous</code> server yet).</p>
-<p>There is no <code>--workspace</code> flag: setup names the workspace after the project's directory and does not claim it for this repository until the first write sends something. If another repository with the same directory name runs <code>remote init</code> first, it takes the name, and every write from this project is refused with <code>belongs to another repository</code>. To choose the name, or to claim it at once, use <code>remote init &lt;URL&gt; --workspace my-app</code> (below).</p>
+<p>There is no <code>--workspace</code> flag: setup names the workspace after the project's directory and does not claim it for this repository; the next <code>remote status</code>, <code>remote pull</code> or write does. If another repository with the same directory name runs <code>remote init</code> first, it takes the name, and every write from this project is refused with <code>belongs to another repository</code>. To choose the name, or to claim it at once, use <code>remote init &lt;URL&gt; --workspace my-app</code> (below).</p>
 <p>The Claude Code registration runs <code>claude mcp add --scope user --transport http deciduous &lt;URL&gt;/mcp --header &quot;Authorization: Bearer &lt;token&gt;&quot;</code>, so the token is stored in plain text in <code>~/.claude.json</code>. If a <code>deciduous</code> server is already registered, even one pointing at a different server, setup prints <code>Claude Code already has a deciduous MCP server</code> and leaves it; to switch servers, run <code>claude mcp remove deciduous -s user</code> first.</p>
 <table>
 <thead>
@@ -60,7 +60,7 @@
 </tr>
 </tbody>
 </table>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ DECIDUOUS_MCP_TOKEN=&lt;token&gt; deciduous remote setup --url https://deciduous.example.com
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ DECIDUOUS_MCP_TOKEN=&lt;token&gt; deciduous remote setup --url https://deciduous.example.com</span>
 </code></pre>
 </div><p>A token given only through the environment is checked but not stored.</p>
 <h3 id="remote-login-remote-logout"><code>remote login</code> / <code>remote logout</code></h3>
@@ -81,7 +81,7 @@
 </tr>
 </tbody>
 </table>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote init http://127.0.0.1:4000 --workspace my-app
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote init http://127.0.0.1:4000 --workspace my-app</span>
 Remote: http://127.0.0.1:4000
   workspace: my-app
   claim: claimed (by this repository's root commit)
@@ -92,7 +92,7 @@ Written to .deciduous/config.toml. The token stays in ~/.config/deciduous/creden
 </div><p>The message names <code>~/.config</code> even when <code>XDG_CONFIG_HOME</code> has moved the file.</p>
 <h3 id="remote-adopt-root-url-server"><code>remote adopt [ROOT] --url &lt;URL&gt;</code> (server)</h3>
 <p>Walk a directory for projects that already have a <code>.deciduous</code> and point each at the server. Existing configuration is left alone. <code>-n, --dry-run</code> shows what would change, but in 1.1.0 it is not free of side effects: like any command run outside a project (see the top of this page), it creates <code>.deciduous/deciduous.db</code> in ROOT, and then lists ROOT itself as a project to configure, under workspace <code>scratch</code>:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote adopt --url http://127.0.0.1:4000 -n
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote adopt --url http://127.0.0.1:4000 -n</span>
 Would configure: 2 projects under .
 
   scratch  (.)                                 would configure
@@ -158,10 +158,10 @@ Themes and tags are not sent to the server, so they are not compared.
 <p><code>DECIDUOUS_OPS_TIMEOUT=&lt;seconds&gt;</code> changes the 120-second limit per request (see <a href="#environment">Environment</a>).</p>
 <h3 id="remote-pull-server"><code>remote pull</code> (server)</h3>
 <p>Refresh the local database from the server. It first refuses a workspace claimed by an unrelated repository, then sends the writes still waiting in <code>.deciduous/remote-log.jsonl</code>; if they cannot be sent it stops with <code>Nothing was pulled.</code> Then it takes the server's side of every difference. Run it before reading with <code>nodes</code>, <code>show</code> or <code>serve</code> if agents have been writing over MCP. No flags.</p>
-<p>It also writes <code>.deciduous/graph.json</code>, <code>graph.json.lock</code> and <code>graph.json.follow.lock</code>, even in a project with a <code>[remote]</code>, where they show up as untracked files. Keep them out of git in a server project.</p>
+<p>It also writes <code>.deciduous/graph.json</code>, <code>graph.json.lock</code> and <code>graph.json.follow.lock</code>, even in a project with a <code>[remote]</code>. The <code>.gitignore</code> block that <code>init</code> writes lets <code>graph.json</code> through on purpose, for projects with no server, so it shows up as untracked. Do not <code>git add</code> it in a server project; <a href="quickstart.html#4-install-the-agent-integration">Join a server, step 4</a> says which line to delete.</p>
 <h3 id="remote-watch-server"><code>remote watch</code> (server)</h3>
 <p>Stream this workspace's writes, one line per node event, reconnecting with backoff.</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote watch
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote watch</span>
 Watching: my-app
 13:38:02  main      outcome     &quot;watched outcome&quot;
 </code></pre>
@@ -244,7 +244,7 @@ Watching: my-app
 </tr>
 </tbody>
 </table>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous add goal &quot;Bound the retry delay&quot; -c 90 --prompt-stdin &lt;&lt;'EOF'
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous add goal &quot;Bound the retry delay&quot; -c 90 --prompt-stdin &lt;&lt;'EOF'</span>
 Retries should stop after a bounded delay; right now a 429 without Retry-After loops forever.
 EOF
 Warning: Prompt is only 93 chars. This looks like a summary, not a full prompt.

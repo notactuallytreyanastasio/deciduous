@@ -4,6 +4,20 @@ You need two things from whoever runs the server: its base URL and its token. Wi
 
 Everything below was run against deciduous 1.1.0. The examples use `https://deciduous.example.com` for the server and a repository called `my-app`; the output is real, captured against a test server, with the URL and home directory swapped in. This page does not cover running a server. For that, see [Run a server](run-a-server.md).
 
+## The short version
+
+```sh
+brew install notactuallytreyanastasio/tap/deciduous
+pbpaste | deciduous remote login --url https://deciduous.example.com   # the token, from your clipboard
+cd my-app
+deciduous remote setup --url https://deciduous.example.com
+deciduous init
+claude mcp get deciduous | grep -E 'Status|URL'   # URL must be https://deciduous.example.com/mcp
+deciduous remote status                            # In sync
+```
+
+Each line is a step below, with its output and what goes wrong at it. The two that catch people: `init` run before `remote setup` offers to install a server on your machine (step 4), and Claude Code can stay pointed at a different server without anything saying so (step 5).
+
 ## 1. Install the CLI
 
 ```sh
@@ -112,7 +126,13 @@ Where should this project's graph live?
 Choose 1-4 [1]:
 ```
 
-Type 4 to join your team's server; it asks for the URL, then whether to use the token already stored on this machine (step 2), or for the token if none is stored. **Do not just press Enter.** The default is 1: it downloads the server executable, creates and migrates a `deciduous` database on localhost:5432, and installs a background service on your machine, which is not what someone joining a team wants. On Linux, 1.1.0's systemd unit for choices 1 and 2 does not even start: systemd rejects its quoted `WorkingDirectory=`. The fix is [#330](https://github.com/notactuallytreyanastasio/deciduous/pull/330), not yet merged or released; until then use choice 3 or run the server by hand. Pressing Ctrl-D at the menu picks 1 as well. Piping input into `init` does not: without a terminal it stops and lists the flags, below. The choices are the same as these flags: 1 is `remote setup --local`, 2 is `--database-url <url>`, 3 is `--docker-postgres`, 4 is `--url <url>`. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.
+Type 4 to join your team's server; it asks for the URL, then whether to use the token already stored on this machine (step 2), or for the token if none is stored.
+
+> **Do not just press Enter.** The default is 1: it downloads the server executable, creates and migrates a `deciduous` database on localhost:5432, and installs a background service on your machine, which is not what someone joining a team wants. Pressing Ctrl-D at the menu picks 1 as well.
+
+The choices are the same as these flags: 1 is `remote setup --local`, 2 is `--database-url <url>`, 3 is `--docker-postgres`, 4 is `--url <url>`. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs. Piping input into `init` does not answer the menu: without a terminal it stops and lists the flags, below.
+
+On Linux, 1.1.0's systemd unit for choices 1 and 2 does not even start: systemd rejects its quoted `WorkingDirectory=`. The fix is [#330](https://github.com/notactuallytreyanastasio/deciduous/pull/330), not yet merged or released; until then use choice 3 or run the server by hand.
 
 Without a terminal (a script, CI, an agent's shell), `init` writes its files and then stops:
 
@@ -133,7 +153,9 @@ It exits 1. Run step 3, then `init` again; files that already exist are skipped.
 
 ## 5. Make sure Claude Code talks to the same server
 
-`remote setup` registers the server with Claude Code (user scope, every repository) only when Claude Code has no server called `deciduous` yet. If it already has one, setup prints `Unchanged Claude Code already has a deciduous MCP server` and leaves it alone, **even when that one points at a different server.** Your CLI writes then go to one graph and your agent's to another, and nothing warns you. Setup's last line still says to restart Claude Code so it picks up the server; restarting picks up the old registration.
+`remote setup` registers the server with Claude Code (user scope, every repository) only when Claude Code has no server called `deciduous` yet. If it already has one, setup prints `Unchanged Claude Code already has a deciduous MCP server` and leaves it alone.
+
+> **It leaves it alone even when that one points at a different server.** Your CLI writes then go to one graph and your agent's to another, and nothing warns you. Setup's last line still says to restart Claude Code so it picks up the server; restarting picks up the old registration.
 
 Check it:
 
@@ -243,4 +265,4 @@ With the `graph.json` line gone from `.gitignore` (step 4), CLI writes no longer
 
 A teammate who clones the repository runs steps 1 and 2, then `deciduous remote setup --url https://deciduous.example.com`: it keeps the workspace in the committed `[remote]` and registers Claude Code if nothing called `deciduous` is registered yet. (Skipping it leaves Claude Code with no registration at all, and `claude mcp get deciduous` prints `No MCP server named "deciduous"`.) Then step 5, then `deciduous remote pull` to fill their local copy. The committed integration files mean they do not need `init`.
 
-Next: [the workflow](workflow.md) for how a piece of work becomes goal, options, decision, actions and outcomes, and [teams](teams.md) for several agents on one workspace. When something here does not match what you see, [troubleshooting](troubleshooting.md).
+Next: [the workflow](workflow.md) for how a piece of work becomes goal, options, decision, actions and outcomes, and [teams](teams.md) for several agents on one workspace, who talk to each other on [the message board](board.md). When something here does not match what you see, [troubleshooting](troubleshooting.md).

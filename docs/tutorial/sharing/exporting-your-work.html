@@ -20,8 +20,12 @@
 <main id="content"><div class="article-meta"><span>Operate</span><a href="../../content/local.md">Read as Markdown</a></div><article><h1 id="without-a-shared-server">Without a shared server</h1>
 <p>There are two fallbacks for when nobody runs a server you can join. <code>deciduous remote setup --local</code> runs the same server on your own machine as a background service, so the CLI and your agents work exactly as they would against a team server, with one person writing. <code>DECIDUOUS_NO_SERVER=1 deciduous init</code> skips the server entirely and shares the graph through a git-tracked <code>.deciduous/graph.json</code>. Use the first if you might join a team later; use the second only when a running service is not an option.</p>
 <h2 id="a-server-on-this-machine">A server on this machine</h2>
-<p><code>remote setup --local</code> looks for a server this machine already has, and installs one if there is none. On a machine that has one, it reuses it and changes nothing about it:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote setup --local
+<p><code>remote setup --local</code> looks for a server this machine already has, and installs one if there is none.</p>
+<blockquote>
+<p><strong>On Linux, 1.1.0's <code>--local</code> does not finish on its own.</strong> With apt's PostgreSQL it needs a role with a password and <code>--database-url</code>, and the systemd unit it writes is refused until one line is edited; both are under <a href="#what-a-fresh-install-does">What a fresh install does</a>. The fix for the unit is PR #330, not yet released. <code>remote setup --docker-postgres</code> avoids both.</p>
+</blockquote>
+<p>On a machine that has one, it reuses it and changes nothing about it:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote setup --local</span>
 deciduous remote setup
 Every project writes its decision graph to a shared server. This connects /home/you/code/my-app
 to one: a server on this machine, or one someone else runs.
@@ -97,7 +101,12 @@ deciduous remote setup --database-url postgres://$USER:&lt;password&gt;@localhos
 <p>Picks the bearer token. If the machine already has one (<code>DECIDUOUS_MCP_TOKEN</code>, else <code>~/.config/deciduous/credentials</code>) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.</p>
 </li>
 <li>
-<p>Runs the executable once with <code>DECIDUOUS_MCP_COMMAND=prepare-database</code>: it connects, creates the database if missing (the role needs <code>CREATEDB</code>), migrates, and exits. A refusal usually comes back in PostgreSQL's words (<code>role &quot;x&quot; does not exist</code>, <code>password authentication failed</code>). Two exceptions were seen on Linux: no password in the URL against a server that wants one gives the <code>key :password not found</code> keyword list above; and on a machine where another user ran the server executable first, it prints only <code>Error: error: AccessDenied</code>, because the executable unpacks <code>/tmp/libc-musl-&lt;hash&gt;.so</code> owned by that user and a second user cannot replace it (moving the file away fixed it). If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> / <code>sudo apt install postgresql</code>.</p>
+<p>Runs the executable once with <code>DECIDUOUS_MCP_COMMAND=prepare-database</code>: it connects, creates the database if missing (the role needs <code>CREATEDB</code>), migrates, and exits. A refusal usually comes back in PostgreSQL's words (<code>role &quot;x&quot; does not exist</code>, <code>password authentication failed</code>). Two exceptions were seen on Linux:</p>
+<ul>
+<li>No password in the URL against a server that wants one gives the <code>key :password not found</code> keyword list above.</li>
+<li>On a machine where another user ran the server executable first, it prints only <code>Error: error: AccessDenied</code>, because the executable unpacks <code>/tmp/libc-musl-&lt;hash&gt;.so</code> owned by that user and a second user cannot replace it (moving the file away fixed it).</li>
+</ul>
+<p>If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> / <code>sudo apt install postgresql</code>.</p>
 </li>
 <li>
 <p>Writes <code>~/.config/deciduous/server/.env</code>, mode 600. This machine's file has these keys (values other than the secrets shown):</p>
@@ -164,10 +173,10 @@ Warning: the local write succeeded but the server refused it: the server rejecte
 </code></pre>
 </div><p><code>DECIDUOUS_MCP_TOKEN</code> is read before the stored file, so the working arrangement is: store the token you use most, and export the other one in the environment of the projects that need it (a per-directory env tool such as direnv, or a wrapper script). Once the right token is in place, <code>deciduous remote push</code> sends what waited.</p>
 <p>The ordering also matters the first time. A brand-new local server adopts whatever token the machine already holds (step 2 above), so installing a local server after <code>remote login</code> to a team server gives the local server the team's token. Both then accept the same secret, and rotating the team token later breaks the local server's projects too. Run <code>remote setup --local</code> with <code>DECIDUOUS_MCP_TOKEN</code> unset and the credentials file empty if you want the two kept apart. (This ordering was read from <code>machine_token()</code> in <code>src/server.rs</code>, not run.)</p>
-<p>Claude Code has the same shape of problem: one user-scope <code>deciduous</code> entry. For a second server, add a project-scoped <code>.mcp.json</code> in the repositories that use it; see <a href="../clients.html">Connect your agents</a>.</p>
+<p>Claude Code has the same shape of problem: one user-scope <code>deciduous</code> entry. For a second server, register it at local scope in the repositories that use it, or in a project <code>.mcp.json</code>, which needs <code>DECIDUOUS_MCP_TOKEN</code> exported where <code>claude</code> starts; see <a href="../clients.html">Connect your agents</a>.</p>
 <h2 id="no-server-at-all">No server at all</h2>
 <p><code>deciduous init</code> does not complete without a server. In a terminal it asks; without one it writes its files (<code>.claude/</code>, <code>CLAUDE.md</code>, <code>.gitignore</code>, <code>.github/</code> and the rest), then prints the four <code>remote setup</code> forms and exits 1. To opt out, say so:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ DECIDUOUS_NO_SERVER=1 deciduous init
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ DECIDUOUS_NO_SERVER=1 deciduous init</span>
    Creating .gitignore (track .deciduous/graph.json, ignore the database)
    Creating .gitattributes (merge the graph file record by record, fold it in PR diffs)
    Configured git merge driver for graph records
@@ -193,16 +202,16 @@ merge.deciduous.driver deciduous merge-record %O %A %B
 </code></pre>
 </div><h3 id="two-clones-one-graph">Two clones, one graph</h3>
 <p>This was run with a bare origin and two clones, <code>a</code> and <code>b</code>. In <code>a</code>: add a goal, <code>deciduous sync</code>, commit <code>.gitignore .gitattributes .deciduous/config.toml .deciduous/graph.json</code> by name, push. A fresh clone <code>b</code> sees the goal immediately (the database follows <code>graph.json</code> on the next command), but its <code>.git/config</code> has no merge driver until something registers it. <code>deciduous sync</code> does:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous sync
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous sync</span>
 Configured git merge driver for the graph file (this clone)
 Synced /home/you/code/b/.deciduous/graph.json (1 nodes, 0 edges, 0 themes, 0 tags on disk)
   Database and records already agree
 </code></pre>
 </div><p>Then both clones changed the graph at once. <code>a</code> added an option, linked it, and set the goal <code>active</code>; <code>b</code> added a different option, linked it, and replaced the goal's prompt. Both committed; <code>a</code> pushed; <code>b</code> pulled:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ git pull --no-edit origin HEAD
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ git pull --no-edit origin HEAD</span>
 Merge made by the 'ort' strategy.
  .deciduous/graph.json | 24 +++++++++++++++++++++++-
-$ deciduous nodes
+<span class="cmd">$ deciduous nodes</span>
 ID    CHANGE    TYPE         STATUS     TITLE
 1     94e4b9f7  goal         active     Shared goal
 3     d04a258b  option       pending    Option from A
@@ -218,9 +227,9 @@ git add .deciduous/graph.json
 </div><p><code>sync --help</code> says <code>--check</code> exits 1 when anything is pending, and the <code>CLAUDE.md</code> that init writes tells agents the same (<code>deciduous sync --check    # what is pending? (exit 1 if anything)</code>). It exits 0 with changes pending, on 1.1.0 and on main. With the database edited behind the file it printed <code>Changes would: 1 nodes updated from records</code> or <code>Changes would: 1 nodes set back to graph.json's version</code>, depending on how the row was edited, and exited 0 both times. Read its output rather than relying on the exit status in a hook. Ordinary writes are mirrored into the file as they happen, so in day-to-day use there is rarely anything pending.</p>
 <p>Numeric ids are per clone (<code>b</code> numbered &quot;Option from B&quot; 2, <code>a</code> numbered &quot;Option from A&quot; 2). Refer to nodes across machines by change_id prefix: <code>deciduous link 94e4b9f7 01ed84dd</code>.</p>
 <p>What this mode does not have: an MCP server over HTTP, <code>check_activity</code>, live <code>remote watch</code>, and anything faster than a git push. Agents can write through <code>deciduous mcp</code>, the stdio server, against the local database, but init registers it with no client (it writes no <code>.mcp.json</code>). For Claude Code, in the project:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ claude mcp add --transport stdio --scope project deciduous -- deciduous mcp
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ claude mcp add --transport stdio --scope project deciduous -- deciduous mcp</span>
 Added stdio MCP server deciduous with command: deciduous mcp to project config
-$ cat .mcp.json
+<span class="cmd">$ cat .mcp.json</span>
 {
   &quot;mcpServers&quot;: {
     &quot;deciduous&quot;: {
@@ -236,8 +245,8 @@ $ cat .mcp.json
 </code></pre>
 </div><p>(Claude Code 2.1.319; the format is on <a href="https://code.claude.com/docs/en/mcp">Claude Code's MCP page</a>.) The stdio tools are not the server's. They take local ids, link with <code>link_nodes</code>, and <code>add_node</code> has no <code>parent_id</code>, although the generated <code>CLAUDE.md</code> says &quot;create and link in one call: <code>add_node</code> with <code>parent_id</code>&quot;. The stdio server answers that with <code>add_node has no argument &quot;parent_id&quot;. Its arguments are: branch, commit, confidence, description, files, node_type, prompt, title</code>. See <a href="../mcp.html">MCP tools</a>. <code>graph.json</code> also carries every prompt and description you write, so treat it like any other committed file.</p>
 <h3 id="moving-to-a-server-later">Moving to a server later</h3>
-<p>Point the project at a server with <code>deciduous remote init https://deciduous.example.com --workspace my-app</code> (or <code>remote setup --url</code>, or <code>--local</code>). The history written before the project had a remote goes up with it. From a clone of the two-clone repository above, pointed at an empty workspace:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote init http://127.0.0.1:4000 --workspace docsref-seed2
+<p>Point the project at a server with <code>deciduous remote init https://deciduous.example.com --workspace my-app</code> (or <code>remote setup --url</code>, or <code>--local</code>). If you registered the stdio server above, remove it first (<code>claude mcp remove deciduous -s project</code>, and commit the <code>.mcp.json</code> change): while any server called <code>deciduous</code> is registered, <code>remote setup</code> prints <code>Unchanged</code> and leaves it, and <code>remote init</code> registers nothing with Claude Code at all. The history written before the project had a remote goes up with it. From a clone of the two-clone repository above, pointed at an empty workspace:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote init http://127.0.0.1:4000 --workspace docsref-seed2</span>
 Remote: http://127.0.0.1:4000
   workspace: docsref-seed2
   claim: claimed (by this repository's root commit)
@@ -248,7 +257,7 @@ Remote: http://127.0.0.1:4000
 <p><code>graph.json</code> does not go away. Every write is still mirrored into it, the ignore rules still track it, and <code>deciduous sync</code> still syncs it. Commit <code>.deciduous/config.toml</code> so teammates' clones pick up the <code>[remote]</code>. A teammate who wrote nodes before pulling it has rows the server never got and no op to send them; <code>remote push</code> says <code>Nothing to push</code>, and <code>remote status</code> names the fix:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Only here (1)
   action b4b791a1 &quot;A wrote before pulling&quot;  (no op covers it: `deciduous remote push --seed`)
-$ deciduous remote push --seed
+<span class="cmd">$ deciduous remote push --seed</span>
 Seeded: my-app -&gt; http://127.0.0.1:4000
   nodes 1 of 1
   edges 0 of 0

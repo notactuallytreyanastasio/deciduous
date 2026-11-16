@@ -16,7 +16,7 @@ A deciduous graph is typed nodes joined by typed, directed edges, kept per works
 
 The flow has two shapes, depending on how the decision was written. Built node by node (`deciduous add`, `add_node`), it is `goal -> option -> decision -> action -> outcome` with `leads_to` edges. Built with MCP's `log_decision`, the decision comes first and its options hang under it: `goal -> decision -> option`, with a `chosen` or `rejected` edge from the decision to each option. Do not then link the options back to the decision; the server refuses an edge that reverses an existing one (see [Edge types](#edge-types)). Observations attach where they were learned. The graph does not enforce either order; `find_orphans` (MCP) reports any non-goal node with no incoming edge, which is the usual sign of a missing link.
 
-In 1.1.0, `add --help` leaves out `revisit` and `status --help` lists only four statuses; both are accepted. The next release lists them all. Anything outside the lists is refused:
+1.1.0's `add --help` leaves `revisit` out of its list; it is accepted, and the next release lists it. Anything outside the list is refused:
 
 ```text
 Error: unknown node type 'bogus'; expected one of: goal, decision, option, action, outcome, observation, revisit
@@ -46,7 +46,7 @@ bb3060b2-... -> 45a3019e-... (chosen) already exists; 45a3019e-... -> bb3060b2-.
 
 ## Status
 
-`pending` (the default), `active`, `completed`, `rejected`, `superseded`, `abandoned`. In 1.1.0, `add --help` leaves out `revisit` and `status --help` lists only four statuses; both are accepted. The next release lists them all. Nothing sets `active` on its own: new nodes are `pending` until someone changes them. Anything else is refused:
+`pending` (the default), `active`, `completed`, `rejected`, `superseded`, `abandoned`. Nothing sets `active` on its own: new nodes are `pending` until someone changes them. 1.1.0's `status --help` lists only the first four; all six are accepted, and the next release lists them all. Anything else is refused:
 
 ```text
 $ deciduous status 1 done
@@ -83,9 +83,9 @@ change_id 11111111-2222-4333-8444-555555555555 is already node 3bcdac84-4e0d-410
 
 A workspace is one repository's graph on a server. Its name comes from `workspace` under `[remote]` in `.deciduous/config.toml`, which `remote init` and `remote setup` write: by default the repository's root directory name, lowercased (`Docs_Ref_Upper` becomes `docs_ref_upper`), or whatever `--workspace` says. The server trims and lowercases names and refuses anything that looks like a path.
 
-The first repository to write to a workspace claims it by its root commit ids. Clones and worktrees of that repository share the root commit and are let in; an unrelated repository with the same directory name is refused until it picks another name or names this one explicitly (see [Troubleshooting](troubleshooting.md#belongs-to-another-repository)).
+The first repository to claim a workspace holds it by its root commit ids. `remote init` claims at once; after `remote setup`, the next `remote status`, `remote pull` or write does. Clones and worktrees of that repository share the root commit and are let in; an unrelated repository with the same directory name is refused until it picks another name or names this one explicitly (see [Troubleshooting](troubleshooting.md#belongs-to-another-repository)).
 
-Over MCP, the workspace for a call is decided in this order: the `X-Deciduous-Workspace` header if the client sends one, then the call's `workspace` argument, then `scratch`. Tools that name a node by id (`update_node`, `delete_node`, `delete_edge`) act in that node's workspace instead; a header that pins a different workspace makes them refuse. Read tools also accept `workspace: "*"` for every workspace at once; writes refuse it. A workspace is a name for routing, not a permission: anyone holding the server's token can read and write all of them. See [Architecture](architecture.md#the-trust-boundary).
+Over MCP, the workspace for a call is decided in this order: the `X-Deciduous-Workspace` header if the client sends one, then the call's `workspace` argument, then `scratch`. Tools that name a node by id (`show_node`, `get_ancestors`, `get_descendants`, `update_node`, `delete_node`, `delete_edge`) act in that node's workspace instead; a header that pins a different workspace makes them refuse. Read tools also accept `workspace: "*"` for every workspace at once; writes refuse it. A workspace is a name for routing, not a permission: anyone holding the server's token can read and write all of them. See [Architecture](architecture.md#the-trust-boundary).
 
 ## Branch
 

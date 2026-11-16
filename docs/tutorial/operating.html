@@ -45,13 +45,14 @@ docker rm -f deciduous-restore-check
 </div><p>Use <code>-h 127.0.0.1</code> in the wait. Over the Unix socket, <code>pg_isready</code> already reports the image's temporary initialisation server as ready, which shuts down a moment later; a restore started then fails with <code>terminating connection due to administrator command</code>. The temporary server does not listen on TCP, so the TCP check waits for the real one.</p>
 <p>The test install printed <code>3</code> and <code>1.1</code>: three nodes, and the database's planner setting. Use <code>--create</code>. Without it, the restore lands in a database that already exists and skips the database-level settings the migrations made, even though the migration ledger says they ran.</p>
 <h2 id="upgrade-the-server">Upgrade the server</h2>
+<p><a href="#back-up">Take a backup</a> first. Putting the old binary back does not undo a migration, so rolling back means restoring the pre-upgrade dump.</p>
 <p>Extract the new release bundle into a new directory next to the one <a href="run-a-server.html">Run a server</a> created (<code>deciduous-mcp-docker</code>). Copy your <code>.env</code> into it, plus <code>certs/</code> if you use a private database CA, and run setup there. From the directory that holds <code>deciduous-mcp-docker</code>, as the user who owns it:</p>
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">mkdir deciduous-mcp-1.2.0
 tar -xzf deciduous-mcp-docker.tar.gz -C deciduous-mcp-1.2.0 --strip-components=1
 cp -p deciduous-mcp-docker/.env deciduous-mcp-1.2.0/
 cd deciduous-mcp-1.2.0 &amp;&amp; ./scripts/setup.sh
 </code></pre>
-</div><p>Keep <code>COMPOSE_PROJECT_NAME</code> the same: it is how setup finds the running containers and the PostgreSQL volume. The new server runs pending migrations before it listens, and setup waits for <code>/ready</code>. Take a backup first. Putting the old binary back does not undo a migration, so rolling back means restoring the pre-upgrade dump.</p>
+</div><p>Keep <code>COMPOSE_PROJECT_NAME</code> the same: it is how setup finds the running containers and the PostgreSQL volume. The new server runs pending migrations before it listens, and setup waits for <code>/ready</code>.</p>
 <p>Rerunning setup on the same release was tested and took 8 seconds, because the image was already built. Settings, volume and graph all survived. A real version change was not run for this page; the procedure is the one in <code>deciduous_mcp/DEPLOY.md</code>.</p>
 <h2 id="upgrade-the-cli">Upgrade the CLI</h2>
 <p>People upgrade their own CLI however they installed it (<code>brew upgrade deciduous</code>, <code>cargo install deciduous</code>, or a release binary). The CLI and server versions do not have to match: a 1.1.0 CLI works against the 1.0.12 reference server. After upgrading, run <code>deciduous update</code> in each repository. It refreshes the Claude Code, OpenCode and Windsurf files that <code>init</code> wrote, for whichever of <code>.claude/</code>, <code>.opencode/</code> and <code>.windsurf/</code> the repository has. It upgrades a server only when that server is a native one on the same machine; a Docker install on a VM is never touched.</p>
@@ -63,8 +64,8 @@ sed -i &quot;s/^DECIDUOUS_MCP_TOKEN=.*/DECIDUOUS_MCP_TOKEN='$NEW'/&quot; .env
 </code></pre>
 </div><p>For the other two kinds of install (not run for this page):</p>
 <ul>
-<li>A native server the CLI installed: edit <code>DECIDUOUS_MCP_TOKEN</code> in <code>~/.config/deciduous/server/.env</code>, then restart it with <code>launchctl kickstart -k gui/$(id -u)/dev.deciduous.server</code> on macOS or <code>systemctl --user restart deciduous-server.service</code> on Linux. The CLI on that machine reuses the token in <code>~/.config/deciduous/credentials</code>, so store the new one there too with <code>deciduous remote login</code>.</li>
-<li>A Docker install the CLI made: edit the same <code>.env</code>, then rerun its setup with <code>DECIDUOUS_ENV_FILE=~/.config/deciduous/server/.env ~/.config/deciduous/server/bundle-1.1.0/deciduous-mcp-docker/scripts/setup.sh</code>, and <code>deciduous remote login</code> as above.</li>
+<li>A native server the CLI installed: edit <code>DECIDUOUS_MCP_TOKEN</code> in <code>~/.config/deciduous/server/.env</code>, then restart it with <code>launchctl kickstart -k gui/$(id -u)/dev.deciduous.server</code> on macOS or <code>systemctl --user restart deciduous-server.service</code> on Linux. The CLI on that machine reuses the token in <code>~/.config/deciduous/credentials</code>, so store the new one there too with <code>deciduous remote login --url http://127.0.0.1:&lt;port&gt;</code>, which checks the new token against the restarted server before storing it.</li>
+<li>A Docker install the CLI made: edit the same <code>.env</code>, then rerun its setup with <code>DECIDUOUS_ENV_FILE=~/.config/deciduous/server/.env ~/.config/deciduous/server/bundle-1.1.0/deciduous-mcp-docker/scripts/setup.sh</code>, and <code>deciduous remote login --url http://127.0.0.1:&lt;port&gt;</code> as above.</li>
 </ul>
 <p>Once it restarts, the old token gets 401 and the new one works. Rotation logs out every client at once, but most commands do not say so. <code>remote status</code>, <code>remote pull</code>, <code>remote push</code> and <code>remote watch</code> fail and exit 1:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>Error: reached https://deciduous.example.com but the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.
@@ -108,7 +109,7 @@ docker compose -f compose.yaml -f compose.local.yaml logs --tail=100 server
 13:45:15  main      action      &quot;Written while watching&quot;
 </code></pre>
 </div><h2 id="when-a-client-and-the-server-disagree">When a client and the server disagree</h2>
-<p><code>deciduous remote status</code> compares one repository's local cache with its workspace on the server. It exits 1 when there is any difference, so a script can use it:</p>
+<p><code>deciduous remote status</code> compares one repository's local cache with its workspace on the server. It exits 1 when there is any difference. It also exits 0, printing <code>Local only</code>, in a project with no <code>[remote]</code>, so a script should check for the <code>In sync</code> line as well:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>                 local    server
   nodes              3         3
   edges              0         0

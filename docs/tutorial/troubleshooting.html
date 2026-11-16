@@ -21,9 +21,9 @@
 <p>Most problems are one of four things: the CLI and the agent are talking to different servers, the token in use belongs to a different server, the workspace name collides with another repository, or the server was unreachable and writes are waiting. Each entry below starts from the text deciduous 1.1.0 prints. Every entry was captured by provoking it, except where the entry says otherwise.</p>
 <p>Two commands answer most questions:</p>
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous remote status      # this copy vs the server: waiting writes, rejected writes, rows that differ
-claude mcp get deciduous     # where Claude Code's agent is actually writing
+claude mcp get deciduous | grep -E 'Status|URL|Scope'   # where Claude Code's agent is actually writing
 </code></pre>
-</div><p><code>remote status</code> exits 0 when it prints <code>In sync</code> or <code>Local only</code>; anything waiting, rejected or different exits 1.</p>
+</div><p>Unfiltered, <code>claude mcp get</code> prints the whole token. <code>remote status</code> exits 0 when it prints <code>In sync</code> or <code>Local only</code>; anything waiting, rejected or different exits 1.</p>
 <h2 id="setting-up">Setting up</h2>
 <h3 id="init-stops-with-no-terminal-to-ask"><code>init</code> stops with &quot;no terminal to ask&quot;</h3>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: /home/you/code/my-app has no server configured ([remote] in .deciduous/config.toml), and there is no terminal to ask where its graph should live. Choose one:
@@ -36,7 +36,7 @@ claude mcp get deciduous     # where Claude Code's agent is actually writing
 then rerun this command. Tests and CI in a throwaway directory can set DECIDUOUS_NO_SERVER=1.
 </code></pre>
 </div><p><strong>Cause.</strong> <code>init</code> was run from a script, an agent's shell, or anything else without a terminal on stdin, in a project with no <code>[remote]</code>. It exits 1, but it has already written <code>.claude/</code>, <code>CLAUDE.md</code>, <code>.deciduous/</code>, <code>.gitignore</code>, <code>.gitattributes</code> and <code>.github/workflows/cleanup-decision-graphs.yml</code> before stopping, so the directory looks initialized.</p>
-<p><strong>Fix.</strong> Run the <code>remote setup</code> form that fits, then <code>deciduous init</code> again. To join a team server: <code>DECIDUOUS_MCP_TOKEN=&lt;token&gt; deciduous remote setup --url https://deciduous.example.com</code>. <code>DECIDUOUS_NO_SERVER=1</code> is for throwaway directories; it gives a project with no server at all (see <a href="local.html#no-server-at-all">Without a shared server</a>).</p>
+<p><strong>Fix.</strong> Run the <code>remote setup</code> form that fits, then <code>deciduous init</code> again. To join a team server: <code>deciduous remote login --url https://deciduous.example.com</code> once per machine (it reads the token from stdin), then <code>deciduous remote setup --url https://deciduous.example.com</code>. <code>DECIDUOUS_NO_SERVER=1 deciduous init</code> is not a way past this error: it makes a project with no server at all, sharing its graph through git (see <a href="local.html#no-server-at-all">Without a shared server</a>).</p>
 <h3 id="the-server-rejected-the-token-401">&quot;the server rejected the token (401)&quot;</h3>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: reached https://deciduous.example.com but the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.
 
@@ -109,7 +109,7 @@ Warning: the local write succeeded but the server did not get it: transport erro
 </code></pre>
 </div><p><strong>Cause.</strong> The server was unreachable (or took longer than the 10 seconds a write waits for it). Nothing is lost: the write is in the local database and the op is in <code>.deciduous/remote-log.jsonl</code>. The command exits 0.</p>
 <p><strong>What to do.</strong> Usually nothing. The next CLI write that reaches the server sends everything queued before it. To see what is waiting:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote status
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote status</span>
 Log: 3 write(s) waiting, 0 rejected  (/home/you/code/my-app/.deciduous/remote-log.jsonl)
   waiting   f7b164cd  create goal f50e03ed &quot;Written while the server is down&quot;
   waiting   87b844eb  create action 316bf956 &quot;Second&quot;
@@ -117,7 +117,7 @@ Log: 3 write(s) waiting, 0 rejected  (/home/you/code/my-app/.deciduous/remote-lo
 Error: cannot reach http://127.0.0.1:9: ...
 </code></pre>
 </div><p><code>remote push</code> while the server is still down exits 1 and keeps everything (<code>3 write(s) still waiting in ...</code>). Once it is back:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote push
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote push</span>
 Pushed 3 op(s) to my-app: 3 applied, 0 already there, 0 rejected
 </code></pre>
 </div><p>Pushing twice is safe; the server applies each op at most once, by its id, and reports repeats as &quot;already there&quot;. For a server that is up but slow, <code>DECIDUOUS_OPS_TIMEOUT=&lt;seconds&gt;</code> raises the 120-second limit on each <code>remote push</code> request.</p>
@@ -146,7 +146,7 @@ or, if the two repositories really should write one graph, say so by naming it:
 <h3 id="rejected-writes">Rejected writes</h3>
 <p><code>remote status</code> lists ops the server refused (as opposed to ops it never received) with the server's reason. They stay in the log until you decide: <code>deciduous remote push --retry-rejected</code> after fixing the cause, <code>--drop-rejected</code> to discard them all, or <code>--drop &lt;op-id prefix&gt;</code> for one. None was provoked for this page; the flags are from <code>remote push --help</code>.</p>
 <h3 id="local-only-no-remote-configured">&quot;Local only: no remote configured&quot;</h3>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote status
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote status</span>
 Local only: no remote configured for this project.
 
     deciduous remote init &lt;url&gt;
@@ -154,8 +154,8 @@ Local only: no remote configured for this project.
 </div><p><code>status</code> exits 0 here; <code>push</code>, <code>pull</code> and <code>watch</code> print <code>Error: no remote configured for this project.</code> and exit 1. The project was initialized with <code>DECIDUOUS_NO_SERVER=1</code>, or <code>.deciduous/config.toml</code> lost its <code>[remote]</code> table. A linked git worktree with no <code>[remote]</code> of its own uses its main checkout's.</p>
 <h2 id="cli-and-agent-disagree">CLI and agent disagree</h2>
 <h3 id="the-agents-nodes-are-not-in-deciduous-nodes-or-yours-are-not-in-the-agents">The agent's nodes are not in <code>deciduous nodes</code>, or yours are not in the agent's</h3>
-<p>First, <code>claude mcp get deciduous</code>, and compare its URL with <code>[remote] url</code> in <code>.deciduous/config.toml</code>:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ claude mcp get deciduous
+<p>First, <code>claude mcp get deciduous | grep -E 'Status|URL|Scope'</code>, and compare its URL with <code>[remote] url</code> in <code>.deciduous/config.toml</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ claude mcp get deciduous</span>
 deciduous:
   Scope: User config (available in all your projects)
   Status: ✔ Connected
@@ -166,7 +166,7 @@ deciduous:
 </code></pre>
 </div><p>That is from a machine whose projects point at <code>http://127.0.0.1:4000</code>: CLI writes go to one server, the agent's to another, and both report success. <code>remote setup</code> does not fix this. It registers Claude Code only when no <code>deciduous</code> server is registered, and otherwise prints <code>Unchanged Claude Code already has a deciduous MCP server</code> whatever URL that one has. Re-register it yourself, or give the repository its own <code>.mcp.json</code>; both are on <a href="clients.html">Connect your agents</a>.</p>
 <p>Second, if the URLs agree: CLI reads (<code>nodes</code>, <code>show</code>, <code>serve</code>) come from the local database, which is a cache. It does not refresh itself. After an agent writes over MCP:</p>
-<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote status
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text"><span class="cmd">$ deciduous remote status</span>
                  local    server
   nodes              1         2
 
@@ -174,7 +174,7 @@ Only on the server (1)
   observation 96096527 &quot;MCP probe obs&quot;
 
 Differs: `deciduous remote pull` takes the server's side.
-$ deciduous remote pull
+<span class="cmd">$ deciduous remote pull</span>
 Pulled: my-app &lt;- http://127.0.0.1:4000
   fetched 2 nodes, 0 edges, 0 deletion(s)
   imported 1 new node(s), updated 0, removed 0; imported 0 edge(s), removed 0
@@ -222,7 +222,7 @@ A node is named by its local id (12, or #12 ...), its change_id or a prefix of i
 </tbody>
 </table>
 <h2 id="reporting-a-problem">Reporting a problem</h2>
-<p>Include <code>deciduous --version</code>, the server version (<code>serverInfo.version</code> in the MCP <code>initialize</code> reply), the command, and the error text as printed. Replace tokens with <code>&lt;token&gt;</code>. Two outputs this page asks for carry one: <code>claude mcp get deciduous</code> prints <code>Authorization: Bearer</code> followed by the full token (Claude Code 2.1.319), and <code>deciduous remote watch --url</code> prints a URL with the token in its query string. Edit the first as in the sample above; never paste the second.</p>
+<p>Include <code>deciduous --version</code>, the server version (<code>serverInfo.version</code> in the MCP <code>initialize</code> reply), the command, and the error text as printed. Replace tokens with <code>&lt;token&gt;</code>. Two outputs carry one: <code>claude mcp get deciduous</code>, unfiltered, prints <code>Authorization: Bearer</code> followed by the full token (Claude Code 2.1.319), and <code>deciduous remote watch --url</code>, which you may have open, prints a URL with the token in its query string. Edit the first as in the sample above; never paste the second.</p>
 </article><nav class="page-turn" aria-label="Previous and next guide"><a href="local.html"><span>Previous</span>Without a shared server</a><a href="concepts.html"><span>Next</span>Graph concepts</a></nav><footer class="article-footer"><a href="../index.html">deciduous.dev</a><span>Many minds. One memory.</span></footer></main>
 <aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#setting-up">Setting up</a></li><li><a href="#writing">Writing</a></li><li><a href="#cli-and-agent-disagree">CLI and agent disagree</a></li><li><a href="#mcp-over-http">MCP over HTTP</a></li><li><a href="#reporting-a-problem">Reporting a problem</a></li></ul></nav></aside></div>
 <dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>

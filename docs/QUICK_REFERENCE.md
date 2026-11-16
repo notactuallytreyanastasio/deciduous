@@ -2,7 +2,7 @@
 
 # CLI reference
 
-The `deciduous` commands people actually use, grouped by what you are trying to do, with flags as `deciduous <command> --help` prints them in 1.1.0. In a project with a `[remote]`, every write command writes the local database, queues an op in `.deciduous/remote-log.jsonl`, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by `remote pull`. Commands marked **server** need a `[remote]`; commands marked **no server** only matter without one.
+The `deciduous` commands people actually use, grouped by what you are trying to do, with flags as `deciduous <command> --help` prints them in 1.1.0. In a project connected to a server (one whose `.deciduous/config.toml` has a `[remote]` table), every write command writes the local database, queues a record of the change (an op) in `.deciduous/remote-log.jsonl`, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by `remote pull`. Commands marked **server** need a `[remote]`; commands marked **no server** only matter without one.
 
 Anywhere a command takes a node, it accepts a local number or a change_id prefix. In a project with a `[remote]` it also accepts a server UUID, once the node is in the local cache.
 
@@ -14,7 +14,7 @@ Any deciduous command run where no `.deciduous` exists in the current directory 
 
 Connect this project to a shared graph server, step by step. In a terminal it asks; flags answer for scripts. Ends by writing `[remote]`, storing the token if needed, and registering Claude Code (only if Claude Code has no `deciduous` server yet).
 
-There is no `--workspace` flag: setup names the workspace after the project's directory and does not claim it for this repository until the first write sends something. If another repository with the same directory name runs `remote init` first, it takes the name, and every write from this project is refused with `belongs to another repository`. To choose the name, or to claim it at once, use `remote init <URL> --workspace my-app` (below).
+There is no `--workspace` flag: setup names the workspace after the project's directory and does not claim it for this repository; the next `remote status`, `remote pull` or write does. If another repository with the same directory name runs `remote init` first, it takes the name, and every write from this project is refused with `belongs to another repository`. To choose the name, or to claim it at once, use `remote init <URL> --workspace my-app` (below).
 
 The Claude Code registration runs `claude mcp add --scope user --transport http deciduous <URL>/mcp --header "Authorization: Bearer <token>"`, so the token is stored in plain text in `~/.claude.json`. If a `deciduous` server is already registered, even one pointing at a different server, setup prints `Claude Code already has a deciduous MCP server` and leaves it; to switch servers, run `claude mcp remove deciduous -s user` first.
 
@@ -112,7 +112,7 @@ Send the ops waiting in `.deciduous/remote-log.jsonl`, in order. The server appl
 
 Refresh the local database from the server. It first refuses a workspace claimed by an unrelated repository, then sends the writes still waiting in `.deciduous/remote-log.jsonl`; if they cannot be sent it stops with `Nothing was pulled.` Then it takes the server's side of every difference. Run it before reading with `nodes`, `show` or `serve` if agents have been writing over MCP. No flags.
 
-It also writes `.deciduous/graph.json`, `graph.json.lock` and `graph.json.follow.lock`, even in a project with a `[remote]`, where they show up as untracked files. Keep them out of git in a server project.
+It also writes `.deciduous/graph.json`, `graph.json.lock` and `graph.json.follow.lock`, even in a project with a `[remote]`. The `.gitignore` block that `init` writes lets `graph.json` through on purpose, for projects with no server, so it shows up as untracked. Do not `git add` it in a server project; [Join a server, step 4](content/quickstart.md#4-install-the-agent-integration) says which line to delete.
 
 ### `remote watch` (server)
 

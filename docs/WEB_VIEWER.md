@@ -39,7 +39,7 @@ The node can be named by local id, `change_id` prefix, or server UUID (`deciduou
 "documents": [{ "id": "38c69819-818d-4a4f-906c-1e8c6101b889", "filename": "test-output.txt", "mime_type": "text/plain" }]
 ```
 
-and anyone with the token can download it from `<url>/documents/<id>`, where `<url>` is `url` under `[remote]` in `.deciduous/config.toml`, including any path such as `/deciduous-mcp` on a Docker-bundle install:
+and anyone with the token can download it from `<url>/documents/<id>`, where `<url>` is `url` under `[remote]` in `.deciduous/config.toml`, including any path prefix the server's proxy uses, such as `/deciduous-mcp`:
 
 ```console
 $ curl -s -i -H "Authorization: Bearer <token>" https://deciduous.example.com/documents/38c69819-818d-4a4f-906c-1e8c6101b889
@@ -51,7 +51,7 @@ test retry ... ok
 4 passed; 0 failed
 ```
 
-Without the token: 401. An unknown id: 404. Behind the Docker bundle's Caddy, leaving out the path prefix gets an empty `200` from Caddy, not an error. One file can be at most 64 MiB; the server refuses a larger upload with 413. `get_graph` lists the workspace's documents with size, description and node.
+Without the token: 401. An unknown id: 404. Behind a Caddy that has only a `handle_path` block ([Run a server](content/run-a-server.md#3-put-https-in-front-of-it)), leaving out the path prefix gets an empty `200`, not an error. One file can be at most 64 MiB; the server refuses a larger upload with 413. `get_graph` lists the workspace's documents with size, description and node.
 
 Older pages said `doc attach` was local only and that configuring a remote did not upload. That stopped being true; in 1.1.0 the upload happens before the command exits, like every other CLI write.
 

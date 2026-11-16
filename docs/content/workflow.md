@@ -94,6 +94,8 @@ $ deciduous link 2 4 -t rejected -r "a slow attempt can exceed the budget"
 Created edge 4 (2 -> 4 via rejected)
 ```
 
+The two shapes are not interchangeable everywhere. `deciduous writeup` builds a decision's "Options considered" list only from edges that run decision -> option, the shape `log_decision` writes, so a decision linked option -> decision as above appears in a writeup without its options.
+
 The numbers are local ids, valid only in this checkout's cache. To refer to a node someone else wrote, use the 8-character `CHANGE` column from `deciduous nodes` or the server's UUID; `link`, `status`, `show` and `doc attach` accept all three.
 
 ## The action: before you edit

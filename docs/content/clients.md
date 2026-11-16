@@ -20,12 +20,12 @@ This is the `claude mcp add` that `deciduous remote setup --url https://deciduou
 
 ```sh
 claude mcp add --scope user --transport http deciduous https://deciduous.example.com/mcp \
-  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
+  --header "Authorization: Bearer $(cat ~/.config/deciduous/credentials)"
 ```
 
 `deciduous init` in a repository that already has `[remote]` does not run it: it checks the server, prints `Connected ... holds N nodes`, and registers nothing. So a teammate who clones a repository with `[remote]` in it runs `deciduous remote setup --url https://deciduous.example.com`, or the `claude mcp add` line above, themselves. `remote setup` with no flags and no terminal registers nothing either; it exits with an error listing the flags.
 
-No workspace header: each tool call carries `workspace`, and the server's instructions tell the agent to take it from `[remote]` in `.deciduous/config.toml`, or else the repository root's directory name. The shell expands `$DECIDUOUS_MCP_TOKEN` when the command runs, so the token is written into `~/.claude.json`, outside every repository, in plain text.
+No workspace header: each tool call carries `workspace`, and the server's instructions tell the agent to take it from `[remote]` in `.deciduous/config.toml`, or else the repository root's directory name. The shell substitutes the token `remote login` stored when the command runs, so the token is written into `~/.claude.json`, outside every repository, in plain text. (`$DECIDUOUS_MCP_TOKEN` in its place works only if you exported that variable; `remote login` does not set it, and with it empty the command still succeeds and registers a header with no token.)
 
 If a `deciduous` server is already registered, setup leaves it as it is and prints `Unchanged Claude Code already has a deciduous MCP server`. It decides that from the exit status of `claude mcp get deciduous` alone, which is 0 for a registration in any scope, whatever URL it points at, including a project `.mcp.json` still waiting for approval and a server that rejects its token. Read the `Status:` line every time you join a new server:
 
@@ -70,6 +70,8 @@ claude mcp add --scope local --transport http deciduous https://other.example.co
   --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
 ```
 
+Export `DECIDUOUS_MCP_TOKEN` with the other server's token in that shell first. The credentials file holds one token, the first server's, so `$(cat ~/.config/deciduous/credentials)` would register the wrong one here; and with the variable unset the command still succeeds and registers a header with no token.
+
 `claude mcp get deciduous` there then shows `Scope: Local config (private to you in this project)`. `remote setup` in that repository sees it and says `Unchanged`.
 
 ### Project scope: `.mcp.json`, pinned to one workspace
@@ -111,7 +113,11 @@ The snippets below follow each client's current documentation (fetched 2026-11-0
 
 None of these files knows about a server. In a project with `[remote]`, `.opencode/commands/sync.md` and `recover.md` still teach `deciduous sync` and `git add .deciduous/graph.json`, and with `--opencode` alone `AGENTS.md` says `deciduous sync    # Reconcile .deciduous/graph.json with teammates`. Ignore `/sync`'s git steps there; `deciduous remote status` and `deciduous remote pull` are the steps. (Under `--both`, `AGENTS.md` is converted from the server-aware `CLAUDE.md`; the `.opencode/` files are the same either way.)
 
-The plugin and the custom tool were written for OpenCode 1.x. [OpenCode 2's migration guide](https://opencode.ai/v2/migrate-v1.md) says "V1 plugin implementations do not run in V2", so the update check does nothing there, and [its plugin guide](https://opencode.ai/v2/build/plugins/migrate-v1.md) does not say whether a V1 `tool()` file still loads. In OpenCode 1.x the tool runs the `deciduous` CLI (`deciduous add goal ...`, `deciduous link ...`), and in a project with `[remote]` every CLI write goes to the server before the command exits. Without the tool, the agent reaches the server the same way by running `deciduous` in its shell. Either way that needs `remote setup` run in the repository and at least one commit in it: in a repository with no commit, a CLI write is kept in `.deciduous/remote-log.jsonl` with `Nothing is sent until the first commit`, and sent by the next write after that commit or by `deciduous remote push` (a read such as `deciduous nodes` sends nothing, whatever the message says).
+The plugin and the custom tool were written for OpenCode 1.x. [OpenCode 2's migration guide](https://opencode.ai/v2/migrate-v1.md) says "V1 plugin implementations do not run in V2", so the update check does nothing there, and [its plugin guide](https://opencode.ai/v2/build/plugins/migrate-v1.md) does not say whether a V1 `tool()` file still loads.
+
+In OpenCode 1.x the tool runs the `deciduous` CLI (`deciduous add goal ...`, `deciduous link ...`), and in a project with `[remote]` every CLI write goes to the server before the command exits. Without the tool, the agent reaches the server the same way by running `deciduous` in its shell.
+
+Either way that needs `remote setup` run in the repository and at least one commit in it: in a repository with no commit, a CLI write is kept in `.deciduous/remote-log.jsonl` with `Nothing is sent until the first commit`, and sent by the next write after that commit or by `deciduous remote push` (a read such as `deciduous nodes` sends nothing, whatever the message says).
 
 To give OpenCode the server's MCP tools as well, register the endpoint as a remote MCP server. This is the [V1 shape](https://docs.opencode.ai/docs/mcp-servers/), servers directly under `mcp`; [OpenCode 2 still reads it](https://opencode.ai/v2/migrate-v1.md) ("The V1 config format remains supported"), so it works in both:
 
@@ -258,7 +264,7 @@ In a project with `[remote]` its writes do reach the server, the same way CLI wr
 
 Three settings have to match, and nothing checks that they do:
 
-1. **URL.** `[remote] url` + `/mcp` is the URL in the client's registration (`claude mcp get deciduous`).
+1. **URL.** `[remote] url` + `/mcp` is the URL in the client's registration (`claude mcp get deciduous | grep -E 'Status|URL'`; unfiltered, it prints the token).
 2. **Token.** The CLI uses `$DECIDUOUS_MCP_TOKEN` if it is set, otherwise `~/.config/deciduous/credentials` (under `$XDG_CONFIG_HOME` if that is set). The client uses whatever its registration holds. A stale `DECIDUOUS_MCP_TOKEN` in your shell overrides a fresh `remote login`.
 3. **Workspace.** `[remote] workspace` is what the agent passes as `workspace`, or what the `X-Deciduous-Workspace` header says.
 
