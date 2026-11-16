@@ -583,7 +583,10 @@ fn apply(m: &mut Model, op: &Op, added: Option<String>) {
                 MNode {
                     node_type: node_type.to_string(),
                     title: title.clone(),
-                    status: "pending".to_string(),
+                    // A record of something already over is born closed
+                    // (default_status in src/db.rs); the rest start pending.
+                    status: if matches!(*node_type, "outcome" | "observation") { "completed" } else { "pending" }
+                        .to_string(),
                     prompt: None,
                 },
             );
