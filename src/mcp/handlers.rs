@@ -333,6 +333,49 @@ fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult
         (None, Caller::Remote) => None,
     };
 
+    // Everything that can refuse the link or the status is checked before the
+    // node is written: a node made and then left unlinked is the orphan this
+    // argument exists to prevent.
+    let status = get_str(args, "status");
+    if let Some(s) = status {
+        if !db::NODE_STATUSES.contains(&s) {
+            return Err(HandlerError::from(format!(
+                "unknown status '{s}'; expected one of: {}; nothing was written",
+                db::NODE_STATUSES.join(", ")
+            )));
+        }
+    }
+    let parent_id = get_node_ref(db, args, "parent_id")?;
+    let edge_type = get_str(args, "edge_type");
+    let rationale = get_str(args, "rationale");
+    match parent_id {
+        Some(pid) => {
+            if !matches!(db.get_node(pid), Ok(Some(_))) {
+                return Err(HandlerError::from(format!(
+                    "parent_id {pid} is not a node in this graph; nothing was written"
+                )));
+            }
+            if let Some(t) = edge_type {
+                if !db::EDGE_TYPES.contains(&t) {
+                    return Err(HandlerError::from(format!(
+                        "unknown edge_type '{t}'; expected one of: {}; nothing was written",
+                        db::EDGE_TYPES.join(", ")
+                    )));
+                }
+            }
+        }
+        None => {
+            if let Some(extra) = [("edge_type", edge_type), ("rationale", rationale)]
+                .iter()
+                .find_map(|(k, v)| v.map(|_| *k))
+            {
+                return Err(HandlerError::from(format!(
+                    "{extra} describes the edge from parent_id, and no parent_id was given; nothing was written"
+                )));
+            }
+        }
+    }
+
     let node_id = db.create_node_full(
         node_type,
         title,
@@ -345,12 +388,39 @@ fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult
         None, // created_at
     )?;
 
-    Ok(tool_result_json(&json!({
+    if let Some(s) = status.filter(|s| *s != db::default_status(node_type)) {
+        db.update_node_status(node_id, s)?;
+    }
+
+    let mut result = json!({
         "node_id": node_id,
         "node_type": node_type,
         "title": title,
+        "status": status.unwrap_or(db::default_status(node_type)),
         "message": format!("Created {} node #{}", node_type, node_id)
-    })))
+    });
+    if let Some(pid) = parent_id {
+        let edge_type = edge_type.unwrap_or("leads_to");
+        match db.create_edge(pid, node_id, edge_type, rationale) {
+            Ok(edge_id) => {
+                result["parent_id"] = json!(pid);
+                result["edge_id"] = json!(edge_id);
+                result["edge_type"] = json!(edge_type);
+                result["message"] = json!(format!(
+                    "Created {node_type} node #{node_id}, linked from #{pid} via {edge_type}"
+                ));
+            }
+            // The checks above leave nothing known that can fail here; if
+            // something does, the node goes too rather than stay an orphan.
+            Err(e) => {
+                let _ = db.delete_node(node_id, false);
+                return Err(HandlerError::from(format!(
+                    "linking from parent_id {pid} failed ({e}); nothing was written"
+                )));
+            }
+        }
+    }
+    Ok(tool_result_json(&result))
 }
 
 fn handle_link_nodes(db: &Database, args: &Value) -> HandlerResult {
@@ -1387,6 +1457,100 @@ mod tests {
         assert!(result.is_error.is_none());
         assert!(result.content[0].text.contains("node_id"));
         assert!(result.content[0].text.contains("My goal"));
+    }
+
+    fn text(result: &ToolCallResult) -> Value {
+        serde_json::from_str(&result.content[0].text)
+            .unwrap_or_else(|_| json!(result.content[0].text))
+    }
+
+    #[test]
+    fn add_node_with_parent_id_creates_and_links_in_one_call() {
+        let db = test_db();
+        let goal = db.create_node("goal", "G", None, None, None).unwrap();
+        let result = dispatch(
+            &db,
+            "add_node",
+            json!({"node_type": "option", "title": "O", "parent_id": goal,
+                   "edge_type": "enables", "rationale": "because"}),
+        );
+        assert!(result.is_error.is_none(), "{:?}", result.content[0].text);
+        let made = text(&result);
+        assert_eq!(made["parent_id"], goal);
+        assert_eq!(made["edge_type"], "enables");
+        let edges = db.get_all_edges().unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].from_node_id, goal);
+        assert_eq!(
+            i64::from(edges[0].to_node_id),
+            made["node_id"].as_i64().unwrap()
+        );
+        assert_eq!(edges[0].rationale.as_deref(), Some("because"));
+    }
+
+    #[test]
+    fn add_node_refuses_before_writing_when_the_link_or_status_cannot_be_made() {
+        let db = test_db();
+        let goal = db.create_node("goal", "G", None, None, None).unwrap();
+        for (args, says) in [
+            (
+                json!({"node_type": "action", "title": "A", "parent_id": 999}),
+                "parent_id",
+            ),
+            (
+                json!({"node_type": "action", "title": "A", "parent_id": goal, "edge_type": "causes"}),
+                "unknown edge_type 'causes'",
+            ),
+            (
+                json!({"node_type": "action", "title": "A", "rationale": "floating"}),
+                "no parent_id was given",
+            ),
+            (
+                json!({"node_type": "action", "title": "A", "status": "resolved"}),
+                "unknown status 'resolved'",
+            ),
+        ] {
+            let result = dispatch(&db, "add_node", args.clone());
+            assert_eq!(result.is_error, Some(true), "{args} was accepted");
+            let said = &result.content[0].text;
+            assert!(said.contains(says), "{args}: {said}");
+            assert_eq!(db.get_all_nodes().unwrap().len(), 1, "{args} left a node");
+        }
+    }
+
+    #[test]
+    fn add_node_is_born_with_its_types_status_unless_one_is_given() {
+        let db = test_db();
+        let status = |args: Value| {
+            let made = text(&dispatch(&db, "add_node", args));
+            let id = made["node_id"].as_i64().unwrap() as i32;
+            (
+                made["status"].as_str().unwrap().to_string(),
+                db.get_node(id).unwrap().unwrap().status,
+            )
+        };
+        for (args, expected) in [
+            (
+                json!({"node_type": "outcome", "title": "passed"}),
+                "completed",
+            ),
+            (json!({"node_type": "action", "title": "do"}), "pending"),
+            (
+                json!({"node_type": "action", "title": "doing", "status": "active"}),
+                "active",
+            ),
+            (
+                json!({"node_type": "outcome", "title": "running", "status": "pending"}),
+                "pending",
+            ),
+        ] {
+            let (said, stored) = status(args.clone());
+            assert_eq!(
+                (said.as_str(), stored.as_str()),
+                (expected, expected),
+                "{args}"
+            );
+        }
     }
 
     #[test]

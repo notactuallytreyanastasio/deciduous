@@ -16,6 +16,7 @@ A graph written by following the shipped instructions could not say what was ope
 - **`deciduous init --no-server`** (and `remote setup --no-server`, and a fifth choice in the setup menu): the graph lives in `.deciduous/graph.json`, committed with the code, and nothing is installed or run. The choice is written to `.deciduous/config.toml` as `[graph] server = "none"`, so `update` stops asking, `init` and `update` no longer exit 1 without a terminal on such a project, and writes stop printing the "no shared server" note. A project that never chose still gets the note. `DECIDUOUS_NO_SERVER=1` is unchanged and remembers nothing.
 
 ### Fixed
+- **The local MCP server's `add_node` takes `parent_id`.** Every CLAUDE.md since 1.0.10 tells the agent to "create and link in one call: `add_node` with `parent_id`", which is the graph server's tool. On a project with no server the local tool had no such argument and refused the call as an unknown argument. It now takes `parent_id` (local id or change_id prefix), `edge_type`, `rationale` and `status`, and checks all four before writing: an unknown parent, edge type or status creates nothing.
 - **A command run outside a project fails.** `deciduous nodes` in a directory with no `.deciduous` above it printed "No nodes found", exited 0 and left a new database behind; `add` succeeded against it. Both now exit 1 naming `deciduous init`. #208 found writes from a subdirectory of the wrong repository this way.
 - **DOT labels break the line.** A node with a confidence was drawn as `Ship it\n(90%)`: the label wrote `\n` and `escape_dot` escaped it again.
 - **`deciduous completion zsh | head -1` no longer panics** on the closed pipe.
@@ -30,6 +31,7 @@ A graph written by following the shipped instructions could not say what was ope
 - Whether an open goal with nothing open beneath it is done or dropped is a judgement; `audit` names the goals and stops.
 - The web viewer still shows status as one line of text, with no filter.
 - The guides still describe 1.1.0: `init --no-server` is not in the README or docs/ until it is released.
+- The local and server MCP tools still differ everywhere else: `link_nodes` against `add_edge`, `update_status` against `update_node`, no `capture_conversation_turn`, `log_decision`, `close_thread` or `ask_graph` locally, and no `change_id` on the local `add_node` to make a retry safe.
 - `deciduous tag 1 perf` is still `unrecognized subcommand`; it is `tag add 1 perf`.
 - CI still runs `cargo test --lib` and `--test cli_integration` by name in `type-check.yml`; eleven of twenty-one Rust test files run nowhere. Replacing the two steps with `cargo test` needs a push with the `workflow` scope.
 
