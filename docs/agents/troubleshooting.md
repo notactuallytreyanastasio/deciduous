@@ -1,99 +1,247 @@
+<!-- Generated from content/troubleshooting.md by scripts/docs/build.mjs. Edit the source. -->
+
 # Troubleshooting
 
-Each entry is a failure that has actually happened, with the text you will see.
-Match the message, apply the fix, and tell the user what you changed.
+Most problems are one of four things: the CLI and the agent are talking to different servers, the token in use belongs to a different server, the workspace name collides with another repository, or the server was unreachable and writes are waiting. Each entry below starts from the exact text deciduous 1.1.0 prints, captured by provoking it.
 
-## "DECIDUOUS: 10 actions since your last graph write"
+Two commands answer most questions:
 
-A project set up by 1.0.2 still has its logging hooks. Upgrade the binary to
-1.0.5 and run `deciduous update` in the project. It removes the hook scripts it
-wrote and their `settings.json` entries, and keeps the rest.
-
-## "Docker is required" from `init` or `update`
-
-```
-Error: Docker is required: deciduous keeps every project's graph in a PostgreSQL server, and without a remote configured `init` sets one up on this machine with Docker.
+```bash
+deciduous remote status      # this copy vs the server: waiting writes, rejected writes, rows that differ
+claude mcp get deciduous     # where Claude Code's agent is actually writing
 ```
 
-The project has no `[remote]`, so `init` tried to set up a local server. Ask
-the user whether to install and start Docker, or to point the project at a
-team's server first (`deciduous remote login --url <url>`, then
-`deciduous remote init <url>`, then `init` again). The project files are
-already written; only the server step is left. Do not set
-`DECIDUOUS_NO_SERVER` to get past it: that leaves a project with nowhere to write.
+`remote status` exits 0 only when it prints `In sync`; anything waiting, rejected or different exits 1.
 
-## "cannot reach ..." from `init` or `update`
+## Setting up
 
-The project's `[remote]` server does not answer, or the stored token is wrong.
-The message names the URL. Tell the user. Starting the server or fixing the
-token (`deciduous remote login --url <url>`) is theirs to do.
+### `init` stops with "no terminal to ask"
 
-## A write is refused with a placeholder id
+```text
+Error: /home/you/code/my-app has no server configured ([remote] in .deciduous/config.toml), and there is no terminal to ask where its graph should live. Choose one:
 
-```
-to_node_id is not a node id: "PLACEHOLDER". To link a node you are creating now, pass parent_id to add_node instead; an id must come from a previous answer, not be written ahead of it
+    deciduous remote setup --local                  # this machine: a background service, PostgreSQL on localhost:5432
+    deciduous remote setup --database-url <url>     # this machine's server, a PostgreSQL you name
+    deciduous remote setup --docker-postgres        # this machine: PostgreSQL and the server in Docker
+    deciduous remote setup --url <url>              # a server someone else runs
+
+then rerun this command. Tests and CI in a throwaway directory can set DECIDUOUS_NO_SERVER=1.
 ```
 
-You sent `add_edge` in the same parallel batch as the `add_node` whose id it
-needed, and put a placeholder where the id would be. Use `add_node` with
-`parent_id` instead. It creates the node and its edge together.
+**Cause.** `init` was run from a script, an agent's shell, or anything else without a terminal on stdin, in a project with no `[remote]`. It exits 1, but it has already written `.claude/`, `CLAUDE.md`, `.deciduous/`, `.gitignore` and `.gitattributes` before stopping, so the directory looks initialized.
 
-## `parent_id ... is not a node in this workspace; nothing was created.`
+**Fix.** Run the `remote setup` form that fits, then `deciduous init` again. To join a team server: `DECIDUOUS_MCP_TOKEN=<token> deciduous remote setup --url https://deciduous.example.com`. `DECIDUOUS_NO_SERVER=1` is for throwaway directories; it gives a project with no server at all (see [Without a shared server](content/local.md#no-server-at-all)).
 
-The parent is missing, or it lives in a different workspace from the one this
-call resolved to. Look it up with `show_node`. If it is in another workspace,
-pass that `workspace`, or check whether an `X-Deciduous-Workspace` header is
-pinning you somewhere else.
+### "the server rejected the token (401)"
 
-## `deciduous remote status` says local holds more than the server
+```text
+Error: reached https://deciduous.example.com but the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.
 
-```
-Drift: local holds more than the server. `deciduous remote push` to send it up.
+Nothing was stored or written.
 ```
 
-Something wrote with the CLI (`deciduous add`) or the old stdio MCP server.
-Those writes never reached the server. Run `deciduous remote push`, then write
-through the HTTP MCP tools from now on. The
-reverse message, the server holding more, means other agents have written. Run
-`deciduous remote pull`.
+`remote init` says the same with `Nothing was written; the project is unchanged.` Both exit 1 and change nothing.
 
-## Your nodes are missing from the workspace you expected
+**Causes**, in the order worth checking:
 
-They landed in another workspace. The usual causes are a `workspace` argument
-set to a worktree's directory name instead of the repository's, a typo (unknown
-names are created, not rejected), or no argument at all from outside a git
-repository, which lands in `scratch`. Find them:
+1. **The URL ends in `/mcp`.** The CLI wants the base URL; the agent wants `<base>/mcp`. Given `.../mcp`, the CLI asks for `.../mcp/health`, which is behind authentication, and reports a token problem that is really a path problem:
 
-```
-query_nodes(workspace: "*", search: "<part of the title>")
-```
+   ```text
+   Error: cannot reach http://127.0.0.1:4000/mcp: the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.
+   ```
 
-## A write is refused because another session holds the branch
+   Drop the `/mcp`.
+2. **A stale `DECIDUOUS_MCP_TOKEN` in this shell.** The environment wins over the stored token. `env | grep DECIDUOUS_MCP_TOKEN`, then `unset` it or correct it.
+3. **The stored token belongs to another server.** There is one stored token per machine, not one per URL. The message says "Check DECIDUOUS_MCP_TOKEN" even when the token came from `~/.config/deciduous/credentials`. See [One token per machine](content/local.md#one-token-per-machine).
+4. **The token is wrong.** Ask whoever runs the server. (`remote login --url` also says "Check DECIDUOUS_MCP_TOKEN" when the bad token came from stdin.) `deciduous remote login --url https://deciduous.example.com` reads a token from stdin, checks it against that server, and only then stores it (mode 0600).
 
-Writes lock per workspace and branch. Another agent is writing on the same
-branch right now, and the refusal names it. Use your own branch. Call
-`check_activity` to see who is active where.
+### "cannot reach ... Connection refused"
 
-## HTTP 403 when scripting against the server directly
-
-The public deployment sits behind Cloudflare, which rejected Python's default
-`urllib` User-Agent with 403 before the request reached the server. Send a
-User-Agent of your own. The same request with `User-Agent: something/1` passed.
-
-## `Server not initialized`
-
-```json
-{"error":{"code":-32600,"data":{"message":"Server not initialized"},"message":"Invalid Request"}}
+```text
+Error: cannot reach http://127.0.0.1:9: transport error: http://127.0.0.1:9/health: Connection Failed: Connect error: Connection refused (os error 61)
 ```
 
-You posted `tools/list` or `tools/call` without an MCP session. Send
-`initialize` first, keep the `mcp-session-id` response header, send
-`notifications/initialized`, then send your call with that header. MCP clients
-do this themselves. You only see this when you script HTTP by hand.
+Nothing listens at that address and port. For a team server, check the URL with whoever runs it and `curl https://deciduous.example.com/health` (it answers `ok` without a token). For this machine's server, the port is `DECIDUOUS_PORT` in `~/.config/deciduous/server/.env` and the log is `~/.config/deciduous/server/logs/server.log`.
 
-## The tools you expect are not there
+A name that does not resolve fails the same way, with `Dns Failed: resolve dns name 'deciduous.invalid:443': failed to lookup address information`.
 
-`link_nodes`, `search_nodes` and `trace_chain` belong to the old `deciduous mcp` stdio server.
-`add_edge`, `query_nodes` and `ask_graph` belong to the shared server. If the
-user expects one and you see the other, the client is registered against the
-wrong one. For Claude Code, `claude mcp get deciduous` shows which.
+### "no such endpoint (404)"
+
+```text
+Error: cannot reach http://127.0.0.1:4000/deciduous-mcp: no such endpoint (404). Is the URL right, including any path prefix?
+```
+
+The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (the reference deployment is `https://bobbby.online/deciduous-mcp`); a server reached directly has none. The base URL is whatever `<base>/health` answers `ok` on.
+
+### "timed out reading response"
+
+The CLI gives `/health` 15 seconds. A server that is up but slow to answer (one production server took 2-7 s per `/health` on 2026-11-08) can push `remote setup --url` over that, and it fails with `timed out reading response` before anything is stored. Run it again. If it keeps happening, the proxy or the server is struggling; `curl -w '%{time_total}\n' https://deciduous.example.com/health` shows by how much.
+
+### "no token for the shared graph"
+
+```text
+Error: no token for the shared graph.
+
+Store one (kept outside every repository, mode 0600):
+
+    deciduous remote login
+
+or set DECIDUOUS_MCP_TOKEN for a one-off.
+```
+
+Neither `DECIDUOUS_MCP_TOKEN` nor `~/.config/deciduous/credentials` holds a token. Note that `remote setup --url` with a token only in the environment does not store it: the next shell without the variable gets this message. `deciduous remote login --url <base>` stores it.
+
+### "invalid workspace name"
+
+```text
+Error: the server returned 422: invalid workspace name "a/b": it looks like a path; pass the repo root's basename
+```
+
+Workspace names are one path segment. The server trims and lowercases them (`--workspace "My App"` is stored as `my app`), so two spellings that differ only in case are one workspace.
+
+## Writing
+
+### "the local write succeeded but the server did not get it"
+
+```text
+Created node 1 (type: goal, title: Written while the server is down) [confidence: 70%] [branch: main]
+Warning: the local write succeeded but the server did not get it: transport error: http://127.0.0.1:9/ops: Connection Failed: Connect error: Connection refused (os error 61)
+1 write(s) queued in /home/you/code/my-app/.deciduous/remote-log.jsonl. They are sent on the next write, or now with `deciduous remote push` once the server is reachable.
+```
+
+**Cause.** The server was unreachable (or took longer than the 10 seconds a write waits for it). Nothing is lost: the write is in the local database and the op is in `.deciduous/remote-log.jsonl`. The command exits 0.
+
+**What to do.** Usually nothing. The next CLI write that reaches the server sends everything queued before it. To see what is waiting:
+
+```text
+$ deciduous remote status
+Log: 3 write(s) waiting, 0 rejected  (/home/you/code/my-app/.deciduous/remote-log.jsonl)
+  waiting   f7b164cd  create goal f50e03ed "Written while the server is down"
+  waiting   87b844eb  create action 316bf956 "Second"
+  waiting   d8aa0105  link f50e03ed -> 316bf956 (leads_to)
+Error: cannot reach http://127.0.0.1:9: ...
+```
+
+`remote push` while the server is still down exits 1 and keeps everything (`3 write(s) still waiting in ...`). Once it is back:
+
+```text
+$ deciduous remote push
+Pushed 3 op(s) to my-app: 3 applied, 0 already there, 0 rejected
+```
+
+Pushing twice is safe; the server applies each op at most once, by its id, and reports repeats as "already there". For a server that is up but slow, `DECIDUOUS_OPS_TIMEOUT=<seconds>` raises the 120-second limit on each `remote push` request.
+
+### "the server refused it: the server rejected the token (401)"
+
+```text
+Warning: the local write succeeded but the server refused it: the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.
+1 write(s) wait in /home/you/code/my-app/.deciduous/remote-log.jsonl, and every later write will be refused the same way until that is fixed. `deciduous remote status` lists them.
+```
+
+The project's server is up but the token in use is not its token: almost always the one-token-per-machine problem after `remote login` or `remote setup --local` for a different server. The write exits 0, so a script will not notice. Put the right token in place ([One token per machine](content/local.md#one-token-per-machine)), then `deciduous remote push`.
+
+### "belongs to another repository"
+
+```text
+Warning: the local write succeeded but the server refused it: workspace "p5" on http://127.0.0.1:4000 belongs to another repository: an unrelated project whose directory is also called p5 (the name is the directory name, lowercased) claimed it first, and this repository shares none of its root commits.
+
+Give this project its own workspace:
+
+    deciduous remote init http://127.0.0.1:4000 --workspace <another-name>
+
+or, if the two repositories really should write one graph, say so by naming it:
+
+    deciduous remote init http://127.0.0.1:4000 --workspace p5
+```
+
+**Cause.** The default workspace is the repository's directory name. The server ties a workspace to the root commits of the first repository that writes to it, and refuses one that shares none. Two unrelated projects both called `api` collide here; two clones or worktrees of one repository never do.
+
+**Fix.** Pick a distinct name with `--workspace`, then `deciduous remote push` to send what waited. Naming an existing workspace explicitly is how you say two repositories should share it: `remote init` then reports `claim: adopted`.
+
+A repository with no commit yet cannot be tied to anything. `remote init` warns, and writes wait in the log until the first commit:
+
+```text
+  note: this repository has no commit yet, so the server cannot tie workspace "my-app" to it, and an unrelated repository also called my-app could later claim the workspace with these writes in it. Nothing is sent until the first commit; the writes wait in the log, and the first command after that commit sends them.
+```
+
+### Rejected writes
+
+`remote status` lists ops the server refused (as opposed to ops it never received) with the server's reason. They stay in the log until you decide: `deciduous remote push --retry-rejected` after fixing the cause, `--drop-rejected` to discard them all, or `--drop <op-id prefix>` for one. None was provoked for this page; the flags are from `remote push --help`.
+
+### "Local only: no remote configured"
+
+```text
+$ deciduous remote status
+Local only: no remote configured for this project.
+
+    deciduous remote init <url>
+```
+
+`status` exits 0 here; `push`, `pull` and `watch` print `Error: no remote configured for this project.` and exit 1. The project was initialized with `DECIDUOUS_NO_SERVER=1`, or `.deciduous/config.toml` lost its `[remote]` table. A linked git worktree with no `[remote]` of its own uses its main checkout's.
+
+## CLI and agent disagree
+
+### The agent's nodes are not in `deciduous nodes`, or yours are not in the agent's
+
+First, `claude mcp get deciduous`, and compare its URL with `[remote] url` in `.deciduous/config.toml`:
+
+```text
+$ claude mcp get deciduous
+deciduous:
+  Scope: User config (available in all your projects)
+  Status: ✔ Connected
+  Type: http
+  URL: https://bobbby.online/deciduous-mcp/mcp
+  Headers:
+    Authorization: Bearer <token>
+```
+
+That is from a machine whose projects point at `http://127.0.0.1:4000`: CLI writes go to one server, the agent's to another, and both report success. `remote setup` does not fix this. It registers Claude Code only when no `deciduous` server is registered, and otherwise prints `Unchanged Claude Code already has a deciduous MCP server` whatever URL that one has. Re-register it yourself, or give the repository its own `.mcp.json`; both are on [Connect your agents](content/clients.md).
+
+Second, if the URLs agree: CLI reads (`nodes`, `show`, `serve`) come from the local database, which is a cache. It does not refresh itself. After an agent writes over MCP:
+
+```text
+$ deciduous remote status
+                 local    server
+  nodes              1         2
+
+Only on the server (1)
+  observation 96096527 "MCP probe obs"
+
+Differs: `deciduous remote pull` takes the server's side.
+$ deciduous remote pull
+Pulled: my-app <- http://127.0.0.1:4000
+  fetched 2 nodes, 0 edges, 0 deletion(s)
+  imported 1 new node(s), updated 0, removed 0; imported 0 edge(s), removed 0
+```
+
+Third, the workspace. An agent passes `workspace` on each call; a `.mcp.json` may pin one with `X-Deciduous-Workspace`, and a pinned header overrides the argument. `list_workspaces` over MCP shows every name on the server; two near-identical names are usually the split.
+
+### "No node has a change_id starting with ... Run 'deciduous sync'"
+
+```text
+Error: No node has a change_id starting with '3bcdac84'. Run 'deciduous sync' if a teammate created it.
+It is the server id 3bcdac84-4e0 = change_id 11111111-222 (idempotent), which this clone does not have yet. Run `deciduous remote pull` first.
+```
+
+The first line is wrong for a project with a server: `sync` is the no-server command and does nothing for this. The second line is right. An agent created the node over MCP and the local cache has not seen it; `deciduous remote pull`, then the same `link` works (`Note: '3bcdac84' is the server id ... local #7`).
+
+### Themes and tags are missing on the server
+
+They are never sent. `remote status` says so on every run: `Themes and tags are not sent to the server, so they are not compared.`
+
+## MCP over HTTP
+
+These are what an MCP client (or `curl`) sees from `<base>/mcp`.
+
+| Response | Meaning |
+| --- | --- |
+| `401 {"error":"unauthorized"}` | No `Authorization: Bearer <token>` header, or the wrong token. |
+| `404` with `"message":"Session not found"` and `"detail":"This session expired or the server restarted. Send a new initialize request without a session id to start another."` | The session id is unknown: the server restarted, the session idled out, or the client never sent `notifications/initialized` after `initialize` (a session that skips it is dropped, and the next call gets this). Reconnect the MCP server in the client. |
+| `405` on `GET /mcp` | Expected. The server offers no server-to-client stream; everything is POST. |
+| `query_nodes has no argument "bogus". Its arguments are: branch, file, limit, search, status, type, workspace` | Every tool refuses an argument it does not have and names the ones it does. Usually an agent using a stdio tool name or argument against the HTTP server; see [MCP tools](content/mcp.md). |
+| `node_id is not a node id: "11111111"` | Server tools take the full server UUID (`id` in every result). The CLI's 8-character change_id prefixes do not work over MCP. |
+
+## Reporting a problem
+
+Include `deciduous --version`, the server version (`serverInfo.version` in the MCP `initialize` reply), the command, and the error text as printed. Replace tokens with `<token>`. `deciduous remote watch --url` prints a URL with the token in its query string; never paste that.

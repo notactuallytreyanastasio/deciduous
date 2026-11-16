@@ -1,92 +1,106 @@
-# Develop the shared graph service
+# Develop deciduous
 
-Deciduous has two implementations to account for: the shared Postgres service in `deciduous_mcp/` and the Rust local CLI in `src/`. The team workflow depends on the former. Avoid changing one interface and assuming the other inherited the behavior.
+The repository holds three things that are built and tested separately: the Rust CLI at the root (`cargo`), the graph server in `deciduous_mcp/` (Elixir, `mix`), and two web builds, the graph viewer in `web/` and this documentation site in `scripts/docs/`. A change to a tool's behaviour usually needs both the Rust and the Elixir side: the CLI's `deciduous mcp` and the server's `/mcp` are separate implementations with different tool sets ([MCP tools](mcp.md)).
 
-Use a disposable local stack from [local Postgres setup](local-postgres.md). Do not point tests or migration experiments at a production database.
+## The CLI
 
-## Repository layout
+The toolchain is pinned in `rust-toolchain.toml` to 1.92.0, with clippy and rustfmt; rustup picks it up from the file. Stable is pinned on purpose: a newer clippy reported 29 errors on an unchanged tree once.
 
-| Directory | What to change there |
-| --- | --- |
-| `deciduous_mcp/lib/deciduous_mcp/mcp/tools/` | Shared HTTP MCP tool schemas and handlers |
-| `deciduous_mcp/lib/deciduous_mcp/graph/` | Postgres graph operations |
-| `deciduous_mcp/lib/deciduous_mcp/web/` | HTTP auth, routes, sessions, workspace pinning, event socket |
-| `deciduous_mcp/priv/repo/migrations/` | Postgres schema and triggers |
-| `deciduous_mcp/test/` | Shared-service tests |
-| `src/remote.rs`, `src/watch.rs` | CLI remote configuration, transfer, event client |
-| `src/mcp/` | Local SQLite MCP tools and protocol |
-| `src/db.rs`, `src/records.rs` | SQLite and optional Git record synchronization |
-| `web/`, `src/viewer.html` | Local graph viewer source and embedded build |
-| `docs/content/` | Canonical documentation source |
-
-## Work on the server
-
-The Mix project declares Elixir `~> 1.16`; the supplied container builds with Elixir 1.18.4 and Erlang/OTP 28.0. Use the pinned container recipe when you want the same release environment as deployment.
-
-For a native development environment, install Elixir/Erlang and run a disposable Postgres instance compatible with `deciduous_mcp/config/dev.exs` and `test.exs`. Those files use local development credentials and separate `deciduous_mcp_dev` and `deciduous_mcp_test` databases. They are not production examples. The `DATABASE_URL` override in `runtime.exs` applies in production mode.
-
-From `deciduous_mcp/`, with a development-only token supplied through the environment:
-
-```sh
-mix deps.get
-mix ecto.create
-mix ecto.migrate
-mix test
-mix format --check-formatted
+```text
+$ cargo build
+   Compiling deciduous v1.1.0 (/Users/you/code/deciduous)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.36s
 ```
 
-The application requires `DECIDUOUS_MCP_TOKEN` even during tests. Supply a generated development token of at least 32 bytes, not a production credential. `mix test` creates and migrates its configured test database before the tests run. Check its target before invoking it. `mix ecto.reset` drops data and is not part of an upgrade procedure.
+(an incremental build; a clean one takes minutes). Before committing, the repository's own rules ask for all three:
 
-Run the development service with `mix run --no-halt` after migrations. The default HTTP port is 4000. Use the [reference](reference.md#http-endpoints) to distinguish `/health`, `/mcp`, and `/events`.
+```bash
+cargo test
+cargo clippy --all-targets
+cargo build --release
+```
 
-## Add or change a shared tool
+Use `./target/debug/deciduous` or `./target/release/deciduous` when checking a change. The `deciduous` on your PATH is whatever you installed, and it will happily answer instead.
 
-Create the tool under `mcp/tools/` using `DeciduousMcp.MCP.Component`, then register it in `mcp/server.ex`. Registration in the convenience `Tools` list alone does not expose it to clients. Check the live `tools/list` result after rebuilding.
+### `cargo test` on a Mac with Homebrew
 
-For a scoped read, resolve the workspace through `Scope.read_scope`. For a new-node write, use `Scope.write_workspace_id`. For an existing-node mutation, use `Scope.write_scope_for_node` so the lease matches the node's workspace and the header pin is checked.
+`tests/git_sync_integration.rs` drives real git with the freshly built binary as the merge driver. It builds the PATH for each simulated developer from the directory holding `git`, and refuses to run if that directory also holds an installed `deciduous`, which would stand in for the binary under test. With Homebrew's git and Homebrew's deciduous both in `/opt/homebrew/bin`, every test in that file fails at once:
 
-Keep an actual transaction around any operation documented as all-or-nothing. Several existing convenience helpers perform sequential writes despite their schema descriptions; do not copy that atomicity claim into a new tool without testing rollback behavior.
+```text
+thread 'a_merge_whose_ancestor_will_not_parse_is_refused_not_decided_by_timestamp' panicked at tests/git_sync_integration.rs:43:5:
+git shares a directory with an installed deciduous (/opt/homebrew/bin)
+```
 
-Add tests for missing or invalid arguments, the correct workspace, header/argument precedence, conflicting sessions on one branch, independent branches, and partial-failure behavior. For borrowed ideas, verify both the source resolution and the `took_from` edge direction.
+That is the test protecting itself, not a bug. Put the system git first:
 
-The custom component module preserves the JSON Schema in `tools/list` and derives a looser Peri validation schema for incoming arguments. Required fields and basic scalar types are checked, while arrays and objects use a permissive type. Do not assume the advertised schema alone enforces every enum or nested constraint. Validate in the handler or graph changeset and test rejection paths.
+```bash
+PATH=/usr/bin:$PATH cargo test
+```
 
-## Test the HTTP boundary
+```text
+$ PATH=/usr/bin:$PATH cargo test --test git_sync_integration a_merge_whose_ancestor
+test a_merge_whose_ancestor_will_not_parse_is_refused_not_decided_by_timestamp ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 3.09s
+```
 
-Check a release through its public routes, not only by calling a tool module in a unit test:
+The full suite run that way passed 687 tests on 2026-11-08. It is slow; filter by test binary (`--test <name>`) or name while iterating.
 
-- `/health` answers without a token; protected routes reject missing or wrong credentials.
-- MCP initialization and `tools/list` succeed; arguments such as `workspace`, `branch`, and search filters reach the handler.
-- A scoped write can be read by a second client in the same workspace.
-- Stale MCP sessions fail fast and clients can initialize again.
-- `GET /mcp` returns the expected 405; normal tool calls still work.
-- `/events` receives a real write and a disconnected client can recover through graph queries.
-- Blob upload validates content hashes; document reads do not expose private content through caches.
+Tests that run `deciduous init` in a temporary directory need `DECIDUOUS_NO_SERVER=1`, or `init` stops at the server step ([Troubleshooting](troubleshooting.md#init-stops-with-no-terminal-to-ask)).
 
-Do not interpret a workspace-header test as proof of tenant authorization. The current service is a shared trust boundary. Test any future access-control change across ID-based reads, workspace listing, imports, document access, and all write paths.
+### Templates
 
-## Work on the Rust CLI
+`deciduous init` and `update` write files from templates in `src/init/`. `src/init/known_templates.rs` is generated: the sha256 of every template ever shipped, which is how `update` tells a file deciduous wrote from one a user edited. It is built from every template text in the repository's git history, so regenerate it after a template change is committed: `python3 scripts/gen_known_templates.py > src/init/known_templates.rs`. A template text missing from the list is one `update` will treat as the user's and keep.
 
-From the repository root:
+## The graph server
 
-```sh
+`deciduous_mcp/` is an Elixir application (`mix.exs` declares Elixir `~> 1.16`; CI uses Elixir 1.18.4 on OTP 28.3.3). It refuses to boot without a `DECIDUOUS_MCP_TOKEN` of at least 32 bytes, tests included. `mix test` creates and migrates its database first (the `test` alias), using `PGHOST`, `PGUSER`, `PGPASSWORD` (default `postgres`/`postgres` on localhost) and database `deciduous_mcp_test`. CI's job, in `.github/workflows/integration.yml`:
+
+```bash
+cd deciduous_mcp
+export MIX_ENV=test PGHOST=localhost PGUSER=postgres PGPASSWORD=postgres
+export DECIDUOUS_MCP_TOKEN=mix-test-token-not-a-secret-0000000000000000
+mix deps.get
+mix test
+```
+
+against a `postgres:17-alpine` service. Development (`config/dev.exs`) uses `deciduous_mcp_dev` with the same credentials. Neither was run for this page.
+
+Things that are easy to get wrong here:
+
+- A new tool lives in `lib/deciduous_mcp/mcp/tools/` and has to be registered with the server to appear in `tools/list`. Check the live list after a rebuild; the CLI's tools are a different list.
+- Every tool's `workspace` argument is merged in by `DeciduousMcp.MCP.Scope`; resolve reads and writes through it so the `X-Deciduous-Workspace` pin is honoured.
+- Unknown arguments are refused by name. A new argument has to be in the schema or clients get `has no argument`.
+- A migration needs `STRUCTURE.sql` regenerated with it (`scripts/dump_structure.sh` against a disposable PostgreSQL 17). CI's `structure` job fails when they disagree.
+- Server dependencies are audited at release: `mix hex.audit` must be clean or the self-contained server build fails.
+
+Release executables are built with Burrito (`Dockerfile.burrito`, `BURRITO_TARGET=darwin_arm64 mix release`, output in `burrito_out/`). To try an unreleased server through the CLI's own installer, point `DECIDUOUS_SERVER_BINARY` at that file (or `DECIDUOUS_SERVER_BUNDLE` at a Docker bundle) before `remote setup --local`. That installs a service on your machine; do it on a machine where that is what you want. `deciduous_mcp/DEPLOY.md` documents every server setting.
+
+## The web viewer
+
+`web/` is React and TypeScript in one `App.tsx`, built by Vite into a single HTML file that the CLI embeds. After changing anything under `web/src/`:
+
+```bash
+cd web && npm run build && cd ..
+cp web/dist/index.html src/viewer.html
+cp web/dist/index.html docs/demo/index.html
 cargo test
 cargo build --release
-cargo clippy
-./target/release/deciduous --version
-./target/release/deciduous remote watch --help
 ```
 
-Use the built binary for command verification. A `deciduous` elsewhere on your PATH may be an older release with different behavior. In particular, 0.19's `remote watch` printed a URL; 1.0 connects and streams by default.
+`deciduous serve` then serves the new viewer from the rebuilt binary. `npm run typecheck` and `npm test` (Vitest) run in `web/`. `scripts/validate-types.sh` checks that the TypeScript types in `web/src/types/` still match the Rust ones. These steps are from the repository's `CLAUDE.md` and `web/package.json`; they were not run for this page.
 
-Use a temporary test repository and database for mutation tests. Do not run `deciduous update`, migrations, or import experiments against a user's working checkout as a substitute for a fixture.
+## This documentation
 
-## Viewer changes
+The site is generated from `docs/content/*.md` by `scripts/docs/`. Navigation and labels are in `scripts/docs/pages.json`; each page needs exactly one `# H1`, and its first paragraph becomes the page description. Links between pages are relative (`[Architecture](architecture.md)`).
 
-The viewer reads the local graph. A viewer build does not add a Postgres connection or make `remote pull` automatic. If you change `web/src/`, rebuild and update the embedded HTML locations required by the repository's `AGENTS.md`, then test the local server and static demo. Keep graph data fixtures free of private prompts and documents.
+```bash
+npm ci --prefix scripts/docs
+npm run build --prefix scripts/docs   # writes the HTML
+npm run check --prefix scripts/docs   # verifies generated files match, then runs test.mjs
+```
 
-## Release and upgrades
+Generated HTML and the search index are committed with the Markdown; CI fails if they disagree. To look at it: `python3 -m http.server 8766 --directory docs --bind 127.0.0.1`.
 
-Keep the Rust and Elixir versioned interfaces documented. A server migration and a CLI update are distinct operations. Back up Postgres before a schema upgrade, test restoration into a separate database, and retain the prior application image until the new release is verified. Follow [upgrading](upgrading.md) for the supported operator procedure.
+## Releasing
 
-The container runs `DeciduousMcp.Release.migrate()` before it starts the release. Review a new migration for data loss, locking, and compatibility with the old application before relying on that startup behavior. Do not promise that rolling back an image reverses a schema migration.
+The steps (both version numbers, both changelogs, `mix hex.audit`, tagging by hand from the merge commit, and watching `release.yml` until crates.io and the Homebrew tap show the version) are in the repository's `CLAUDE.md` under "Release Process". A release that looks finished may have published nothing; check `gh release view vX.Y.Z`, crates.io and the tap.

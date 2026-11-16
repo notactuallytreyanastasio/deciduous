@@ -1,61 +1,148 @@
-# Reconstruct earlier decisions
+# Keep the approaches that were abandoned
 
-An agent team can add useful history to its shared graph before it starts changing an unfamiliar repository. Use commits, tests, issues, and design notes to explain how the current implementation developed. Store the resulting records in the same workspace the team uses for current work.
-
-This is optional groundwork. You can begin with [the team workflow](teams.md) and record new decisions as they happen without reconstructing the entire repository.
-
-## Choose a bounded question
-
-Pick a subsystem or a decision that affects the task: why retries have a fixed cap, why an endpoint has two response shapes, or why a dependency was removed. Assign separate investigations to agents only when the questions are independent. Share the source nodes so they can connect findings that overlap.
-
-Use one workspace and each investigator's actual branch. Read existing decisions first to avoid creating a second account of the same change without noticing the first.
-
-## Read the evidence before writing a story
-
-Inspect the relevant history with Git:
-
-```sh
-git log --all --oneline -- src/retry.rs tests/retry.rs
-git log --all --format=fuller -- src/retry.rs
-git show COMMIT_SHA -- src/retry.rs tests/retry.rs
-```
-
-Replace the paths and commit placeholder with evidence from the repository. Start with the relevant commit list before narrowing it by keywords. Search for introductions, replacements, renames, and removals; an abandoned approach often explains the surviving one.
-
-A commit proves what changed. It may not prove why. Distinguish an author's stated rationale from your inference. If no source supports the rationale, record the uncertainty instead of filling the gap with a plausible explanation.
-
-## Put the finding in shared memory
-
-Use HTTP MCP tools to create an observation with a useful title, a description of the source evidence, and the full commit hash. Connect it to the goal or decision under investigation. A teammate should be able to follow the node back to the exact diff or test.
-
-Record a historical design choice as a decision only when the evidence supports that choice. Record alternatives as options only when they were considered, not because they are alternatives you can imagine now.
-
-The shared `add_node` tool does not have a backdating argument. Preserve the historical date in the description and commit reference; its creation timestamp records when your team added the node. The optional local CLI supports `--date`, but a local write does not appear in the shared workspace without a separate, reviewed migration.
-
-## Represent a replacement without erasing the old choice
-
-Connect the old decision to the observation that challenged it, then to a revisit and the new decision:
+When an approach turns out wrong, the useful record is not the corrected decision alone but the chain that replaced it: the old decision, the observation that killed it, a `revisit`, and the new decision, with the old one marked `superseded`. The same structure serves history reconstructed after the fact from commits. Both end up in the shared workspace, written either with `deciduous archaeology` from the CLI or node by node over MCP.
 
 ```text
-old decision -> observation -> revisit -> replacement decision
+old decision --> observation (why it failed) --> revisit --> new decision
+  (superseded)
 ```
 
-Mark the old choice `superseded` if it explains a previous implementation. Keep the reason for replacement specific: a failing test, a deployment limit, or a measured cost. Do not model attempts made years apart as options considered at one meeting.
+## A pivot from the CLI, in one command
 
-## Connect investigators' findings
+`deciduous archaeology pivot` writes the observation, the revisit and the new decision, links them, and supersedes the old node. `--dry-run` shows it first:
 
-An agent studying the retry loop may discover that another agent already traced its timeout requirement. Read that source node, link the dependency, and use `took_from` when the source informed your own work. The [MCP guide](mcp.md#borrow-with-a-source) shows the supported borrowing call.
+```console
+$ deciduous archaeology pivot 0a4240dc \
+    "A fixed 30s deadline fails batch jobs that legitimately wait minutes" \
+    "Per-caller deadline passed in the request context" \
+    -r "One deadline cannot fit interactive and batch callers" -c 75
+=== PIVOT CREATED ===
 
-Do not duplicate the entire other investigation inside your description. Link to it and record the new inference or evidence you contributed. Check activity at milestones so the team can change direction before two agents complete the same history pass.
+  #27 [observation] "A fixed 30s deadline fails batch jobs that legitimately wait minutes"
+    └── linked from #4 "Use an overall deadline, not an attempt cap"
+  #28 [revisit] "Reconsidering: Use an overall deadline, not an attempt cap"
+    └── linked from #27 [observation]
+  #29 [decision] "Per-caller deadline passed in the request context"
+    └── linked from #28 [revisit]
 
-## Review the result
+  Superseded: #4 "Use an overall deadline, not an attempt cap" -> status: superseded
 
-Use `show_node` to inspect claims and sources, `find_orphans` to find missing incoming links, and graph reads to check connections. A clean orphan check cannot establish factual accuracy. Have a second agent compare important claims with the original commits or tests.
+  Summary: 3 nodes created, 3 edges created, 1 node superseded
+```
 
-Keep a short description of what you did not investigate. That gives the next session a boundary and prevents a partial history from looking complete.
+The first argument takes a local id, `change_id` prefix or server UUID. All of it reached the server; `remote status` afterwards listed only nodes other writers had added.
 
-## Existing local archaeology workflows
+The work done under the old decision is history too. `archaeology supersede --cascade` marks a node and everything below it:
 
-Older installations may have `/pulse`, `/narratives`, `/archaeology`, or `/decision-graph` command files and local narrative Markdown. They can help structure an investigation, but their generated instructions may call the SQLite CLI. Review them before giving them to a team using shared Postgres.
+```console
+$ deciduous archaeology supersede 29d960e4 --cascade
+Superseded node #5 "Apply a 30s deadline to the retry loop"
+  Also superseded (cascade):
+    #6 "Retry loop stops at the deadline"
+  Total: 2 node(s) marked superseded
+```
 
-Use the same evidence discipline while replacing local writes with the shared HTTP tools. Migrate an existing local graph through [upgrading](upgrading.md); do not bulk-push an old copy into an active team workspace without review.
+`--dry-run` lists what would change; read it before running the real thing.
+
+## The same pivot over MCP
+
+The server has no pivot tool. Three `add_node` calls with `parent_id`, then `update_node`:
+
+```javascript
+add_node({workspace: "my-app", branch: "agent-api", node_type: "observation",
+  title: "Mobile client cannot parse problem+json",
+  description: "iOS 1.x hard-codes {error: string}; 12% of traffic",
+  parent_id: "<old decision id>"})
+add_node({workspace: "my-app", branch: "agent-api", node_type: "revisit",
+  title: "Reconsidering the error format", parent_id: "<observation id>"})
+add_node({workspace: "my-app", branch: "agent-api", node_type: "decision",
+  title: "problem+json for v2 clients, legacy body for v1", parent_id: "<revisit id>"})
+update_node({workspace: "my-app", branch: "agent-api", node_id: "<old decision id>", status: "superseded"})
+```
+
+Each call needs the id the previous one returned, so they cannot go in one batch. The CLI reads it back as a pivot once pulled:
+
+```console
+$ deciduous remote pull
+$ deciduous narratives pivots -b agent-api
+=== PIVOTS === (1 found)
+
+Pivot #1: [revisit #40] "Reconsidering the error format"
+  Old approach: #8 [decision] "Use RFC 7807 problem+json over an ad-hoc error object" (superseded)
+  Triggered by: #39 [observation] "Mobile client cannot parse problem+json"
+  New approach: #38 [decision] "problem+json for v2 clients, legacy body for v1"
+```
+
+`ask_graph` follows revisits and superseded nodes when the question asks about history or pivots, so "why did we change the retry deadline?" comes back with both the dead decision and its replacement ([Recovery](recovery.md#what-the-agent-is-told)).
+
+## Statuses
+
+`superseded` means replaced by a newer approach; `abandoned` means tried and dropped with nothing replacing it. `deciduous status <id> superseded` and `abandoned` work, although the 1.1.0 `status --help` lists only `pending, active, completed, rejected`. Over MCP, `update_node` takes all six. Query the current state with `query_nodes` and `status: "active"`, the history with no status filter, or `type: "revisit"` for the pivots.
+
+## Reconstructing history from commits
+
+For a codebase that was built before anyone logged decisions, the graph can be filled in from git. Pick one bounded question (why retries have a cap, why an endpoint has two response shapes) rather than the whole repository, and read the evidence first:
+
+```bash
+git log --oneline -- src/retry.rs
+git show <sha> -- src/retry.rs
+```
+
+A commit proves what changed, not why. Record the author's stated reason as such, mark your inference as inference, and say what you did not look at. Record options only where the evidence shows they were considered; alternatives you can think of now are not history.
+
+The CLI can backdate a node and tie it to the commit:
+
+```console
+$ deciduous add decision "Retry with exponential backoff (historical)" \
+    -d "Reconstructed from commit message" --date 2024-03-01 --commit <sha>
+Created node 37 (type: decision, ...) [commit: 4c3ba126...] [branch: main] [date: 2024-03-01T00:00:00-05:00]
+```
+
+The date reaches the server: `query_nodes` returned `"created_at": "2024-03-01T05:00:00.000000Z"` for it. `--date` takes `YYYY-MM-DD`, `YYYY-MM-DD HH:MM:SS` or RFC 3339, read in local time. MCP's `add_node` has no date argument; an agent reconstructing history puts the date and full hash in the description, or uses the CLI. (An older page said a backdated CLI node stays local. With a `[remote]` it does not.)
+
+`deciduous archaeology timeline` lists nodes in creation order, so backdated ones sort where they belong:
+
+```console
+$ deciduous archaeology timeline -b main
+=== TIMELINE === (11 nodes)
+
+  2024-03-01  #37  [decision]      Retry with exponential backoff (historical) pending
+  2026-11-08  #1   [goal]          Bound retries for failed requests        active        90%
+  2026-11-08  #4   [decision]      Use an overall deadline, not an attempt cap superseded    80%
+  2026-11-08  #27  [observation]   A fixed 30s deadline fails batch jobs that legitimately wait minutes pending
+  2026-11-08  #28  [revisit]       Reconsidering: Use an overall deadline, not an attempt cap pending
+  2026-11-08  #29  [decision]      Per-caller deadline passed in the request context pending  75%
+```
+
+It reads the local cache; `remote pull` first. `-t` filters by type, `-l` limits to the most recent N, `--json` for scripts.
+
+## Narratives
+
+A narrative is the prose version: how one part of the system got the way it is, with its pivots. `deciduous narratives init` writes `.deciduous/narratives.md` with one section per active goal to fill in:
+
+```console
+$ deciduous narratives init
+Created .../.deciduous/narratives.md with 2 goal section(s)
+$ deciduous narratives show
+# Narratives
+...
+## Bound retries for failed requests
+> Node #1 | Status: active
+
+**Current state:** [How it works today]
+
+**Evolution:**
+1. [First approach] - [why]
+2. **PIVOT:** [what changed] - [why it changed]
+3. [Current approach] - [why this is better]
+```
+
+That file is local. It is not sent to the server, and the `.gitignore` that `deciduous init` writes ignores everything in `.deciduous/` except `config.toml` and `graph.json`, so git does not carry it either. Teammates see the graph, not the narrative; put anything they need into nodes, or commit the file somewhere outside `.deciduous/` with `-o`.
+
+## The commands and skills init installs
+
+`deciduous init` writes `.claude/commands/decision-graph.md` (`/decision-graph`: build a graph from commit history, with narratives as the source of truth and commits as evidence) and three instruction files, `.claude/skills/pulse.md`, `narratives.md` and `archaeology.md`, for mapping the current design, writing narratives, and turning them into nodes. All of them drive the CLI (`deciduous add`, `link`, `status`, `--date`), so in a project with a `[remote]` what they write reaches the server. Review them before handing them to an agent: `/decision-graph` assumes the binary is at `~/.cargo/bin/deciduous`.
+
+## Check the result
+
+`find_orphans` finds nodes nothing points at; an empty list says the graph is connected, not that it is true. Have a second agent check the important claims against the commits they cite.

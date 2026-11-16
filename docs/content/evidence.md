@@ -1,80 +1,120 @@
-# Give each finding evidence
+# Attach the evidence, or derive the graph from it
 
-Record enough evidence for another agent to check a claim without reconstructing your whole session. Put the test command and result beside the action it verifies. Keep a rejected experiment's failure reason connected to the decision it changed.
+A node is only as good as what backs it. Deciduous has two ways to put evidence next to a claim: attach a file to a node with `deciduous doc attach`, which in a project with a `[remote]` uploads the bytes to the server; and `deciduous transcript import`, which reads a Claude Code session's transcript and writes the goals, actions and outcomes it can prove, each marked with what it rests on.
 
-## Record the check you ran
+## Say what ran
 
-An outcome should say what ran, on which code, and what remains untested. Avoid "all tests pass" if you ran one file.
+Before either, the cheapest evidence is a precise outcome: the command, the count, the commit, and what was not checked.
 
 ```javascript
-add_node({
-  workspace: "example-app", branch: "agent-tests",
-  node_type: "outcome", status: "completed",
+close_thread({
+  workspace: "my-app", branch: "agent-tests",
+  parent_node_id: "<action id>",
   title: "Request validation passes 8 integration cases",
-  description: "npm test -- tests/items.test.ts: 8 passed, 0 failed. Covers malformed input and the 422 response body. Browser behavior was not checked.",
-  files: ["tests/items.test.ts"]
-})
-add_edge({
-  workspace: "example-app", branch: "agent-tests",
-  from_node_id: "ACTION_ID", to_node_id: "OUTCOME_ID",
-  rationale: "Integration results for this implementation"
+  description: "npm test -- tests/items.test.ts: 8 passed, 0 failed. Browser behaviour not checked.",
+  success: true
 })
 ```
 
-These are MCP calls. Replace `ACTION_ID` and `OUTCOME_ID` with real server UUIDs. Add `commit` to `add_node` when you have a real Git SHA; the server cannot resolve `HEAD` against your working directory.
+"All tests pass" after running one file is the claim the next agent will wrongly rely on. A `files` list and a `commit` on a node are references, not copies: the reader needs the repository to follow them.
 
-A file path is context, not an upload. A commit reference is a string in metadata, not proof that the commit exists on the reader's machine. Make the referenced code accessible through the team's repository.
+## Documents from the CLI reach the server
 
-## Distinguish a source from agreement
+The server's MCP tools have no upload: 21 tools, none of them attaches a file. Attaching is a CLI command, and agents run it like anyone else.
 
-Use a `took_from` edge when a finding changes your approach. Include why you adopted it and which part you verified. Reusing a decision does not prove it correct in a new context.
-
-```javascript
-log_observation({
-  workspace: "example-app", branch: "agent-tests",
-  related_to: "ACTION_ID",
-  took_from: "SOURCE_DECISION_ID",
-  title: "Reuse the field error codes in the request tests",
-  why: "The API decision defines stable codes; tests should not depend on prose messages.",
-  description: "Read the source decision and confirmed the handler emits the documented codes."
-})
+```console
+$ deciduous doc attach 5ee7c7c7 test-output.txt -d "cargo test retry output"
+Attached document 1 to node 6 (test-output.txt)
+  Description: cargo test retry output
+$ deciduous remote status | tail -2
+In sync: no writes waiting, and every node, edge and document matches field by field.
+Themes and tags are not sent to the server, so they are not compared.
 ```
 
-The server writes this observation and its edges in one transaction. Both references must resolve in the same workspace. A node UUID or full `change_id` works; a display prefix does not.
+The node can be named by local id, `change_id` prefix, or server UUID (`deciduous doc attach de6ccf4c-877b-... file`). The bytes are uploaded to the server, which checks them against their SHA-256, and the attachment is recorded on the node. An agent then sees it in `show_node`:
 
-## Documents in the shared server
-
-The Postgres service stores attachment metadata and document bytes separately. Byte content is keyed by SHA-256 and deduplicated in Postgres. Existing local attachments can move to the server through the [upgrade/import procedure](upgrading.md).
-
-`show_node` lists a node's document IDs, filenames, and MIME types. `get_graph` includes document metadata. Authorized clients can fetch bytes at `GET /documents/{document-id}` or by content hash. A `410` means metadata exists but content is missing; a `404` means the requested document was not found. The download response uses private, no-store caching headers.
-
-The current shared MCP tool set has no attachment-upload tool. `deciduous doc attach` is a local SQLite command; configuring a remote does not make it upload. `remote push` sends graph metadata but not blob bytes, and `remote pull` does not download attachment metadata or content into SQLite. Do not mistake a listed filename for a verified remote copy.
-
-## Bring existing attachments across safely
-
-Use the upgrade scripts before normal team writing begins. They must transfer both the graph rows and each attachment's bytes, then verify downloads by hash. The server's blob endpoint, `PUT /blob/{sha256}`, verifies that the bytes match the named hash; an upload by itself does not create a node attachment.
-
-Keep the original `.deciduous/documents` files until the migration checks and backup are complete. Review unresolved edges and missing-content reports rather than treating a successful HTTP import as proof that all evidence arrived.
-
-Avoid bulk-pushing a stale local graph to attach one new file after the team has started writing on the server. Import can replace matching node records. For new evidence, record a concise result plus a stable repository reference until you have a reviewed attachment-ingestion path.
-
-## Local attachment tools
-
-For the [solo/offline](solo.md) workflow, the CLI supports:
-
-```bash
-deciduous doc attach 42 ./evidence/validation-output.txt \
-  -d "Sanitized integration test output"
-deciduous doc list 42
-deciduous doc show 7
+```json
+"documents": [{ "id": "38c69819-818d-4a4f-906c-1e8c6101b889", "filename": "test-output.txt", "mime_type": "text/plain" }]
 ```
 
-`42` and `7` are example local IDs; use the IDs from your own graph and document listing. These commands do not operate on server UUIDs. `doc detach` soft-deletes an attachment; `doc gc` can remove orphaned files, so review and back up before cleanup.
+and anyone with the token can download it:
 
-## Review before sharing
+```console
+$ curl -s -i -H "Authorization: Bearer <token>" https://deciduous.example.com/documents/38c69819-818d-4a4f-906c-1e8c6101b889
+HTTP/1.1 200 OK
+cache-control: no-store, private, max-age=0
+content-type: text/plain
 
-Prompts and attachments can contain customer records, private paths, or credentials. Sanitize command output and screenshots before recording them. Do not attach `.env` files, credential stores, database connection strings, or token-bearing event URLs.
+test retry ... ok
+4 passed; 0 failed
+```
 
-The current bearer token grants access across the server. Workspace naming and headers do not create a separate permission boundary for attachments. Use separate deployments when different groups must not see each other's evidence.
+Without the token: 401. An unknown id: 404. `get_graph` lists the workspace's documents with size, description and node.
 
-Static graph exports can publish the same sensitive text without the MCP server's authentication. Review exported JSON and generated writeups before committing them or publishing a docs site.
+Older pages said `doc attach` was local only and that configuring a remote did not upload. That stopped being true; in 1.1.0 the upload happens before the command exits, like every other CLI write.
+
+What does not work in 1.1.0:
+
+- **Documents do not come down.** `deciduous remote pull` in another clone fetched every node and edge and no documents: `deciduous doc list` there said `No documents found.`, and `remote status` in that clone still said "every node, edge and document matches", which was not so. Read other people's attachments with `show_node` and `GET /documents/<id>`.
+- **A detached document is still served.** `deciduous doc detach 3` reached the server: the document disappeared from `get_graph`. But `show_node` on its node still listed it, and `GET /documents/<id>` still returned its bytes with 200. If you attached a secret, detaching it does not take it off the server. Whoever runs the server has to delete it from the database: [Remove a document that should never have been attached](operating.md#remove-a-document-that-should-never-have-been-attached).
+
+The token grants access to every workspace on the server, documents included ([Architecture](architecture.md)). Do not attach `.env` files, credential stores, connection strings, or output you have not read.
+
+`deciduous doc list`, `doc show`, `doc describe`, `doc open` and `doc gc` operate on this checkout's copy in `.deciduous/documents/`.
+
+## Deriving the graph from a transcript
+
+Claude Code writes every prompt, edit, command and result of a session to a JSONL file under `~/.claude/projects/<project>/`. `deciduous transcript import` derives nodes from it: a goal per prompt with the prompt verbatim, actions from edit runs and commits, outcomes from test and build runs with their exit status, and an outcome from the assistant's closing report. Each node carries `metadata.evidence.kind`: `proven` (a tool call and its result) or `inferred` (the assistant said so).
+
+What it cannot derive is an option or a decision. Whether one approach was chosen over another is a judgement about prose, so those still have to be logged as they happen.
+
+Start with the list and a dry run. `transcript list` reads the directory for the current project:
+
+```console
+$ deciduous transcript list
+/Users/me/.claude/projects/-Users-me-code-my-app
+new      6494dc2d    2 prompts  2026-11-08  <session title>
+new      305de803    1 prompts  2026-11-05  <session title>
+
+$ deciduous transcript import --dry-run 6494dc2d
+Would import <session title> (6494dc2d, 2 prompts)
+  goals 2 · actions 11 · outcomes 4 proven, 1 inferred · observations 0 · edges 17
+  10 files hashed · 3 subagent runs skipped (their transcripts are separate files) · 15 deciduous MCP writes skipped (already in the graph)
+```
+
+It takes a session id (looked up in this project's directory) or a path to a `.jsonl`. Calls the session already made to deciduous's MCP tools are skipped rather than duplicated. Subagents' transcripts are separate files and are not followed. Actions record a hash of each file they touched; `--no-hash` skips that.
+
+In a directory Claude Code has never run in, `transcript list` fails with the raw `No such file or directory (os error 2)` for the directory it expected; pass `--dir`, or import by path.
+
+A real import, into a workspace on the server:
+
+```console
+$ deciduous transcript import ~/.claude/projects/<project>/305de803-....jsonl
+Imported <session title> (305de803, 1 prompts)
+  goals 1 · actions 0 · outcomes 0 proven, 1 inferred · observations 0 · edges 1
+  1 deciduous MCP writes skipped (already in the graph)
+  root goal #1: deciduous show 1
+$ deciduous remote status | tail -2
+In sync: no writes waiting, and every node, edge and document matches field by field.
+```
+
+The nodes went to the server like any CLI write. On the server, the goal's metadata:
+
+```json
+{ "branch": "main",
+  "evidence": { "kind": "proven", "source": "transcript", "session": "305de803-...", "uuids": ["fd7edbe1-..."] },
+  "session": { "id": "305de803-...", "transcript": "/Users/me/.claude/projects/.../305de803-....jsonl", "turns": 1 } }
+```
+
+and the outcome's `evidence.kind` was `inferred`, from the assistant's report at the end of the turn. The nodes keep the transcript's timestamps (`created_at` 2026-11-05 for a session from that day), while `branch` is the current checkout's.
+
+Importing the same transcript again changes nothing:
+
+```text
+  goals 0 · actions 0 · outcomes 0 proven, 0 inferred · observations 0 · edges 0
+  2 already present · 1 deciduous MCP writes skipped (already in the graph)
+```
+
+Read what you are about to share. A goal holds the prompt verbatim and an inferred outcome holds the assistant's report in full; both can contain paths, hostnames and anything pasted into the session, and on a shared server every token holder can read them. Run `--dry-run` first, and import into a workspace whose readers should see that session.
+
+The viewer does not yet show `metadata.evidence`; `deciduous show <id>` prints it (`Evidence: inferred transcript, session 305de803`), and `show_node` returns it in `metadata`.

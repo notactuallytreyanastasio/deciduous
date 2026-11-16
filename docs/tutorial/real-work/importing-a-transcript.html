@@ -1,251 +1,103 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-docs-generated="true">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Importing a Transcript - The Deciduous Tutorial</title>
-    <link rel="stylesheet" href="../style.css">
-
-    <!-- Open Graph / Social -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="The Deciduous Tutorial" />
-    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
-    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Attach the evidence, or derive the graph from it · Deciduous docs</title>
+<meta name="description" content="A node is only as good as what backs it. Deciduous has two ways to put evidence next to a claim: attach a file to a node with deciduous doc attach, which in a project with a [remote] uploads the bytes">
+<link rel="canonical" href="https://deciduous.dev/tutorial/evidence.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Attach the evidence, or derive the graph from it · Deciduous docs"><meta property="og:description" content="A node is only as good as what backs it. Deciduous has two ways to put evidence next to a claim: attach a file to a node with deciduous doc attach, which in a project with a [remote] uploads the bytes"><meta property="og:url" content="https://deciduous.dev/tutorial/evidence.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css"><script src="../docs.js" defer></script>
 </head>
-<body>
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <a href="../../" class="logo">DECIDUOUS</a>
-            <span class="subtitle">Tutorial</span>
-        </div>
-        <div class="toc">
-            <div class="toc-section">
-                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
-                <ul>
-                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
-                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
-                <ul>
-                    <li><a href="../getting-started/installing.html">Installing</a></li>
-                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
-                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
-                <ul>
-                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
-                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
-                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
-                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../real-work/starting-work.html" class="toc-title active">Live Development</a>
-                <ul>
-                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
-                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
-                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
-                    <li><a href="../real-work/importing-a-transcript.html" class="active">Importing a Transcript</a></li>
-                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../sharing/pr-workflow.html" class="toc-title">Sharing</a>
-                <ul>
-                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
-                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
-                <ul>
-                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
-                    <li><a href="../advanced/hooks.html">Hooks</a></li>
-                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
-            </div>
-        </div>
-    </nav>
+<body data-search-index="../search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get started</h2><ul><li><a href="../index.html">What deciduous is</a></li><li><a href="../quickstart.html">Join a server</a></li><li><a href="../run-a-server.html">Run a server</a></li><li><a href="../clients.html">Connect your agents</a></li><li><a href="../for-agents.html">For agents</a></li></ul></section><section class="nav-group"><h2>Work in the graph</h2><ul><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../teams.html">Many agents, one graph</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html" aria-current="page">Documents and transcripts</a></li><li><a href="../history.html">Design history</a></li></ul></section><section class="nav-group"><h2>Operate</h2><ul><li><a href="../operating.html">Backups, upgrades, tokens</a></li><li><a href="../local.html">Without a shared server</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html">Graph concepts</a></li><li><a href="../reference.html">CLI reference</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop deciduous</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Work in the graph</span><a href="../../content/evidence.md">Read as Markdown</a></div><article><h1 id="attach-the-evidence-or-derive-the-graph-from-it">Attach the evidence, or derive the graph from it</h1>
+<p>A node is only as good as what backs it. Deciduous has two ways to put evidence next to a claim: attach a file to a node with <code>deciduous doc attach</code>, which in a project with a <code>[remote]</code> uploads the bytes to the server; and <code>deciduous transcript import</code>, which reads a Claude Code session's transcript and writes the goals, actions and outcomes it can prove, each marked with what it rests on.</p>
+<h2 id="say-what-ran">Say what ran</h2>
+<p>Before either, the cheapest evidence is a precise outcome: the command, the count, the commit, and what was not checked.</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">close_thread({
+  workspace: &quot;my-app&quot;, branch: &quot;agent-tests&quot;,
+  parent_node_id: &quot;&lt;action id&gt;&quot;,
+  title: &quot;Request validation passes 8 integration cases&quot;,
+  description: &quot;npm test -- tests/items.test.ts: 8 passed, 0 failed. Browser behaviour not checked.&quot;,
+  success: true
+})
+</code></pre>
+</div><p>&quot;All tests pass&quot; after running one file is the claim the next agent will wrongly rely on. A <code>files</code> list and a <code>commit</code> on a node are references, not copies: the reader needs the repository to follow them.</p>
+<h2 id="documents-from-the-cli-reach-the-server">Documents from the CLI reach the server</h2>
+<p>The server's MCP tools have no upload: 21 tools, none of them attaches a file. Attaching is a CLI command, and agents run it like anyone else.</p>
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous doc attach 5ee7c7c7 test-output.txt -d &quot;cargo test retry output&quot;
+Attached document 1 to node 6 (test-output.txt)
+  Description: cargo test retry output
+$ deciduous remote status | tail -2
+In sync: no writes waiting, and every node, edge and document matches field by field.
+Themes and tags are not sent to the server, so they are not compared.
+</code></pre>
+</div><p>The node can be named by local id, <code>change_id</code> prefix, or server UUID (<code>deciduous doc attach de6ccf4c-877b-... file</code>). The bytes are uploaded to the server, which checks them against their SHA-256, and the attachment is recorded on the node. An agent then sees it in <code>show_node</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">&quot;documents&quot;: [{ &quot;id&quot;: &quot;38c69819-818d-4a4f-906c-1e8c6101b889&quot;, &quot;filename&quot;: &quot;test-output.txt&quot;, &quot;mime_type&quot;: &quot;text/plain&quot; }]
+</code></pre>
+</div><p>and anyone with the token can download it:</p>
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ curl -s -i -H &quot;Authorization: Bearer &lt;token&gt;&quot; https://deciduous.example.com/documents/38c69819-818d-4a4f-906c-1e8c6101b889
+HTTP/1.1 200 OK
+cache-control: no-store, private, max-age=0
+content-type: text/plain
 
-    <main class="content">
-        <article>
-            <h1>Importing a Transcript</h1>
+test retry ... ok
+4 passed; 0 failed
+</code></pre>
+</div><p>Without the token: 401. An unknown id: 404. <code>get_graph</code> lists the workspace's documents with size, description and node.</p>
+<p>Older pages said <code>doc attach</code> was local only and that configuring a remote did not upload. That stopped being true; in 1.1.0 the upload happens before the command exits, like every other CLI write.</p>
+<p>What does not work in 1.1.0:</p>
+<ul>
+<li><strong>Documents do not come down.</strong> <code>deciduous remote pull</code> in another clone fetched every node and edge and no documents: <code>deciduous doc list</code> there said <code>No documents found.</code>, and <code>remote status</code> in that clone still said &quot;every node, edge and document matches&quot;, which was not so. Read other people's attachments with <code>show_node</code> and <code>GET /documents/&lt;id&gt;</code>.</li>
+<li><strong>A detached document is still served.</strong> <code>deciduous doc detach 3</code> reached the server: the document disappeared from <code>get_graph</code>. But <code>show_node</code> on its node still listed it, and <code>GET /documents/&lt;id&gt;</code> still returned its bytes with 200. If you attached a secret, detaching it does not take it off the server. Whoever runs the server has to delete it from the database: <a href="../operating.html#remove-a-document-that-should-never-have-been-attached">Remove a document that should never have been attached</a>.</li>
+</ul>
+<p>The token grants access to every workspace on the server, documents included (<a href="../architecture.html">Architecture</a>). Do not attach <code>.env</code> files, credential stores, connection strings, or output you have not read.</p>
+<p><code>deciduous doc list</code>, <code>doc show</code>, <code>doc describe</code>, <code>doc open</code> and <code>doc gc</code> operate on this checkout's copy in <code>.deciduous/documents/</code>.</p>
+<h2 id="deriving-the-graph-from-a-transcript">Deriving the graph from a transcript</h2>
+<p>Claude Code writes every prompt, edit, command and result of a session to a JSONL file under <code>~/.claude/projects/&lt;project&gt;/</code>. <code>deciduous transcript import</code> derives nodes from it: a goal per prompt with the prompt verbatim, actions from edit runs and commits, outcomes from test and build runs with their exit status, and an outcome from the assistant's closing report. Each node carries <code>metadata.evidence.kind</code>: <code>proven</code> (a tool call and its result) or <code>inferred</code> (the assistant said so).</p>
+<p>What it cannot derive is an option or a decision. Whether one approach was chosen over another is a judgement about prose, so those still have to be logged as they happen.</p>
+<p>Start with the list and a dry run. <code>transcript list</code> reads the directory for the current project:</p>
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous transcript list
+/Users/me/.claude/projects/-Users-me-code-my-app
+new      6494dc2d    2 prompts  2026-11-08  &lt;session title&gt;
+new      305de803    1 prompts  2026-11-05  &lt;session title&gt;
 
-            <p class="lead">An agent that logs its own decisions can forget to. The transcript cannot. Claude Code writes every session to a JSONL file; since 1.1.0 <code>deciduous transcript import</code> derives the graph from it, and every node it makes says what it is backed by.</p>
-
-            <h2>The Session Had a Transcript All Along</h2>
-
-            <p>Every prompt you typed, every file the agent edited, every command it ran and what came back is in <code>~/.claude/projects/&lt;slug&gt;/&lt;session-id&gt;.jsonl</code>, the slug being the project's absolute path with every character outside <code>[A-Za-z0-9]</code> replaced by <code>-</code>. <code>transcript list</code> shows this project's sessions and whether each is already in the graph:</p>
-
-            <pre><span class="cmd">$ deciduous transcript list</span>
-<span class="output">/Users/alice/.claude/projects/-Users-alice-code-snowflex
-new      7c3e9a10    2 prompts  2026-10-24  Add CI pipelines for snowflex</span></pre>
-
-            <p>The scratch project for this tutorial has no directory under <code>~/.claude/projects/</code>, so <code>list</code> there fails with <code>No such file or directory</code>; the runs below pass <code>--dir</code> and a path instead. The transcript is the issue #93 session from the previous pages, written by hand in Claude Code's format: one prompt, a <code>Read</code> of <code>mix.exs</code>, a <code>Write</code> of the workflow and an <code>Edit</code> of <code>mix.exs</code>, <code>mix test</code>, a <code>git commit</code>, the closing report, then a second prompt answered in prose.</p>
-
-            <h2>Dry Run, Then Import</h2>
-
-            <pre><span class="cmd">$ deciduous transcript import --dry-run ~/transcripts/7c3e9a10-5b2d-4f61-9e8a-2d4c6b8f0a93.jsonl</span>
-<span class="output">Would import Add CI pipelines for snowflex (7c3e9a10, 2 prompts)
-  goals 2 · actions 2 · outcomes 1 proven, 1 inferred · observations 1 · edges 6
-  2 files hashed</span>
-
-<span class="cmd">$ deciduous transcript import ~/transcripts/7c3e9a10-5b2d-4f61-9e8a-2d4c6b8f0a93.jsonl</span>
-<span class="output">Imported Add CI pipelines for snowflex (7c3e9a10, 2 prompts)
-  goals 2 · actions 2 · outcomes 1 proven, 1 inferred · observations 1 · edges 6
-  2 files hashed
-  root goal #23: deciduous show 23</span>
-
-<span class="cmd">$ deciduous nodes -b ci-pipelines</span>
-<span class="output">Nodes on branch 'ci-pipelines' (13 total):
-ID    CHANGE    TYPE         STATUS     TITLE
-------------------------------------------------------------------------------
-23    9c05bd22  goal         pending    Add CI pipelines for snowflex
-24    5166704c  action       pending    Edit .github/workflows/ci.yml, mix.exs
-25    835c03ee  outcome      pending    mix test passed
-26    4968b5ca  action       pending    Committed: ci: add unit test workflow for GitHub Actions
-27    880f4e89  outcome      pending    Done. The unit test workflow is in .github/workflows/ci.yml and runs on every pull request; all 51…
-28    25b869f4  goal         pending    why separate workflow files instead of one?
-29    6a24e61a  observation  pending    A contributor opening .github/workflows/ sees two files named for what they run. One file with…
-16    649d7202  goal         pending    Add CI pipelines for snowflex
-...</span></pre>
-
-            <p>One session is one tree. The first prompt is the root goal (#23), titled with the name Claude Code gave the session. Each later prompt is a goal under it (#28, edge rationale "prompt 2 of the session"). Under each goal sit its actions, and under each action the command outcomes that followed it; the closing report hangs off the goal beside the proven outcomes, not under one of them.</p>
-
-            <p>Notice #16 and #23 are both "Add CI pipelines for snowflex". #16 is the goal the agent logged itself; #23 is the one derived from the transcript. The import does not merge them: it skips the <code>mcp__deciduous__*</code> calls and <code>deciduous add</code> commands it finds in the transcript (those nodes are already there) but has no way to know that #16 is the same intent. Joining the two trees is an edge you add.</p>
-
-            <h2>What Each Node Is Backed By</h2>
-
-            <pre><span class="cmd">$ deciduous show 24</span>
-<span class="output">Node #24 action
-────────────────────────────────────────────────────────────
-Title: Edit .github/workflows/ci.yml, mix.exs
-Description: I'll look at how the tests run today, then add a unit test workflow.
-Status: pending
-Change ID: 5166704c-0112-802b-ae87-6d7b71a0075b
-Created: 2026-10-24T09:00:08Z
-Updated: 2026-10-24T09:00:08Z
-
-Metadata
-  Branch: ci-pipelines
-  Files: .github/workflows/ci.yml (git:43f00f9cbe064c31ebc239dccffbba30c26e4b85), mix.exs (git:c66318a8a66eb06790a040eac00373f847113ecb)
-  Consulted: mix.exs
-  Evidence: proven transcript, session 7c3e9a10, 2 tool call(s)
-
-Connections
-  Incoming (1):
-    #23 ─[leads_to]→ here: files changed in this turn
-  Outgoing (1):
-    here ─[leads_to]→ #25: command run in this turn</span></pre>
-
-            <p>Three things on this one node. <strong>Description</strong> is what the assistant said just before the edit run: the stated intent next to the proof of what was done. <strong>Consulted</strong> is every file the agent <code>Read</code> since the previous action: the evidence trail a filesystem watcher would give, without one. <strong>Files</strong> carry hashes taken at import time, as git blob ids (<code>git:&lt;sha1&gt;</code>, the id <code>git log --find-object</code> takes; <code>sha256:</code> outside a repository), so you can find the commit that holds exactly that content. <code>--no-hash</code> skips the hashing when the files may be half-written.</p>
-
-            <pre><span class="cmd">$ deciduous show 25</span>
-<span class="output">Node #25 outcome
-Title: mix test passed
-Description: Finished in 2.1 seconds (0.00s async, 2.1s sync)
-51 tests, 0 failures
-Randomized with seed 420137
-...
-  Evidence: proven transcript, session 7c3e9a10, 1 tool call(s), exit ok</span>
-
-<span class="cmd">$ deciduous show 27</span>
-<span class="output">Node #27 outcome
-Title: Done. The unit test workflow is in .github/workflows/ci.yml and runs on every pull request; all 51…
-Description: **Done.** The unit test workflow is in `.github/workflows/ci.yml` and runs on every pull request; all 51 tests pass locally. The integration workflow needs a Snowflake account secret before it can run.
-...
-  Evidence: inferred transcript, session 7c3e9a10</span></pre>
-
-            <p><strong>Proven</strong> means the transcript recorded the thing happening: a tool call and its result, or your own words. <strong>Inferred</strong> means the assistant said so. The two sit side by side on purpose. When a closing report says "all tests pass" and the <code>cargo test</code> outcome beside it says <code>12 passed, 1 failed</code>, the second is the one to believe, and the graph says which is which. The same distinction applies to #29: a turn that only answered produces an observation, inferred.</p>
-
-            <p>In the JSON the evidence carries the entry uuids and tool_use ids it rests on:</p>
-
-            <pre><span class="cmd">$ deciduous show 24 --json</span>
-<span class="output">...
-"metadata_json": "{\"branch\":\"ci-pipelines\",\"consulted\":[\"mix.exs\"],\"edits\":2,\"evidence\":{\"kind\":\"proven\",\"session\":\"7c3e9a10-5b2d-4f61-9e8a-2d4c6b8f0a93\",\"source\":\"transcript\",\"tool_use_ids\":[\"t2\",\"t3\"],\"uuids\":[\"a3\",\"a4\"]},\"file_hashes\":{\".github/workflows/ci.yml\":\"git:43f00f9c...\",\"mix.exs\":\"git:c66318a8...\"},\"files\":[\".github/workflows/ci.yml\",\"mix.exs\"],\"hashed_at\":\"2026-10-24T16:51:32Z\"}"</span></pre>
-
-            <table>
-                <thead><tr><th>Node</th><th>Derived from</th><th>Evidence</th></tr></thead>
-                <tbody>
-                    <tr><td><code>goal</code></td><td>a prompt you typed, kept verbatim in <code>metadata.prompt</code></td><td>proven</td></tr>
-                    <tr><td><code>action</code></td><td>a run of <code>Edit</code> / <code>Write</code> / <code>MultiEdit</code> calls, or a shell command Claude Code saw change files</td><td>proven</td></tr>
-                    <tr><td><code>action</code></td><td>a <code>git commit</code>, with the hash from <code>[branch sha]</code> or the <code>git log</code> that followed</td><td>proven</td></tr>
-                    <tr><td><code>outcome</code></td><td>a build, test or lint run (<code>cargo test</code>, <code>npm run build</code>, <code>pytest</code>, <code>mix test</code>, <code>make</code>...) and its exit status</td><td>proven</td></tr>
-                    <tr><td><code>outcome</code></td><td><code>gh pr create</code> printing the PR's URL</td><td>proven</td></tr>
-                    <tr><td><code>outcome</code></td><td>the assistant's closing text for a turn that did things</td><td>inferred</td></tr>
-                    <tr><td><code>observation</code></td><td>the assistant's closing text for a turn that only answered</td><td>inferred</td></tr>
-                </tbody>
-            </table>
-
-            <h2>Importing Twice Changes Nothing</h2>
-
-            <pre><span class="cmd">$ deciduous transcript import ~/transcripts/7c3e9a10-5b2d-4f61-9e8a-2d4c6b8f0a93.jsonl</span>
-<span class="output">Imported Add CI pipelines for snowflex (7c3e9a10, 2 prompts)
-  goals 0 · actions 0 · outcomes 0 proven, 0 inferred · observations 0 · edges 0
-  7 already present · 2 files hashed
-  root goal #23: deciduous show 23</span></pre>
-
-            <p>Change ids are derived from the session id and each entry's uuid (look at #23's change id, <code>9c05bd22-83e5-87c4-...</code>: not a random UUID), so a second import finds everything present, and two people importing the same transcript produce the same nodes, which <code>deciduous sync</code> then merges as one. <code>--json</code> prints the report as data, one object per transcript, including what was skipped (subagent calls, deciduous writes, other tools) and <code>unreadable_lines</code>.</p>
-
-            <h2>What Is Not Derived</h2>
-
-            <ul>
-                <li><strong>Decisions and options.</strong> Whether one approach was chosen over another is a judgement about prose, not a fact in a tool result. The material is there (each action's description is what the assistant said it was about to do); the pass that writes <code>option</code> and <code>decision</code> nodes belongs to an agent reading the imported graph, with <code>capture_conversation_turn</code> as its pen. This is why #16 to #21, logged live, have a decision and the imported tree does not.</li>
-                <li><strong>Subagent work.</strong> An <code>Agent</code> call is counted and skipped; its transcript under <code>&lt;session&gt;/subagents/</code> is not imported as a subtree yet.</li>
-                <li><strong>Reads, searches, ordinary commands.</strong> <code>ls</code>, <code>grep</code>, <code>git status</code> leave no node; <code>Read</code> calls survive only as the next action's <code>consulted</code> list.</li>
-                <li><strong>Other assistants' transcripts.</strong> Only Claude Code's format is read. A file with no user prompt in it is refused by name: <code>agent-only.jsonl: no user prompt in this transcript (a subagent file, or a session that never got a message); nothing to derive</code>.</li>
-                <li><strong>A session id outside the project's directory.</strong> <code>import 7c3e9a10</code> looks only under <code>~/.claude/projects/&lt;this project&gt;/</code>; in the scratch project that was <code>not a file, and no transcript directory to look it up in</code>. Pass the path.</li>
-            </ul>
-
-            <h2>Running It at the End of Every Session</h2>
-
-            <p>A Claude Code <code>SessionEnd</code> hook receives the transcript path on stdin. With this in <code>.claude/settings.json</code>, the agent never has to log anything for the session to be in the graph:</p>
-
-            <pre>{
-  "hooks": {
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "jq -r .transcript_path | xargs deciduous transcript import --no-hash &gt;/dev/null 2&gt;&amp;1 || true"
-          }
-        ]
-      }
-    ]
-  }
-}</pre>
-
-            <p><code>--no-hash</code> because the session may have ended mid-edit and a hash of a half-written file is not worth keeping; hash on a later import, or leave it on and accept that. <code>/recover</code> does the other half: at the start of a session it runs <code>transcript list</code> and imports anything marked <code>new</code>, so a session that logged little still arrives in the graph before anyone reads it.</p>
-
-            <div class="info-box">
-                <strong>The numbers that motivated this</strong>
-                <p>On a three-week session that had logged nine nodes through MCP while it ran, the import found 119 edits and commits, 67 build and test results, and 68 verbatim prompts. <code>docs/transcripts.md</code> in the repository is the canonical description of the feature.</p>
-            </div>
-
-            <div class="page-nav">
-                <a href="../real-work/implementing.html" class="prev">
-                    <span class="label">Previous</span>
-                    <span class="title">The Implementation</span>
-                </a>
-                <a href="../real-work/editing-and-fixing.html" class="next">
-                    <span class="label">Next</span>
-                    <span class="title">Editing the Graph</span>
-                </a>
-            </div>
-        </article>
-    </main>
-
-    <script src="../terminal-demo.js"></script>
-</body>
-</html>
+$ deciduous transcript import --dry-run 6494dc2d
+Would import &lt;session title&gt; (6494dc2d, 2 prompts)
+  goals 2 · actions 11 · outcomes 4 proven, 1 inferred · observations 0 · edges 17
+  10 files hashed · 3 subagent runs skipped (their transcripts are separate files) · 15 deciduous MCP writes skipped (already in the graph)
+</code></pre>
+</div><p>It takes a session id (looked up in this project's directory) or a path to a <code>.jsonl</code>. Calls the session already made to deciduous's MCP tools are skipped rather than duplicated. Subagents' transcripts are separate files and are not followed. Actions record a hash of each file they touched; <code>--no-hash</code> skips that.</p>
+<p>In a directory Claude Code has never run in, <code>transcript list</code> fails with the raw <code>No such file or directory (os error 2)</code> for the directory it expected; pass <code>--dir</code>, or import by path.</p>
+<p>A real import, into a workspace on the server:</p>
+<div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous transcript import ~/.claude/projects/&lt;project&gt;/305de803-....jsonl
+Imported &lt;session title&gt; (305de803, 1 prompts)
+  goals 1 · actions 0 · outcomes 0 proven, 1 inferred · observations 0 · edges 1
+  1 deciduous MCP writes skipped (already in the graph)
+  root goal #1: deciduous show 1
+$ deciduous remote status | tail -2
+In sync: no writes waiting, and every node, edge and document matches field by field.
+</code></pre>
+</div><p>The nodes went to the server like any CLI write. On the server, the goal's metadata:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{ &quot;branch&quot;: &quot;main&quot;,
+  &quot;evidence&quot;: { &quot;kind&quot;: &quot;proven&quot;, &quot;source&quot;: &quot;transcript&quot;, &quot;session&quot;: &quot;305de803-...&quot;, &quot;uuids&quot;: [&quot;fd7edbe1-...&quot;] },
+  &quot;session&quot;: { &quot;id&quot;: &quot;305de803-...&quot;, &quot;transcript&quot;: &quot;/Users/me/.claude/projects/.../305de803-....jsonl&quot;, &quot;turns&quot;: 1 } }
+</code></pre>
+</div><p>and the outcome's <code>evidence.kind</code> was <code>inferred</code>, from the assistant's report at the end of the turn. The nodes keep the transcript's timestamps (<code>created_at</code> 2026-11-05 for a session from that day), while <code>branch</code> is the current checkout's.</p>
+<p>Importing the same transcript again changes nothing:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">  goals 0 · actions 0 · outcomes 0 proven, 0 inferred · observations 0 · edges 0
+  2 already present · 1 deciduous MCP writes skipped (already in the graph)
+</code></pre>
+</div><p>Read what you are about to share. A goal holds the prompt verbatim and an inferred outcome holds the assistant's report in full; both can contain paths, hostnames and anything pasted into the session, and on a shared server every token holder can read them. Run <code>--dry-run</code> first, and import into a workspace whose readers should see that session.</p>
+<p>The viewer does not yet show <code>metadata.evidence</code>; <code>deciduous show &lt;id&gt;</code> prints it (<code>Evidence: inferred transcript, session 305de803</code>), and <code>show_node</code> returns it in <code>metadata</code>.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="../recovery.html"><span>Previous</span>Recover context</a><a href="../history.html"><span>Next</span>Design history</a></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#say-what-ran">Say what ran</a></li><li><a href="#documents-from-the-cli-reach-the-server">Documents from the CLI reach the server</a></li><li><a href="#deriving-the-graph-from-a-transcript">Deriving the graph from a transcript</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

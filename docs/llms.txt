@@ -1,16 +1,35 @@
 # Deciduous
 
-> Decision graph memory for coding agents. Setup and working instructions written for agents are under /agents/.
+> A decision graph for AI-assisted development. Agents and people write goals, options, decisions, actions and outcomes to a shared server (PostgreSQL behind an authenticated HTTP MCP endpoint), one workspace per repository. Deciduous 1.1.0.
 
-## For agents
+Every page below is Markdown. The whole set in one file: https://deciduous.dev/llms-full.txt
 
-- [Deciduous, for agents](https://deciduous.dev/agents/index.md): This section is written for you, the coding agent, not for the person you work for.
-- [Install](https://deciduous.dev/agents/install.md): You need one binary, `deciduous`: the CLI that sets up a project, points it at the shared server and installs the agent instructions.
-- [Set up the project](https://deciduous.dev/agents/project.md): Run everything from the repository root.
-- [Shared graph](https://deciduous.dev/agents/shared-graph.md): A shared server is one PostgreSQL database behind an HTTP MCP endpoint.
-- [Logging while you work](https://deciduous.dev/agents/logging.md): The graph is only worth reading if it is written while the work happens.
-- [MCP tools](https://deciduous.dev/agents/tools.md): The shared server's 18 tools in 1.0.2, generated from its own `tools/list` reply, not written by hand.
-- [Verify](https://deciduous.dev/agents/verify.md): Run these after setting up and report each result to the user as pass or fail, with the output.
-- [Troubleshooting](https://deciduous.dev/agents/troubleshooting.md): Each entry is a failure that has actually happened, with the text you will see.
+## Get started
 
-- [Everything above in one file](https://deciduous.dev/agents/llms-full.txt)
+- [One decision graph for every agent on the team](https://deciduous.dev/content/index.md): Deciduous records why the code is the way it is: what was asked, the approaches considered, the one chosen and what it beat, what was changed, and what happened. The graph lives on a server your team 
+- [Join your team's graph server](https://deciduous.dev/content/quickstart.md): You need two things from whoever runs the server: its base URL and its token. With those, five commands connect a repository: remote login stores the token, remote setup --url points the repository at
+- [Run a server for your team](https://deciduous.dev/content/run-a-server.md): A deciduous server is two containers, the server and PostgreSQL, on one machine behind an HTTPS proxy. You start it once, then give each person a URL and a token. Every developer's CLI and every agent
+- [Connect your coding agents](https://deciduous.dev/content/clients.md): Every client connects to the same thing: /mcp over Streamable HTTP, with Authorization: Bearer . What differs is where each client keeps that registration and whether it pins a workspace. The one thin
+- [For agents: setting up and using deciduous](https://deciduous.dev/content/for-agents.md): This page is written to you, the coding agent that was told "set up deciduous here" or "use deciduous". The graph lives on a server the user's team runs; your job is to connect this repository to that
+
+## Work in the graph
+
+- [Record the work as goal, options, decision, action, outcome](https://deciduous.dev/content/workflow.md): A useful graph answers two questions for whoever comes next: what was asked for, and what has already been tried. Write each node at the moment it happens, on the server everyone shares: an agent thro
+- [Many agents, one workspace](https://deciduous.dev/content/teams.md): Every agent and every person on a project writes to the same workspace on the same server, each on its own git branch. Nothing locks: two sessions writing one branch both succeed and their nodes inter
+- [Pick up where the last session stopped](https://deciduous.dev/content/recovery.md): A new session starts with nothing but the repository, and the graph on the server holds everything the last one decided. Recovery is reading that graph before writing anything: the goal still open, th
+- [Attach the evidence, or derive the graph from it](https://deciduous.dev/content/evidence.md): A node is only as good as what backs it. Deciduous has two ways to put evidence next to a claim: attach a file to a node with deciduous doc attach, which in a project with a [remote] uploads the bytes
+- [Keep the approaches that were abandoned](https://deciduous.dev/content/history.md): When an approach turns out wrong, the useful record is not the corrected decision alone but the chain that replaced it: the old decision, the observation that killed it, a revisit, and the new decisio
+
+## Operate
+
+- [Backups, upgrades, tokens](https://deciduous.dev/content/operating.md): There are two things to look after: the PostgreSQL database and the .env file next to it. The server itself holds no state, so if you rebuild it from the same .env against the same database, the graph
+- [Without a shared server](https://deciduous.dev/content/local.md): There are two fallbacks for when nobody runs a server you can join. deciduous remote setup --local runs the same server on your own machine as a background service, so the CLI and your agents work exa
+- [Troubleshooting](https://deciduous.dev/content/troubleshooting.md): Most problems are one of four things: the CLI and the agent are talking to different servers, the token in use belongs to a different server, the workspace name collides with another repository, or th
+
+## Reference
+
+- [Graph concepts](https://deciduous.dev/content/concepts.md): A deciduous graph is typed nodes joined by typed, directed edges, kept per workspace (one per repository) on a shared server. Seven node types, seven edge types, six statuses, and a confidence from 0 
+- [CLI reference](https://deciduous.dev/content/reference.md): The deciduous commands people actually use, grouped by what you are trying to do, with flags as deciduous --help prints them in 1.1.0. In a project with a [remote], every write command writes the loca
+- [MCP tools](https://deciduous.dev/content/mcp.md): There are two MCP servers with different tool sets, and an agent gets whichever one its client is configured for. The graph server answers at /mcp over HTTP with 21 tools and writes PostgreSQL directl
+- [Architecture and trust](https://deciduous.dev/content/architecture.md): The graph lives in PostgreSQL behind one server process. Agents reach that server over HTTPS MCP; the CLI reaches the same server, over the same HTTPS and token, through ordinary JSON endpoints (/ops,
+- [Develop deciduous](https://deciduous.dev/content/developer.md): The repository holds three things that are built and tested separately: the Rust CLI at the root (cargo), the graph server in deciduous_mcp/ (Elixir, mix), and two web builds, the graph viewer in web/

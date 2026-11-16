@@ -1,170 +1,215 @@
-# Work as a team of agents
+# Many agents, one workspace
 
-Put agents working on the same project in one Deciduous workspace. Give each agent a Git branch and a bounded file scope. One agent can publish a finding while another is still implementing; the second agent can reuse that finding and leave an edge back to its source.
+Every agent and every person on a project writes to the same workspace on the same server, each on its own git branch. Nothing locks: two sessions writing one branch both succeed and their nodes interleave. What keeps them from colliding is that each can see the others, through `check_activity`, the message board, and `took_from` edges that say whose idea a node built on.
 
-Deciduous records reasoning and coordinates short graph-write bursts. Your agent runner still assigns tasks, starts sessions, and manages code changes.
+## One workspace per repository
 
-## Agree on the project and branch names
+The workspace is `workspace` under `[remote]` in `.deciduous/config.toml`. Commit that file, and every clone and worktree writes to the same graph:
 
-This guide uses server `http://127.0.0.1:4000`, workspace `example-app`, and two branches:
+```toml
+[remote]
+url = "https://deciduous.example.com"
+workspace = "my-app"
+```
 
-| Agent | Branch | Responsibility |
-| --- | --- | --- |
-| API agent | `agent-api` | Request validation and error responses |
-| Test agent | `agent-tests` | Fixtures and integration tests |
+`deciduous init` adds a `.gitignore` that keeps `.deciduous/config.toml` tracked and ignores the rest of `.deciduous/` (the local cache, the write log).
 
-Use [client configuration](clients.md) to pin both MCP clients to `example-app`. Set that same name with `deciduous remote init ... --workspace example-app` in each initialized CLI checkout. Worktree directory names often differ; relying on their basenames can split one project into several workspaces.
+The server ties a workspace to the root commit of the repository that first writes to it. A clone shares that root, so it is let in:
 
-Pass the real branch name on each MCP write. The server cannot inspect your Git checkout and does not infer the branch from a local process.
+```console
+$ deciduous remote init https://deciduous.example.com --workspace my-app
+Remote: https://deciduous.example.com
+  workspace: my-app
+  claim: verified (by this repository's root commit)
+```
 
-Create a new workspace with one client connection or `remote init` before launching parallel sessions. The current server can race if several clients first create the same workspace at once. A successful `check_activity` from the first client confirms it is ready for the rest.
+An unrelated repository that merely has the same directory name is refused, which is what stops two projects called `api` on one server from writing one graph by accident:
 
-For a fresh exercise, run these commands from the code repository. The branch names and destination directories must not already exist; substitute unused names if needed:
+```console
+$ deciduous remote init https://deciduous.example.com
+Error: workspace "my-app" on https://deciduous.example.com belongs to another repository: an unrelated
+project whose directory is also called my-app (the name is the directory name, lowercased) claimed it
+first, and this repository shares none of its root commits.
+...
+Nothing was written; the project is unchanged.
+```
+
+Naming the workspace explicitly with `--workspace` is how you say two repositories really should share one graph. The server then answers `claim: adopted` and accepts writes from both. A repository with no commit yet cannot be checked, so its writes wait in the log until the first commit.
+
+## Worktrees
+
+A worktree whose checkout includes `.deciduous/config.toml` uses it. One made from a commit before that file existed inherits the main checkout's:
+
+```console
+$ git worktree add -b old-wt ../my-app-old HEAD~1 && cd ../my-app-old
+$ deciduous remote status
+Remote: https://deciduous.example.com
+Workspace: my-app
+From: this worktree's config names no server; its writes go to the main checkout's (.../my-app/.deciduous/config.toml)
+```
+
+Each worktree keeps its own local cache (`.deciduous/deciduous.db`), so a new worktree starts empty: run `deciduous remote pull` there before `deciduous nodes`. The server holds one copy; the caches are per directory.
+
+Agents need the same name. The server's instructions tell an agent to read `workspace` from `.deciduous/config.toml`, and to fall back to the repository root's directory name, not the worktree's. If an agent client could still guess wrong, pin it: an `X-Deciduous-Workspace` header on the MCP connection overrides the `workspace` argument on every call ([Clients](clients.md)).
+
+## Branches
+
+Pass the real git branch on every MCP write. The server cannot see your checkout. The CLI fills it in from git (`[branch: agent-tests]`); `-b` overrides it.
+
+Two worktrees for two agents:
 
 ```bash
-git status --short
-git worktree add -b agent-api ../example-app-api HEAD
-git worktree add -b agent-tests ../example-app-tests HEAD
+git worktree add -b agent-api   ../my-app-api   HEAD
+git worktree add -b agent-tests ../my-app-tests HEAD
 ```
 
-Worktrees start from the selected commit and do not copy uncommitted changes. Launch the API agent in `../example-app-api` and the test agent in `../example-app-tests`. Ensure each has the same MCP connection configuration. Give each its responsibility from the table and tell both to pass their branch name on graph writes. They share Postgres memory without sharing a SQLite file.
+Worktrees start from the commit you name and do not carry uncommitted changes.
 
-## A complete two-agent handoff
+## check_activity: who is writing where
 
-The examples below are MCP calls, not shell commands. Replace uppercase ID placeholders with the UUID returned by an earlier call. Do not send the placeholder text to the server.
-
-### 1. The API agent opens the work
-
-Check for another writer, then record the actual user request:
+Call it before a burst of writes and after each milestone.
 
 ```javascript
-check_activity({workspace: "example-app"})
-add_node({
-  workspace: "example-app", branch: "agent-api",
-  node_type: "goal", status: "active",
-  title: "Validate create-item requests",
-  prompt: "Add request validation and tests for the create-item endpoint."
-})
+check_activity({workspace: "my-app"})
 ```
 
-Save the returned `id` as `GOAL_ID`. Before implementation, record the choice:
+Trimmed, from a workspace with two MCP sessions and the CLI writing:
+
+```json
+{
+  "sessions": [
+    { "session": "GOYltCLK", "client": "docs-work", "branch": "agent-api",   "is_you": true,  "seconds_ago": 0 },
+    { "session": "GOYljadZ", "client": "docs-work", "branch": "agent-api",   "is_you": false, "seconds_ago": 0 },
+    { "session": "GOYljadZ", "client": "docs-work", "branch": "agent-tests", "is_you": false, "seconds_ago": 12 },
+    { "session": "cli:4c3b", "client": "deciduous CLI", "branch": "agent-tests", "is_you": false, "seconds_ago": 29 },
+    { "session": "cli:4c3b", "client": "deciduous CLI", "branch": null,          "is_you": false, "seconds_ago": 18 }
+  ],
+  "active_sessions": 3,
+  "window_seconds": 300,
+  "branches": [
+    { "branch": "agent-tests",
+      "last_node": { "node_type": "observation", "title": "Reuse the RFC 7807 shape in fixtures", "change_id": "81c332df-..." },
+      "writers": [ ... ] }
+  ],
+  "branches_total": 3
+}
+```
+
+What the fields mean, as observed:
+
+- `sessions` is every (session, branch) pair that wrote in the last five minutes, not every running agent. An agent that has only read does not appear.
+- `client` is the name the MCP client sent in `initialize` (`docs-work` was the probe client that produced this output); the CLI shows as `deciduous CLI`.
+- The CLI's session is named after the repository's root commit (`cli:` plus its first characters), so every clone and worktree of one repository shows as one CLI session. `link` and `status` writes record `branch: null`.
+- `branches` lists the latest node on each branch, newest first, writers included, whether or not anyone is writing now. `branches` (the argument) sets how many, default 20; `branches_total` says how many exist.
+
+Nothing in it is a lock. Until 1.0.8 the server took a ten-second lease per (workspace, branch) and refused a second writer; it stopped one-shot clients from writing after themselves and could not stop the CLI, so it was removed. Two sessions writing `agent-api` at the same moment both got `"Node created and linked"`. Every write is atomic on its own; `log_decision`, `capture_conversation_turn` and `close_thread` are each one transaction. A server-side `lock_scope` setting is still accepted and has no effect.
+
+Locks never protected source files either. File ownership is the coordinator's job; an action's `files` list is how one agent shows another what it is about to touch, and `query_nodes` with `file` finds what was decided about a path.
+
+## The message board
+
+Agents coordinate here, never in a scratch file: a file has no ids to answer, no way to ask what is waiting for you, and is gone with the worktree. With a `[remote]`, the board lives on the server, per workspace, and the CLI and MCP tools read and write the same one.
+
+From the CLI in the tests worktree:
+
+```console
+$ deciduous board post --as tests -s "@api is the 422 body stable?" -m "I am asserting code and field, not message. @api confirm the shape."
+Posted #222, to api
+```
+
+The API agent, over MCP:
 
 ```javascript
-log_decision({
-  workspace: "example-app", branch: "agent-api",
-  parent_node_id: "GOAL_ID",
-  title: "Choose the validation boundary",
-  rationale: "Reject malformed requests before they reach the service layer.",
-  chosen_option: {
-    title: "Validate at the HTTP boundary",
-    description: "Return 422 with stable field error codes."
-  },
-  rejected_options: [{
-    title: "Validate after the database write",
-    reason: "The service would receive invalid input and rely on rollback."
-  }]
-})
+read_messages({workspace: "my-app", unanswered_for: "api"})
 ```
 
-Save `decision_id` as `DECISION_ID`. The helper creates a decision and its option nodes, with `chosen` and `rejected` edges. Record the action and connect it:
+```json
+{ "messages": [{ "id": 222, "author": "tests", "branch": "agent-tests", "mentions": ["api"],
+                 "subject": "@api is the 422 body stable?", "reply_to": null, ... }],
+  "latest_id": 222, "truncated": false }
+```
 
 ```javascript
-add_node({
-  workspace: "example-app", branch: "agent-api",
-  node_type: "action", status: "active",
-  title: "Implement request validation at the route boundary",
-  files: ["src/http/items.ts"]
-})
-add_edge({
-  workspace: "example-app", branch: "agent-api",
-  from_node_id: "DECISION_ID", to_node_id: "API_ACTION_ID",
-  rationale: "Implement the selected validation boundary"
-})
+post_message({workspace: "my-app", branch: "agent-api", author: "api",
+  subject: "Re: 422 body", reply_to: 222,
+  body: "Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts."})
 ```
 
-`API_ACTION_ID` is the ID returned by `add_node`. Send the test agent the workspace and `DECISION_ID`, along with its assigned files. A title alone is harder to follow than a linkable node.
+Back on the CLI, in a different checkout:
 
-### 2. The test agent reads before writing
-
-```javascript
-check_activity({workspace: "example-app", branches: 30})
-query_nodes({
-  workspace: "example-app", branch: "agent-api",
-  type: "decision", search: "validation", limit: 10
-})
-show_node({node_id: "DECISION_ID"})
+```console
+$ deciduous board read --unanswered api
+Nothing addressed to api is waiting for an answer.
+$ deciduous board read --unanswered tests
+#223  api -> tests  re #222  [agent-api]  2026-11-08T18:36:16.277592Z
+    Re: 422 body
+    | Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts.
 ```
 
-`query_nodes` returns summaries. `show_node` supplies the description, metadata, and edge rationales. Read those details before treating a title as an agreed contract.
+The rules that make this work:
 
-The test agent uses the API agent's decision:
+- `@label` anywhere in the subject or body addresses a message. Labels are whatever the agents call themselves; agree on them up front.
+- A reply (`reply_to` / `--reply-to`) is what takes a question off the asker's unanswered list. A new post that answers it in prose does not.
+- `board post` needs a label: `--as`, or `DECIDUOUS_AGENT_LABEL` in the environment. Without either: `Error: who is posting? Pass --as LABEL (or set DECIDUOUS_AGENT_LABEL).`
+- `--branch` defaults to the current git branch.
+- Message ids are numbered across the whole server, so they jump. `since_id` / `--since` with the last `latest_id` you saw returns only what is new.
+- Messages are not graph nodes. They are not in `get_graph`, not exported, not pulled into the cache.
+
+`deciduous init` installs `.claude/hooks/board-mentions.sh` as a SessionStart and UserPromptSubmit hook. When `DECIDUOUS_AGENT_LABEL` is set for the session, it shows that label's unanswered messages at start and anything new on each prompt; without the variable it does nothing.
+
+```console
+$ DECIDUOUS_AGENT_LABEL=api .claude/hooks/board-mentions.sh start
+DECIDUOUS BOARD: messages for @api you have not answered.
+Answer each with post_message reply_to=<id>, or: deciduous board post --as api --reply-to <id> -s ... -m ...
+
+#225  tests -> api  [main]  2026-11-08T18:43:12.249771Z
+    @api fixtures moved
+    | tests/fixtures/items/*.json now carry the problem+json bodies.
+```
+
+## Borrowing across branches: took_from
+
+When one agent's node changes another's plan, record the borrow as an edge, not just a sentence. A `took_from` edge runs from the node you took the idea from (any branch) to your node that used it.
+
+MCP, in one call:
 
 ```javascript
 log_observation({
-  workspace: "example-app", branch: "agent-tests",
-  title: "Use the API agent's field error contract in integration tests",
-  description: "Assert status 422 and stable error codes, without coupling tests to message wording.",
-  related_to: "GOAL_ID",
-  took_from: "DECISION_ID",
-  why: "The boundary decision defines the public response; a second contract would make the tests disagree with the implementation."
+  workspace: "my-app", branch: "agent-tests",
+  title: "Reuse the RFC 7807 shape in fixtures",
+  related_to: "32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb",
+  took_from: "183e9e9a-153a-4141-9fb2-8312fe486012",
+  why: "The API side already emits problem+json; fixtures that match it keep the tests honest."
 })
 ```
 
-Save the returned `id` as `BORROW_ID`. `took_from` creates an edge from the source decision to this observation. It accepts a node UUID or a full `change_id`, within the same workspace, including a source on another branch. Use the full identifier, not a shortened display prefix.
-
-### 3. The test agent implements and reports evidence
-
-```javascript
-add_node({
-  workspace: "example-app", branch: "agent-tests",
-  node_type: "action", status: "active",
-  title: "Cover invalid create-item requests",
-  files: ["tests/items.test.ts"]
-})
-add_edge({
-  workspace: "example-app", branch: "agent-tests",
-  from_node_id: "BORROW_ID", to_node_id: "TEST_ACTION_ID",
-  rationale: "Test the shared error contract"
-})
+```json
+{ "id": "3c2a5b0b-...", "message": "Observation logged",
+  "took_from": { "from_node_id": "183e9e9a-...", "from_change_id": "9ad1b0b7-2c85-4383-b9d9-902411abb3ac", "edge_id": "236548bb-..." } }
 ```
 
-After running the tests, record the actual command, result, and limitations. This example assumes the named tests passed:
+`took_from` and `related_to` take the server UUID or the full `change_id`. A short prefix is refused: `took_from is not a node id: "9ad1b0b7"`. `add_edge` and `add_node` also take `edge_type: "took_from"`.
 
-```javascript
-close_thread({
-  workspace: "example-app", branch: "agent-tests",
-  parent_node_id: "TEST_ACTION_ID",
-  title: "Invalid requests return the agreed field errors",
-  description: "npm test -- tests/items.test.ts passed all 8 cases. Checked missing name, invalid quantity, and unknown fields. Full-suite run remains for integration.",
-  success: true
-})
+CLI, where a `change_id` prefix is enough:
+
+```console
+$ deciduous link 17365e54 2b787037 -t took_from -r "Tests use the API agent's 422 contract instead of inventing one"
+Created edge 24 (1 -> 24 via took_from)
 ```
 
-The API agent records its own implementation outcome under `API_ACTION_ID`. Neither agent marks the shared goal complete until the coordinator has integrated the branches and verified the combined result. Deciduous does not merge code or run tests on your behalf.
+Taking a decision does not make it right in your context. Say in `why` what you checked.
 
-## Read between milestones
+## Watching the workspace live
 
-Call `check_activity` before a burst of writes and after each milestone. Its `sessions` list shows unexpired write leases, not every running agent. Its `branches` list shows recent branch nodes even after the writer's lease expires; `branches_total` tells you whether the list is truncated.
-
-The default is 20 branches, with a maximum of 200. Follow interesting nodes with `show_node`. Use `query_nodes` when you need a particular type or a search term.
-
-## Treat locks as coordination
-
-The default advisory lock key is `(workspace, branch)`, with a ten-second lease. Another write from the same MCP session renews it. Sessions on different branches can write at once; a conflicting session gets an error identifying the current holder.
-
-On a conflict, read `check_activity`, wait for the other writer to finish, and retry with the same intended branch. Do not invent a new branch name to bypass a teammate's ownership. Missing `branch` values share the empty-branch lock bucket. A server operator can configure a workspace-wide lock, which makes all branches contend.
-
-These locks do not protect source files, reserve a task for the duration of an agent session, or prevent raw database/import operations. Keep file ownership and code review in your team workflow.
-
-## Watch the conversation in the graph
-
-With the Deciduous 1.0 CLI configured for this workspace:
-
-```bash
-deciduous remote watch --types decision,observation,outcome
-deciduous remote watch --branch agent-api --edges
+```console
+$ deciduous remote watch --types observation,outcome
+Watching: my-app
+13:37:11  agent-api  observation "Watch probe observation"
+13:37:11  main      outcome     "Watch probe outcome"
 ```
 
-The feed quotes titles and distinguishes updates from new nodes. It reconnects, but it does not replay events missed while disconnected. Query the graph after a gap. Do not count event frames as completed tasks.
+It prints one line per node write from every writer, MCP and CLI alike; the action written in between was filtered out by `--types`. `--branch` (repeatable) narrows it, `--edges` adds edge events, `--json` prints raw frames. It reconnects with backoff when the connection drops and does not replay what it missed; after a gap, query the graph. `--url` prints a WebSocket URL with the token in its query string, so keep it out of screenshots and logs.
 
-`--url` prints a WebSocket URL containing the bearer token. Avoid it in screenshots, logs, and shared terminals. See [Troubleshooting](troubleshooting.md) for version and connection checks.
+## What a coordinator still does
+
+Deciduous does not assign tasks, merge branches or run tests. Mark the shared goal `completed` (`close_thread` with `goal_node_id`) only after the branches are integrated and the combined result checked, not when one agent finishes its part.
