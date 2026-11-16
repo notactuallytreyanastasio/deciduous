@@ -197,8 +197,8 @@ tar -xzf deciduous-mcp-docker.tar.gz && cd deciduous-mcp-docker
 `setup.sh` builds the server image on the machine (no prebuilt image is
 published, so the first run takes a while), starts PostgreSQL 17 and the
 server on `127.0.0.1`, and waits for `/ready`. The token is in `.env`. Put
-an HTTPS proxy in front with response buffering off (`flush_interval -1` in
-Caddy), and hand out the URL and token. One token opens every workspace on
+an HTTPS proxy in front that passes WebSocket upgrades (Caddy does by default),
+and hand out the URL and token. One token opens every workspace on
 the server; there are no per-user accounts.
 
 [Run a server](https://deciduous.dev/tutorial/run-a-server.html) covers the

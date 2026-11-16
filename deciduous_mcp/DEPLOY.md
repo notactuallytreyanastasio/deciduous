@@ -73,7 +73,7 @@ would do by hand:
 
    ```
    DECIDUOUS_SERVER_MODE=native
-   DECIDUOUS_SERVER_VERSION=1.0.12
+   DECIDUOUS_SERVER_VERSION=1.1.0
    DECIDUOUS_BIND_ADDRESS=127.0.0.1
    DECIDUOUS_PORT=24987
    DECIDUOUS_MCP_TOKEN='<at least 32 bytes>'
@@ -159,7 +159,7 @@ would do by hand:
    [Service]
    Environment="DECIDUOUS_ENV_FILE=/home/you/.config/deciduous/server/.env"
    Environment="DECIDUOUS_MCP_INSTALL_DIR=/home/you/.config/deciduous/server/runtime"
-   WorkingDirectory="/home/you/.config/deciduous/server"
+   WorkingDirectory=/home/you/.config/deciduous/server
    ExecStart="/home/you/.config/deciduous/server/bin/deciduous-mcp"
    Restart=always
    RestartSec=5
@@ -183,8 +183,9 @@ would do by hand:
 
 On a machine with no launchd and no `systemctl --user` (a container, a bare
 shell on a server) the CLI offers to run the server in Docker instead;
-declined, it does steps 1-5 and prints the foreground command from step 6 for
-you to run by hand, then stops until the server answers.
+declined (or with no terminal to ask, where Docker is not offered), it does
+steps 1-5, prints the foreground command from step 6, and exits with an error
+saying to run that command and then rerun `remote setup`. It does not wait.
 
 `deciduous update` in a project that writes to this machine's native server
 replaces an executable older than the CLI (verified like the first), rewrites
@@ -456,7 +457,7 @@ docker run -d --name deciduous-restore-check --network none \
   -e POSTGRES_USER=deciduous -e POSTGRES_DB=postgres \
   -e POSTGRES_HOST_AUTH_METHOD=trust \
   --tmpfs /var/lib/postgresql/data postgres:17.11
-docker exec deciduous-restore-check pg_isready -U deciduous -d postgres
+until docker exec deciduous-restore-check pg_isready -h 127.0.0.1 -U deciduous -d postgres; do sleep 1; done
 ```
 
 Once `pg_isready` reports that PostgreSQL accepts connections, restore the
@@ -555,7 +556,8 @@ deciduous.example.com {
 
 If Caddy is another container, put both services on the same Docker network and
 proxy to `server:4000` (4000 is the port inside the container; the host port
-from `.env` does not apply on the Docker network). Leave PostgreSQL unexposed. `flush_interval -1` keeps MCP
-streamed responses from waiting in the proxy's buffer. `/health` checks process
+from `.env` does not apply on the Docker network). Leave PostgreSQL unexposed. `flush_interval -1` is a
+precaution: the 1.1.0 server answers MCP with plain JSON and does not stream, but
+`/events` is a WebSocket the proxy must pass through. `/health` checks process
 liveness; `/ready` also checks the database and is appropriate for deployment
 readiness.

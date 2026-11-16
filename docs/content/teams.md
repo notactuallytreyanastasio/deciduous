@@ -14,7 +14,7 @@ workspace = "my-app"
 
 `deciduous init` adds a `.gitignore` that keeps `.deciduous/config.toml` tracked and ignores the rest of `.deciduous/` (the local cache, the write log).
 
-The server ties a workspace to the root commit of the repository that first writes to it. A clone shares that root, so it is let in:
+The server ties a workspace to the root commit of the first repository that connects to it, at `remote init` or `remote setup`, before anything is written. A clone shares that root, so it is let in:
 
 ```console
 $ deciduous remote init https://deciduous.example.com --workspace my-app

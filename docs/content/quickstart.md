@@ -24,7 +24,7 @@ If `which -a` lists two paths, the first one runs. Remove the stale one rather t
 
 ## 2. Get the token
 
-Ask the person who runs the server. They read it from the server's settings file, the `DECIDUOUS_MCP_TOKEN='...'` line in it: `.env` in the extracted Docker bundle, or `~/.config/deciduous/server/.env` for a server the CLI installed. It should reach you through your team's secret manager, not chat.
+Ask the person who runs the server. They read it from the server's settings file: the value of the `DECIDUOUS_MCP_TOKEN` line, without the single quotes `setup.sh` puts around it (a token pasted with its quotes gets a 401): `.env` in the extracted Docker bundle, or `~/.config/deciduous/server/.env` for a server the CLI installed. It should reach you through your team's secret manager, not chat.
 
 Store it with `remote login`. It reads one line from stdin, so the token stays out of shell history and the process list, and checks it against the server before writing anything. Pipe it in from wherever you keep it (`pbpaste`, your secret manager's CLI); if you paste it at the prompt instead, the terminal shows it as you paste.
 
@@ -48,7 +48,7 @@ Nothing was stored.
 
 ## 3. Point the repository at the server
 
-The repository needs at least one commit first. The server ties a workspace to the repository's root commit, so that an unrelated project that happens to share the directory name cannot write into your graph. In a repository with no commit, CLI writes are kept in `.deciduous/remote-log.jsonl` and `deciduous remote push` sends them after the first commit.
+Make the repository's first commit before you write anything. `remote setup` itself works in a repository with no commit, but the server ties a workspace to the repository's root commit, so that an unrelated project that happens to share the directory name cannot write into your graph. In a repository with no commit, CLI writes are kept in `.deciduous/remote-log.jsonl` and `deciduous remote push` sends them after the first commit.
 
 ```sh
 $ cd my-app
@@ -75,7 +75,7 @@ workspace = "my-app"
 
 The workspace is the repository directory's name. Every clone and worktree of the repository should use the same one, so commit this file. To choose a different name, `deciduous remote init https://deciduous.example.com --workspace <name>`. `remote setup` has no `--workspace` flag.
 
-Without a stored token it stops before writing anything: `Error: no token: set DECIDUOUS_MCP_TOKEN or run 'deciduous remote login --url ...' first`. A token given only through `DECIDUOUS_MCP_TOKEN` works for setup but is not stored by it.
+Without a stored token it stops before writing anything: ``Error: no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url https://deciduous.example.com` first``. A token given only through `DECIDUOUS_MCP_TOKEN` works for setup but is not stored by it.
 
 If setup fails with `cannot reach <url>: ... timed out reading response`, the server's `/health` took longer than the CLI's 15 seconds. Run it again; if it keeps happening, tell whoever runs the server.
 
@@ -107,7 +107,7 @@ Where should this project's graph live?
   4) A server someone else runs: you need its URL and token
 ```
 
-Choose 4 to join your team's server; it asks for the URL and then the token. The choices are the same as these flags: 1 is `remote setup --local`, 2 is `--database-url <url>`, 3 is `--docker-postgres`, 4 is `--url <url>`. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.
+Type 4 to join your team's server; it asks for the URL and then the token. **Do not just press Enter.** The default is 1: it downloads the server executable, creates and migrates a `deciduous` database on localhost:5432, and installs a background service on your machine, which is not what someone joining a team wants. End-of-input picks the default too, so do not pipe `init` an empty answer. The choices are the same as these flags: 1 is `remote setup --local`, 2 is `--database-url <url>`, 3 is `--docker-postgres`, 4 is `--url <url>`. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.
 
 Without a terminal (a script, CI, an agent's shell), `init` writes its files and then stops:
 
@@ -128,7 +128,7 @@ It exits 1. Run step 3, then `init` again; files that already exist are skipped.
 
 ## 5. Make sure Claude Code talks to the same server
 
-`remote setup` registers the server with Claude Code (user scope, every repository) only when Claude Code has no server called `deciduous` yet. If it already has one, setup prints `Unchanged Claude Code already has a deciduous MCP server` and leaves it alone, **even when that one points at a different server.** Your CLI writes then go to one graph and your agent's to another, and nothing warns you.
+`remote setup` registers the server with Claude Code (user scope, every repository) only when Claude Code has no server called `deciduous` yet. If it already has one, setup prints `Unchanged Claude Code already has a deciduous MCP server` and leaves it alone, **even when that one points at a different server.** Your CLI writes then go to one graph and your agent's to another, and nothing warns you. Setup's last line still says to restart Claude Code so it picks up the server; restarting picks up the old registration.
 
 Check it:
 
@@ -141,6 +141,8 @@ deciduous:
   URL: https://old-server.example.com/deciduous-mcp/mcp
   Headers:
     Authorization: Bearer <token>
+
+To remove this server, run: claude mcp remove deciduous -s user
 ```
 
 This is the mismatch the step exists for, and it happened while this page was being written: the project pointed at one server and Claude Code at another. The `URL` must be your `[remote] url` followed by `/mcp`. If it is not, replace the registration:
@@ -204,6 +206,7 @@ Pulled: my-app <- https://deciduous.example.com
   imported 1 new node(s), updated 0, removed 0; imported 1 edge(s), removed 0
 
 $ deciduous nodes
+2 nodes:
 ID    CHANGE    TYPE         STATUS     TITLE
 ------------------------------------------------------------------------------
 1     b1710c03  goal         pending    Add rate limiting to the public API
@@ -227,7 +230,7 @@ git add .deciduous/config.toml .gitignore CLAUDE.md .claude/
 git commit -m "chore: connect to the team's deciduous server"
 ```
 
-With the `graph.json` line gone from `.gitignore` (step 4), `git status` stays clean after CLI writes; the SQLite cache and `graph.json` are both ignored.
+With the `graph.json` line gone from `.gitignore` (step 4), CLI writes no longer change `git status`: the SQLite cache and `graph.json` are both ignored. What stays in `git status` is what `init` wrote and you chose not to commit: `?? .gitattributes` and, unless you committed it, `?? .github/`. Delete them if you do not want them listed.
 
 `init` also wrote `.github/workflows/cleanup-decision-graphs.yml`, which deletes the graph images `deciduous dot --auto` puts in PRs; commit it only if you use that. Stage files by name, never `git add -A`.
 

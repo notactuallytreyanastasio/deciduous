@@ -26,7 +26,7 @@ url = &quot;https://deciduous.example.com&quot;
 workspace = &quot;my-app&quot;
 </code></pre>
 </div><p><code>deciduous init</code> adds a <code>.gitignore</code> that keeps <code>.deciduous/config.toml</code> tracked and ignores the rest of <code>.deciduous/</code> (the local cache, the write log).</p>
-<p>The server ties a workspace to the root commit of the repository that first writes to it. A clone shares that root, so it is let in:</p>
+<p>The server ties a workspace to the root commit of the first repository that connects to it, at <code>remote init</code> or <code>remote setup</code>, before anything is written. A clone shares that root, so it is let in:</p>
 <div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous remote init https://deciduous.example.com --workspace my-app
 Remote: https://deciduous.example.com
   workspace: my-app

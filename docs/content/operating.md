@@ -2,7 +2,7 @@
 
 There are two things to look after: the PostgreSQL database and the `.env` file next to it. The server itself holds no state, so if you rebuild it from the same `.env` against the same database, the graph comes back. Every command on this page was run against a v1.1.0 Docker install on 2026-11-08, with the output shown, except where a section says otherwise.
 
-Run the commands from the directory that holds the install's `.env` and `compose.yaml`. If your machine has `docker-compose` rather than the `docker compose` plugin, use that; the arguments are the same.
+Run the commands from the directory that holds the install's `.env` and `compose.yaml`. A Docker install the CLI made (`remote setup --docker-postgres` on a developer machine) keeps them apart: the settings are in `~/.config/deciduous/server/.env` and the compose files in its bundle directory, so add `--env-file ~/.config/deciduous/server/.env` to each `docker compose` command. If your machine has `docker-compose` rather than the `docker compose` plugin, use that; the arguments are the same.
 
 ## Back up
 
@@ -27,7 +27,7 @@ docker run -d --name deciduous-restore-check --network none \
   -e POSTGRES_USER=deciduous -e POSTGRES_DB=postgres \
   -e POSTGRES_HOST_AUTH_METHOD=trust \
   --tmpfs /var/lib/postgresql/data postgres:17.11-alpine
-docker exec deciduous-restore-check pg_isready -U deciduous -d postgres   # repeat until "accepting connections"
+until docker exec deciduous-restore-check pg_isready -h 127.0.0.1 -U deciduous -d postgres; do sleep 1; done
 
 docker exec -i deciduous-restore-check pg_restore -U deciduous \
   --create --exit-on-error --dbname=postgres < deciduous-2026-11-08.dump
@@ -36,6 +36,8 @@ docker exec deciduous-restore-check psql -X -U deciduous -d deciduous -tA \
 docker rm -f deciduous-restore-check
 ```
 
+Use `-h 127.0.0.1` in the wait. Over the Unix socket, `pg_isready` already reports the image's temporary initialisation server as ready, which shuts down a moment later; a restore started then fails with `terminating connection due to administrator command`. The temporary server does not listen on TCP, so the TCP check waits for the real one.
+
 The test install printed `3` and `1.1`: three nodes, and the database's planner setting. Use `--create`. Without it, the restore lands in a database that already exists and skips the database-level settings the migrations made, even though the migration ledger says they ran.
 
 ## Upgrade the server
@@ -43,6 +45,7 @@ The test install printed `3` and `1.1`: three nodes, and the database's planner 
 Extract the new release bundle into a new directory. Copy your `.env` into it, plus `certs/` if you use a private database CA, and run setup there:
 
 ```bash
+mkdir -p /opt/deciduous-mcp-1.2.0
 tar -xzf deciduous-mcp-docker.tar.gz -C /opt/deciduous-mcp-1.2.0 --strip-components=1
 cp /opt/deciduous-mcp-1.1.0/.env /opt/deciduous-mcp-1.2.0/
 cd /opt/deciduous-mcp-1.2.0 && ./scripts/setup.sh
@@ -58,11 +61,11 @@ People upgrade their own CLI however they installed it (`brew upgrade deciduous`
 
 ## Rotate the token
 
-Set a new token in `.env` and rerun setup. These commands are for the Linux VM; on macOS, `sed -i` needs `''` after it:
+Set a new token in `.env` and rerun setup. These commands are for the Linux VM; on macOS, `sed -i` needs `''` after it. Keep the single quotes around the value, as `setup.sh` writes it: tools that read the token back out of `.env`, including the one-liner in `deciduous_mcp/DEPLOY.md`, expect them.
 
 ```bash
 NEW=$(openssl rand -hex 32)
-sed -i "s/^DECIDUOUS_MCP_TOKEN=.*/DECIDUOUS_MCP_TOKEN=$NEW/" .env
+sed -i "s/^DECIDUOUS_MCP_TOKEN=.*/DECIDUOUS_MCP_TOKEN='$NEW'/" .env
 ./scripts/setup.sh
 ```
 

@@ -19,7 +19,7 @@
 <div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get started</h2><ul><li><a href="index.html">What deciduous is</a></li><li><a href="quickstart.html">Join a server</a></li><li><a href="run-a-server.html">Run a server</a></li><li><a href="clients.html">Connect your agents</a></li><li><a href="for-agents.html">For agents</a></li></ul></section><section class="nav-group"><h2>Work in the graph</h2><ul><li><a href="workflow.html">Record the reasoning</a></li><li><a href="teams.html">Many agents, one graph</a></li><li><a href="recovery.html">Recover context</a></li><li><a href="evidence.html">Documents and transcripts</a></li><li><a href="history.html">Design history</a></li></ul></section><section class="nav-group"><h2>Operate</h2><ul><li><a href="operating.html">Backups, upgrades, tokens</a></li><li><a href="local.html">Without a shared server</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="concepts.html">Graph concepts</a></li><li><a href="reference.html" aria-current="page">CLI reference</a></li><li><a href="mcp.html">MCP tools</a></li><li><a href="architecture.html">Architecture and trust</a></li><li><a href="developer.html">Develop deciduous</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.1.0</span></div></aside>
 <main id="content"><div class="article-meta"><span>Reference</span><a href="../content/reference.md">Read as Markdown</a></div><article><h1 id="cli-reference">CLI reference</h1>
 <p>The <code>deciduous</code> commands people actually use, grouped by what you are trying to do, with flags as <code>deciduous &lt;command&gt; --help</code> prints them in 1.1.0. In a project with a <code>[remote]</code>, every write command writes the local database, queues an op in <code>.deciduous/remote-log.jsonl</code>, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by <code>remote pull</code>. Commands marked <strong>server</strong> need a <code>[remote]</code>; commands marked <strong>no server</strong> only matter without one.</p>
-<p>Anywhere a command takes a node, it accepts a local number, a change_id prefix, or a server UUID.</p>
+<p>Anywhere a command takes a node, it accepts a local number or a change_id prefix. In a project with a <code>[remote]</code> it also accepts a server UUID, once the node is in the local cache.</p>
 <h2 id="connect-a-project-to-a-server">Connect a project to a server</h2>
 <h3 id="remote-setup-server"><code>remote setup</code> (server)</h3>
 <p>Connect this project to a shared graph server, step by step. In a terminal it asks; flags answer for scripts. Ends by writing <code>[remote]</code>, storing the token if needed, and registering Claude Code (only if Claude Code has no <code>deciduous</code> server yet).</p>
@@ -86,8 +86,9 @@ Remote: http://127.0.0.1:4000
 
 Written to .deciduous/config.toml. The token stays in ~/.config/deciduous/credentials (or DECIDUOUS_MCP_TOKEN), never here.
 </code></pre>
-</div><h3 id="remote-adopt-root-url-server"><code>remote adopt [ROOT] --url &lt;URL&gt;</code> (server)</h3>
-<p>Walk a directory for projects that already have a <code>.deciduous</code> and point each at the server. Existing configuration is left alone. <code>-n, --dry-run</code> shows what would change.</p>
+</div><p>The message names <code>~/.config</code> even when <code>XDG_CONFIG_HOME</code> has moved the file.</p>
+<h3 id="remote-adopt-root-url-server"><code>remote adopt [ROOT] --url &lt;URL&gt;</code> (server)</h3>
+<p>Walk a directory for projects that already have a <code>.deciduous</code> and point each at the server. Existing configuration is left alone. <code>-n, --dry-run</code> shows what would change, but in 1.1.0 it is not free of side effects: it leaves a <code>.deciduous/deciduous.db</code> in the directory it walks. That stray <code>.deciduous</code> then captures any repository below it that has no <code>.deciduous</code> of its own, including a worktree, which writes to that file instead of its main checkout's server. Delete it after a dry run.</p>
 <h2 id="check-and-repair-the-connection">Check and repair the connection</h2>
 <h3 id="remote-status-server"><code>remote status</code> (server)</h3>
 <p>How far the local copy has drifted from the server: ops waiting and rejected, node and edge counts, and every row that differs, field by field. Exits 0 only on <code>In sync</code>.</p>
@@ -351,8 +352,8 @@ EOF
 </table>
 <p>See <a href="evidence.html">Documents and transcripts</a>.</p>
 <h2 id="coordinate-agents">Coordinate agents</h2>
-<p><code>board post --subject &lt;S&gt; [-m &lt;BODY&gt;]</code> (body from stdin if omitted), <code>--as &lt;LABEL&gt;</code> (default <code>$DECIDUOUS_AGENT_LABEL</code>), <code>--reply-to &lt;ID&gt;</code>, <code>--branch</code>, <code>--json</code>. <code>@label</code> in the subject or body addresses someone.</p>
-<p><code>board read</code>: <code>--unanswered &lt;LABEL&gt;</code> (what is waiting on you), <code>--to</code>, <code>--from</code>, <code>--since &lt;ID&gt;</code>, <code>-q, --query</code>, <code>--limit</code> (default 50, max 200), <code>--json</code>. <code>board show &lt;ID&gt;</code>.</p>
+<p><code>board post -s, --subject &lt;S&gt; [-m &lt;BODY&gt;]</code> (body from stdin if omitted), <code>--as &lt;LABEL&gt;</code> (default <code>$DECIDUOUS_AGENT_LABEL</code>), <code>--reply-to &lt;ID&gt;</code>, <code>--branch</code>, <code>--json</code>. <code>@label</code> in the subject or body addresses someone.</p>
+<p><code>board read</code>: <code>--unanswered &lt;LABEL&gt;</code> (what is waiting on you), <code>--to</code>, <code>--from</code>, <code>--since &lt;ID&gt;</code>, <code>-q, --query</code>, <code>--limit</code> (default 50, max 200), <code>--json</code>. <code>board show &lt;ID&gt; [--json]</code>.</p>
 <p>With a <code>[remote]</code> the board lives on the server, per workspace; without one, in the main worktree's database. Messages are not graph nodes and are never exported. See <a href="teams.html">Many agents, one graph</a>.</p>
 <h2 id="export">Export</h2>
 <table>
@@ -463,7 +464,19 @@ EOF
 </tr>
 <tr>
 <td><code>DECIDUOUS_NO_SERVER</code></td>
-<td><code>1</code> makes <code>init</code> and <code>update</code> skip the server step.</td>
+<td>Any value other than empty or <code>0</code> makes <code>init</code> and <code>update</code> skip the server step.</td>
+</tr>
+<tr>
+<td><code>DECIDUOUS_PORT</code></td>
+<td>Port for this machine's server the first time <code>remote setup --local</code> installs it.</td>
+</tr>
+<tr>
+<td><code>DECIDUOUS_DB_PATH</code></td>
+<td>Use this SQLite file instead of finding <code>.deciduous/deciduous.db</code> by walking up (Claude Desktop, unusual layouts).</td>
+</tr>
+<tr>
+<td><code>DECIDUOUS_API_DATA_DIR</code>, <code>DECIDUOUS_API_TOKEN</code></td>
+<td>Fallbacks for <code>serve --api</code>'s <code>--data-dir</code> and <code>--token</code>.</td>
 </tr>
 <tr>
 <td><code>DECIDUOUS_OPS_TIMEOUT</code></td>

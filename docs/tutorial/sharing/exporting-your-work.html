@@ -73,7 +73,7 @@ it sends the logging instructions when it connects.
 <tr>
 <td><code>--port &lt;port&gt;</code></td>
 <td>any of the above</td>
-<td>used only on first setup; asked otherwise, with a free port in 20000-32767 suggested</td>
+<td>used only on first setup. Without it, <code>DECIDUOUS_PORT</code> from the environment is used; failing that, a terminal asks (suggesting a free port in 20000-32767), and without a terminal a free port is chosen and printed (<code>Chose port N</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -87,7 +87,7 @@ it sends the logging instructions when it connects.
 <p>Picks the bearer token. If the machine already has one (<code>DECIDUOUS_MCP_TOKEN</code>, else <code>~/.config/deciduous/credentials</code>) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.</p>
 </li>
 <li>
-<p>Runs the executable once with <code>DECIDUOUS_MCP_COMMAND=prepare-database</code>: it connects, creates the database if missing (the role needs <code>CREATEDB</code>), migrates, and exits. A refusal comes back in PostgreSQL's words (<code>role &quot;x&quot; does not exist</code>, <code>password authentication failed</code>). If nothing listens on 5432 at all, setup says so and prints <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> / <code>sudo apt install postgresql</code>.</p>
+<p>Runs the executable once with <code>DECIDUOUS_MCP_COMMAND=prepare-database</code>: it connects, creates the database if missing (the role needs <code>CREATEDB</code>), migrates, and exits. A refusal comes back in PostgreSQL's words (<code>role &quot;x&quot; does not exist</code>, <code>password authentication failed</code>). If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> / <code>sudo apt install postgresql</code>.</p>
 </li>
 <li>
 <p>Writes <code>~/.config/deciduous/server/.env</code>, mode 600. This machine's file has these keys (values other than the secrets shown):</p>
@@ -105,12 +105,22 @@ DECIDUOUS_PREPARE_DATABASE=true
 </code></pre>
 </div></li>
 <li>
-<p>Installs a user service that starts at login and restarts on exit: a LaunchAgent <code>dev.deciduous.server</code> at <code>~/Library/LaunchAgents/dev.deciduous.server.plist</code> on macOS, a systemd user unit <code>deciduous-server.service</code> on Linux. The service definition carries only paths; the token and database URL stay in <code>.env</code>, which the server reads itself through <code>DECIDUOUS_ENV_FILE</code>. Output goes to <code>~/.config/deciduous/server/logs/server.log</code>. On Linux, user services stop at logout unless you run <code>loginctl enable-linger $USER</code>.</p>
+<p>Installs a user service that starts at login and restarts on exit (<strong>on Linux this fails in 1.1.0</strong>; see below): a LaunchAgent <code>dev.deciduous.server</code> at <code>~/Library/LaunchAgents/dev.deciduous.server.plist</code> on macOS, a systemd user unit <code>deciduous-server.service</code> on Linux. The service definition carries only paths; the token and database URL stay in <code>.env</code>, which the server reads itself through <code>DECIDUOUS_ENV_FILE</code>. Output goes to <code>~/.config/deciduous/server/logs/server.log</code>. On Linux, user services stop at logout unless you run <code>loginctl enable-linger $USER</code>.</p>
 </li>
 <li>
 <p>Waits for <code>/ready</code>, then stores the token in <code>~/.config/deciduous/credentials</code> if it differs from the one there, writes <code>[remote]</code>, and registers with Claude Code as above.</p>
 </li>
 </ol>
+<p><strong>Linux: the service does not start in 1.1.0.</strong> The unit file the CLI writes puts <code>WorkingDirectory</code> in double quotes, and systemd refuses the whole unit (checked with <code>systemd-analyze verify</code> on systemd 252):</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">/home/you/.config/systemd/user/deciduous-server.service:8: WorkingDirectory= path is not absolute: &quot;/home/you/.config/deciduous/server&quot;
+deciduous-server.service: Unit configuration has fatal error, unit will not be started.
+Unit deciduous-server.service has a bad unit file setting.
+</code></pre>
+</div><p>Until that is fixed, remove the quotes from that one line, then start the service:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">sed -i 's/^WorkingDirectory=&quot;\(.*\)&quot;$/WorkingDirectory=\1/' ~/.config/systemd/user/deciduous-server.service
+systemctl --user daemon-reload &amp;&amp; systemctl --user restart deciduous-server.service
+</code></pre>
+</div><p>Checked on debian:12: before the edit <code>systemd-analyze verify</code> refuses the unit, after it the unit verifies clean. The quoted <code>ExecStart=</code> and <code>Environment=</code> lines are fine. macOS (launchd) is not affected.</p>
 <p>The server binds <code>127.0.0.1</code> because <code>DECIDUOUS_BIND_ADDRESS</code> says so; a server started by hand without that setting listens on every interface. Every start re-runs the migrations (<code>DECIDUOUS_PREPARE_DATABASE=true</code>), and <code>deciduous update</code> in a project that writes to this server replaces an older executable and restarts the service. Docker installs are not upgraded by <code>update</code>.</p>
 <p>A database URL may carry <code>?sslmode=</code>. The CLI maps it onto the server's TLS settings: <code>require</code> → <code>DB_SSL=true DB_SSL_VERIFY=none</code>, <code>verify-ca</code> → <code>ca</code>, <code>verify-full</code> → <code>full</code>. <code>disable</code>, <code>allow</code> and <code>prefer</code> all turn TLS off; <code>prefer</code> does not mean &quot;try TLS&quot; here. Any other query parameter is refused rather than dropped. The meaning of each mode is on <a href="../architecture.html#tls-to-postgresql">Architecture</a>.</p>
 <p>The first log lines after a start say what the server is doing. From this machine's <code>server.log</code>:</p>
@@ -139,7 +149,7 @@ Warning: the local write succeeded but the server refused it: the server rejecte
 <p>The ordering also matters the first time. A brand-new local server adopts whatever token the machine already holds (step 2 above), so installing a local server after <code>remote login</code> to a team server gives the local server the team's token. Both then accept the same secret, and rotating the team token later breaks the local server's projects too. Run <code>remote setup --local</code> with <code>DECIDUOUS_MCP_TOKEN</code> unset and the credentials file empty if you want the two kept apart. (This ordering was read from <code>machine_token()</code> in <code>src/server.rs</code>, not run.)</p>
 <p>Claude Code has the same shape of problem: one user-scope <code>deciduous</code> entry. For a second server, add a project-scoped <code>.mcp.json</code> in the repositories that use it; see <a href="../clients.html">Connect your agents</a>.</p>
 <h2 id="no-server-at-all">No server at all</h2>
-<p><code>deciduous init</code> will not finish without a server. In a terminal it asks; without one it prints the four <code>remote setup</code> forms and exits 1. To opt out, say so:</p>
+<p><code>deciduous init</code> does not complete without a server. In a terminal it asks; without one it writes its files (<code>.claude/</code>, <code>CLAUDE.md</code>, <code>.gitignore</code>, <code>.github/</code> and the rest), then prints the four <code>remote setup</code> forms and exits 1. To opt out, say so:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ DECIDUOUS_NO_SERVER=1 deciduous init
    Creating .gitignore (track .deciduous/graph.json, ignore the database)
    Creating .gitattributes (merge the graph file record by record, fold it in PR diffs)

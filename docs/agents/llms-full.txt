@@ -9,7 +9,7 @@ Deciduous records why the code is the way it is: what was asked, the approaches 
 ```
  Claude Code, OpenCode, any MCP client          deciduous CLI
    (agents, one per worktree/branch)        (add, link, remote status,
-                │                              pull, watch, serve)
+                │                              pull, watch)
                 │ HTTPS, bearer token                 │ HTTPS, same token
                 │ <base>/mcp                          │ <base>/ops, /export, ...
                 ▼                                     ▼
@@ -24,7 +24,7 @@ Deciduous records why the code is the way it is: what was asked, the approaches 
 
 - **The server** is PostgreSQL plus the deciduous server, normally on a VM behind a TLS proxy. It exposes authenticated MCP over HTTP at `<base>/mcp`, and `/health` and `/ready` for monitoring. One server holds many repositories, each in its own workspace. A running example is the reference install at `https://bobbby.online/deciduous-mcp`, on a Hetzner VM behind Caddy.
 - **Agents** connect to `<base>/mcp` with a bearer token. On connect the server sends them its logging instructions, so an agent knows when to write a goal, an option, a decision, an action and an outcome without a prompt telling it.
-- **The CLI** (`deciduous`) writes to the same server. A project whose `.deciduous/config.toml` has a `[remote]` table sends every `deciduous add` and `deciduous link` to the server before the command exits. The SQLite file in `.deciduous/` is this machine's cache of the server, not a second graph.
+- **The CLI** (`deciduous`) writes to the same server. A project whose `.deciduous/config.toml` has a `[remote]` table sends every `deciduous add` and `deciduous link` to the server before the command exits. The SQLite file in `.deciduous/` is this machine's cache of the server, not a second graph. `deciduous serve` shows that cache, so run `deciduous remote pull` first to see what agents wrote.
 
 One token per server, not per person or per workspace. Anyone holding it can read and write every workspace on that server. Run separate servers for groups that must not see each other's graphs. [Architecture](architecture.md) covers the trust boundary in full.
 
@@ -68,7 +68,7 @@ If `which -a` lists two paths, the first one runs. Remove the stale one rather t
 
 ## 2. Get the token
 
-Ask the person who runs the server. They read it from the server's settings file, the `DECIDUOUS_MCP_TOKEN='...'` line in it: `.env` in the extracted Docker bundle, or `~/.config/deciduous/server/.env` for a server the CLI installed. It should reach you through your team's secret manager, not chat.
+Ask the person who runs the server. They read it from the server's settings file: the value of the `DECIDUOUS_MCP_TOKEN` line, without the single quotes `setup.sh` puts around it (a token pasted with its quotes gets a 401): `.env` in the extracted Docker bundle, or `~/.config/deciduous/server/.env` for a server the CLI installed. It should reach you through your team's secret manager, not chat.
 
 Store it with `remote login`. It reads one line from stdin, so the token stays out of shell history and the process list, and checks it against the server before writing anything. Pipe it in from wherever you keep it (`pbpaste`, your secret manager's CLI); if you paste it at the prompt instead, the terminal shows it as you paste.
 
@@ -92,7 +92,7 @@ Nothing was stored.
 
 ## 3. Point the repository at the server
 
-The repository needs at least one commit first. The server ties a workspace to the repository's root commit, so that an unrelated project that happens to share the directory name cannot write into your graph. In a repository with no commit, CLI writes are kept in `.deciduous/remote-log.jsonl` and `deciduous remote push` sends them after the first commit.
+Make the repository's first commit before you write anything. `remote setup` itself works in a repository with no commit, but the server ties a workspace to the repository's root commit, so that an unrelated project that happens to share the directory name cannot write into your graph. In a repository with no commit, CLI writes are kept in `.deciduous/remote-log.jsonl` and `deciduous remote push` sends them after the first commit.
 
 ```sh
 $ cd my-app
@@ -119,7 +119,7 @@ workspace = "my-app"
 
 The workspace is the repository directory's name. Every clone and worktree of the repository should use the same one, so commit this file. To choose a different name, `deciduous remote init https://deciduous.example.com --workspace <name>`. `remote setup` has no `--workspace` flag.
 
-Without a stored token it stops before writing anything: `Error: no token: set DECIDUOUS_MCP_TOKEN or run 'deciduous remote login --url ...' first`. A token given only through `DECIDUOUS_MCP_TOKEN` works for setup but is not stored by it.
+Without a stored token it stops before writing anything: ``Error: no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url https://deciduous.example.com` first``. A token given only through `DECIDUOUS_MCP_TOKEN` works for setup but is not stored by it.
 
 If setup fails with `cannot reach <url>: ... timed out reading response`, the server's `/health` took longer than the CLI's 15 seconds. Run it again; if it keeps happening, tell whoever runs the server.
 
@@ -151,7 +151,7 @@ Where should this project's graph live?
   4) A server someone else runs: you need its URL and token
 ```
 
-Choose 4 to join your team's server; it asks for the URL and then the token. The choices are the same as these flags: 1 is `remote setup --local`, 2 is `--database-url <url>`, 3 is `--docker-postgres`, 4 is `--url <url>`. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.
+Type 4 to join your team's server; it asks for the URL and then the token. **Do not just press Enter.** The default is 1: it downloads the server executable, creates and migrates a `deciduous` database on localhost:5432, and installs a background service on your machine, which is not what someone joining a team wants. End-of-input picks the default too, so do not pipe `init` an empty answer. The choices are the same as these flags: 1 is `remote setup --local`, 2 is `--database-url <url>`, 3 is `--docker-postgres`, 4 is `--url <url>`. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.
 
 Without a terminal (a script, CI, an agent's shell), `init` writes its files and then stops:
 
@@ -172,7 +172,7 @@ It exits 1. Run step 3, then `init` again; files that already exist are skipped.
 
 ## 5. Make sure Claude Code talks to the same server
 
-`remote setup` registers the server with Claude Code (user scope, every repository) only when Claude Code has no server called `deciduous` yet. If it already has one, setup prints `Unchanged Claude Code already has a deciduous MCP server` and leaves it alone, **even when that one points at a different server.** Your CLI writes then go to one graph and your agent's to another, and nothing warns you.
+`remote setup` registers the server with Claude Code (user scope, every repository) only when Claude Code has no server called `deciduous` yet. If it already has one, setup prints `Unchanged Claude Code already has a deciduous MCP server` and leaves it alone, **even when that one points at a different server.** Your CLI writes then go to one graph and your agent's to another, and nothing warns you. Setup's last line still says to restart Claude Code so it picks up the server; restarting picks up the old registration.
 
 Check it:
 
@@ -185,6 +185,8 @@ deciduous:
   URL: https://old-server.example.com/deciduous-mcp/mcp
   Headers:
     Authorization: Bearer <token>
+
+To remove this server, run: claude mcp remove deciduous -s user
 ```
 
 This is the mismatch the step exists for, and it happened while this page was being written: the project pointed at one server and Claude Code at another. The `URL` must be your `[remote] url` followed by `/mcp`. If it is not, replace the registration:
@@ -248,6 +250,7 @@ Pulled: my-app <- https://deciduous.example.com
   imported 1 new node(s), updated 0, removed 0; imported 1 edge(s), removed 0
 
 $ deciduous nodes
+2 nodes:
 ID    CHANGE    TYPE         STATUS     TITLE
 ------------------------------------------------------------------------------
 1     b1710c03  goal         pending    Add rate limiting to the public API
@@ -271,7 +274,7 @@ git add .deciduous/config.toml .gitignore CLAUDE.md .claude/
 git commit -m "chore: connect to the team's deciduous server"
 ```
 
-With the `graph.json` line gone from `.gitignore` (step 4), `git status` stays clean after CLI writes; the SQLite cache and `graph.json` are both ignored.
+With the `graph.json` line gone from `.gitignore` (step 4), CLI writes no longer change `git status`: the SQLite cache and `graph.json` are both ignored. What stays in `git status` is what `init` wrote and you chose not to commit: `?? .gitattributes` and, unless you committed it, `?? .github/`. Delete them if you do not want them listed.
 
 `init` also wrote `.github/workflows/cleanup-decision-graphs.yml`, which deletes the graph images `deciduous dot --auto` puts in PRs; commit it only if you use that. Stage files by name, never `git add -A`.
 
@@ -330,13 +333,13 @@ Rerun this command to rebuild and upgrade. Your settings and database volume are
 Everything that defines the install is in `.env`, which is created with mode 0600:
 
 ```
-COMPOSE_PROJECT_NAME=deciduous-mcp
+COMPOSE_PROJECT_NAME=deciduous
 DECIDUOUS_SERVER_MODE=docker
 DECIDUOUS_DATABASE_MODE=local
 DECIDUOUS_BIND_ADDRESS=127.0.0.1
 DECIDUOUS_PORT=24555
-DECIDUOUS_MCP_TOKEN=<64 hex digits>
-POSTGRES_PASSWORD=<64 hex digits>
+DECIDUOUS_MCP_TOKEN='<64 hex digits>'
+POSTGRES_PASSWORD='<64 hex digits>'
 DATABASE_URL='ecto://deciduous:<password>@db:5432/deciduous'
 DB_SSL=false
 DB_SSL_VERIFY=full
@@ -366,7 +369,7 @@ deciduous.example.com {
 }
 ```
 
-`flush_interval -1` is required. MCP responses are streamed (Server-Sent Events). If the proxy buffers them, the client waits for a response the server has already written, and agents appear to hang. Any proxy you use needs the same setting, and it must also pass WebSocket upgrades through, because `deciduous remote watch` streams events over `/events`.
+What the proxy must do is pass WebSocket upgrades through, because `deciduous remote watch` streams events over `/events`. Caddy does this by default. `flush_interval -1` is optional in 1.1.0. Earlier versions of this page said it was required for MCP streaming, but the 1.1.0 server does not stream: `POST /mcp` returns plain JSON with a `Content-Length`, and `GET /mcp` is refused with 405 (`this server does not offer a server-to-client stream`). Behind a Caddy without the setting, `initialize`, `add_node` and `remote watch` all worked. It is kept here because it costs nothing and protects you if a later server streams.
 
 To share a domain with something else, serve the server under a path, as the reference install does. `handle_path` strips the prefix, so the server still sees `/mcp` at its own root:
 
@@ -377,8 +380,13 @@ example.com {
 			flush_interval -1
 		}
 	}
+	handle {
+		respond 404
+	}
 }
 ```
+
+Keep the final `handle` if nothing else is served on that domain. Without it, Caddy answers every other path with an empty 200. A developer who leaves the prefix off the URL then gets `the server's response was not a graph: Failed to read JSON: EOF while parsing` instead of the CLI's clear `no such endpoint (404). Is the URL right, including any path prefix?`. Both behaviours were tested. If the domain already serves something else, that site answers instead, and the error depends on what it returns.
 
 If Caddy runs in a container, join it to the bundle's Compose network and proxy to `server:4000`. Port 4000 is the port inside the network; `DECIDUOUS_PORT` applies only on the host. The path-prefix form was tested exactly this way: health, readiness, CLI writes, an MCP `add_node`, and `remote watch` all went through Caddy.
 
@@ -389,7 +397,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/health  #
 curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/mcp     # 401
 ```
 
-`/health` is public on purpose, so that proxies and uptime checks can use it without a token. Every other route requires the token.
+`/health` and `/ready` are public on purpose, so that proxies and uptime checks can use them without a token. Every other route requires the token.
 
 ## 4. Hand out the URL and the token
 
@@ -557,6 +565,7 @@ The server speaks Streamable HTTP. A client must:
 - `POST` JSON-RPC to `<base>/mcp` with `Authorization: Bearer <token>`.
 - Send `Accept: application/json, text/event-stream`.
 - Keep the `mcp-session-id` header from the `initialize` response and send it on every later request.
+- Send `notifications/initialized` after `initialize`, before any other call. Skip it and the next request fails with `Session not found` and a message saying the session expired or the server restarted, which it did not.
 
 This is the handshake, done by hand:
 
@@ -664,7 +673,7 @@ What can go wrong at this step, by message:
 
 | Message | Cause | What to do |
 | --- | --- | --- |
-| `no token: set DECIDUOUS_MCP_TOKEN or run 'deciduous remote login --url ...' first` | No token on this machine | Ask the user to run `remote login` |
+| ``no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url <base>` first`` | No token on this machine | Ask the user to run `remote login` |
 | `server rejected the token (401) ... Nothing was stored or written.` | Wrong token for this server | Tell the user; nothing changed |
 | `cannot reach <url>: ... timed out reading response` | `/health` took over 15 s | Run it once more, then report it |
 | `Warning: the local write succeeded but could not be sent: ... this repository has no commit yet` | The server ties a workspace to the repository's root commit | After the user's first commit, `deciduous remote push` |
@@ -740,7 +749,7 @@ The server sends you these rules when you connect. They are the rules; the rest 
 
 ### Writing from the CLI instead
 
-In a project with `[remote]`, `deciduous add` and `deciduous link` write to the server before the command exits, so a shell is a fallback when MCP is not available. CLI node references are local ids or change_id prefixes, not server UUIDs:
+In a project with `[remote]`, `deciduous add` and `deciduous link` write to the server before the command exits, so a shell is a fallback when MCP is not available. CLI node references are local ids, change_id prefixes, or server UUIDs (a UUID resolves only once the node is in the local cache; run `deciduous remote pull` first if an MCP tool made it):
 
 ```sh
 deciduous add goal "Add rate limiting to the public API" -c 90 -p "<the user's message, verbatim>"
@@ -924,7 +933,7 @@ close_thread({
 })
 ```
 
-`success: true` writes a `completed` outcome under the parent; `success: false` writes a `rejected` one. Each `lessons_learned` entry becomes an observation under the outcome; each `next_steps` entry becomes a new goal. `goal_node_id` marks that goal `completed`, so pass it only when the whole goal is done, not when your part is.
+`success: true` writes a `completed` outcome under the parent; `success: false` writes a `rejected` one. Each `lessons_learned` entry becomes an observation under the outcome; each `next_steps` entry becomes a new goal. `next_steps` entries must be objects (`{"title": "...", "description": "..."}`); unlike `lessons_learned`, a plain string is refused with `next_steps[0] must be an object ... nothing was written`. `goal_node_id` marks that goal `completed`, so pass it only when the whole goal is done, not when your part is.
 
 CLI:
 
@@ -1028,7 +1037,7 @@ workspace = "my-app"
 
 `deciduous init` adds a `.gitignore` that keeps `.deciduous/config.toml` tracked and ignores the rest of `.deciduous/` (the local cache, the write log).
 
-The server ties a workspace to the root commit of the repository that first writes to it. A clone shares that root, so it is let in:
+The server ties a workspace to the root commit of the first repository that connects to it, at `remote init` or `remote setup`, before anything is written. A clone shares that root, so it is let in:
 
 ```console
 $ deciduous remote init https://deciduous.example.com --workspace my-app
@@ -1327,7 +1336,15 @@ Local ids differ in every checkout. `show`, `link`, `status` and `doc attach` ta
 Error: No node has a change_id starting with '5ca33b18'. Run 'deciduous sync' if a teammate created it.
 ```
 
-With a `[remote]` the fix is `deciduous remote pull`, not `sync`. A server UUID is looked up on the server and reports which local node it is:
+With a `[remote]` the fix is `deciduous remote pull`, not `sync`. A server UUID does not get you around the pull. Before it, the CLI recognises the UUID and tells you to pull:
+
+```console
+$ deciduous show 14a9f4d8-b37a-...
+Error: No node has a change_id starting with '14a9f4d8-b37a-...'. Run 'deciduous sync' if a teammate created it.
+It is the server id 14a9f4d8-b37 = change_id 3e460153-12b (Validate create-item requests), which this clone does not have yet. Run `deciduous remote pull` first.
+```
+
+After the pull it resolves to the local node:
 
 ```console
 $ deciduous show 32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb
@@ -1341,7 +1358,7 @@ Note: '32d05bcb-1b2b-4b7b-b3b8-170a8aa8b7fb' is the server id 32d05bcb-1b2 = cha
 Parts of the 1.1.0 template do not work as written:
 
 - `deciduous commands` prints `No commands logged.` in 1.1.0, however many writes the checkout made. Fixed after 1.1.0.
-- The orphan audit (`deciduous edges | cut -d'>' -f2 ...`) looks for a `>` the tabular `edges` output does not contain, so it prints nothing useful. Use `find_orphans` over MCP.
+- The orphan audit (`deciduous edges | cut -d'>' -f2 ...`) looks for a `>` the tabular `edges` output does not contain, so it flags every node as an orphan (one `CHECK:` line per node). Use `find_orphans` over MCP.
 - Step 3, `cat git.log | tail -30`, reads a file nothing creates.
 
 The template on the main branch adds a step that runs `deciduous transcript import` for sessions the graph does not have yet; 1.1.0 does not ship it. You can run the import yourself ([Evidence](evidence.md#deriving-the-graph-from-a-transcript)).
@@ -1628,7 +1645,7 @@ It reads the local cache; `remote pull` first. `-t` filters by type, `-l` limits
 
 ## Narratives
 
-A narrative is the prose version: how one part of the system got the way it is, with its pivots. `deciduous narratives init` writes `.deciduous/narratives.md` with one section per active goal to fill in:
+A narrative is the prose version: how one part of the system got the way it is, with its pivots. `deciduous narratives init` writes `.deciduous/narratives.md` with one section per goal that is not superseded or abandoned (pending and completed goals included) to fill in:
 
 ```console
 $ deciduous narratives init
@@ -1665,7 +1682,7 @@ That file is local. It is not sent to the server, and the `.gitignore` that `dec
 
 There are two things to look after: the PostgreSQL database and the `.env` file next to it. The server itself holds no state, so if you rebuild it from the same `.env` against the same database, the graph comes back. Every command on this page was run against a v1.1.0 Docker install on 2026-11-08, with the output shown, except where a section says otherwise.
 
-Run the commands from the directory that holds the install's `.env` and `compose.yaml`. If your machine has `docker-compose` rather than the `docker compose` plugin, use that; the arguments are the same.
+Run the commands from the directory that holds the install's `.env` and `compose.yaml`. A Docker install the CLI made (`remote setup --docker-postgres` on a developer machine) keeps them apart: the settings are in `~/.config/deciduous/server/.env` and the compose files in its bundle directory, so add `--env-file ~/.config/deciduous/server/.env` to each `docker compose` command. If your machine has `docker-compose` rather than the `docker compose` plugin, use that; the arguments are the same.
 
 ## Back up
 
@@ -1690,7 +1707,7 @@ docker run -d --name deciduous-restore-check --network none \
   -e POSTGRES_USER=deciduous -e POSTGRES_DB=postgres \
   -e POSTGRES_HOST_AUTH_METHOD=trust \
   --tmpfs /var/lib/postgresql/data postgres:17.11-alpine
-docker exec deciduous-restore-check pg_isready -U deciduous -d postgres   # repeat until "accepting connections"
+until docker exec deciduous-restore-check pg_isready -h 127.0.0.1 -U deciduous -d postgres; do sleep 1; done
 
 docker exec -i deciduous-restore-check pg_restore -U deciduous \
   --create --exit-on-error --dbname=postgres < deciduous-2026-11-08.dump
@@ -1699,6 +1716,8 @@ docker exec deciduous-restore-check psql -X -U deciduous -d deciduous -tA \
 docker rm -f deciduous-restore-check
 ```
 
+Use `-h 127.0.0.1` in the wait. Over the Unix socket, `pg_isready` already reports the image's temporary initialisation server as ready, which shuts down a moment later; a restore started then fails with `terminating connection due to administrator command`. The temporary server does not listen on TCP, so the TCP check waits for the real one.
+
 The test install printed `3` and `1.1`: three nodes, and the database's planner setting. Use `--create`. Without it, the restore lands in a database that already exists and skips the database-level settings the migrations made, even though the migration ledger says they ran.
 
 ## Upgrade the server
@@ -1706,6 +1725,7 @@ The test install printed `3` and `1.1`: three nodes, and the database's planner 
 Extract the new release bundle into a new directory. Copy your `.env` into it, plus `certs/` if you use a private database CA, and run setup there:
 
 ```bash
+mkdir -p /opt/deciduous-mcp-1.2.0
 tar -xzf deciduous-mcp-docker.tar.gz -C /opt/deciduous-mcp-1.2.0 --strip-components=1
 cp /opt/deciduous-mcp-1.1.0/.env /opt/deciduous-mcp-1.2.0/
 cd /opt/deciduous-mcp-1.2.0 && ./scripts/setup.sh
@@ -1721,11 +1741,11 @@ People upgrade their own CLI however they installed it (`brew upgrade deciduous`
 
 ## Rotate the token
 
-Set a new token in `.env` and rerun setup. These commands are for the Linux VM; on macOS, `sed -i` needs `''` after it:
+Set a new token in `.env` and rerun setup. These commands are for the Linux VM; on macOS, `sed -i` needs `''` after it. Keep the single quotes around the value, as `setup.sh` writes it: tools that read the token back out of `.env`, including the one-liner in `deciduous_mcp/DEPLOY.md`, expect them.
 
 ```bash
 NEW=$(openssl rand -hex 32)
-sed -i "s/^DECIDUOUS_MCP_TOKEN=.*/DECIDUOUS_MCP_TOKEN=$NEW/" .env
+sed -i "s/^DECIDUOUS_MCP_TOKEN=.*/DECIDUOUS_MCP_TOKEN='$NEW'/" .env
 ./scripts/setup.sh
 ```
 
@@ -1843,7 +1863,7 @@ The output above was observed on a machine that already had a server. The steps 
 | `--database-url <url>` | the same user service | the PostgreSQL you name |
 | `--docker` | a container from the release's `deciduous-mcp-docker.tar.gz` | the PostgreSQL from the first two rows; `localhost` is rewritten to `host.docker.internal` |
 | `--docker-postgres` | a container (implies `--docker`) | a new PostgreSQL 17 container |
-| `--port <port>` | any of the above | used only on first setup; asked otherwise, with a free port in 20000-32767 suggested |
+| `--port <port>` | any of the above | used only on first setup. Without it, `DECIDUOUS_PORT` from the environment is used; failing that, a terminal asks (suggesting a free port in 20000-32767), and without a terminal a free port is chosen and printed (`Chose port N`) |
 
 With no flags and a terminal, `remote setup` asks the same questions as a menu. Without a terminal and without `--local` or `--url`, it stops and prints the four scripted forms.
 
@@ -1851,7 +1871,7 @@ The native install, in order:
 
 1. Downloads `deciduous-mcp-<os>-<arch>` for the CLI's own version, checks it against the release's `checksums.txt`, and installs it as `~/.config/deciduous/server/bin/deciduous-mcp`.
 2. Picks the bearer token. If the machine already has one (`DECIDUOUS_MCP_TOKEN`, else `~/.config/deciduous/credentials`) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.
-3. Runs the executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`: it connects, creates the database if missing (the role needs `CREATEDB`), migrates, and exits. A refusal comes back in PostgreSQL's words (`role "x" does not exist`, `password authentication failed`). If nothing listens on 5432 at all, setup says so and prints `brew install postgresql@17 && brew services start postgresql@17` / `sudo apt install postgresql`.
+3. Runs the executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`: it connects, creates the database if missing (the role needs `CREATEDB`), migrates, and exits. A refusal comes back in PostgreSQL's words (`role "x" does not exist`, `password authentication failed`). If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing `brew install postgresql@17 && brew services start postgresql@17` / `sudo apt install postgresql`.
 4. Writes `~/.config/deciduous/server/.env`, mode 600. This machine's file has these keys (values other than the secrets shown):
 
    ```text
@@ -1868,8 +1888,25 @@ The native install, in order:
    DECIDUOUS_PREPARE_DATABASE=true
    ```
 
-5. Installs a user service that starts at login and restarts on exit: a LaunchAgent `dev.deciduous.server` at `~/Library/LaunchAgents/dev.deciduous.server.plist` on macOS, a systemd user unit `deciduous-server.service` on Linux. The service definition carries only paths; the token and database URL stay in `.env`, which the server reads itself through `DECIDUOUS_ENV_FILE`. Output goes to `~/.config/deciduous/server/logs/server.log`. On Linux, user services stop at logout unless you run `loginctl enable-linger $USER`.
+5. Installs a user service that starts at login and restarts on exit (**on Linux this fails in 1.1.0**; see below): a LaunchAgent `dev.deciduous.server` at `~/Library/LaunchAgents/dev.deciduous.server.plist` on macOS, a systemd user unit `deciduous-server.service` on Linux. The service definition carries only paths; the token and database URL stay in `.env`, which the server reads itself through `DECIDUOUS_ENV_FILE`. Output goes to `~/.config/deciduous/server/logs/server.log`. On Linux, user services stop at logout unless you run `loginctl enable-linger $USER`.
 6. Waits for `/ready`, then stores the token in `~/.config/deciduous/credentials` if it differs from the one there, writes `[remote]`, and registers with Claude Code as above.
+
+**Linux: the service does not start in 1.1.0.** The unit file the CLI writes puts `WorkingDirectory` in double quotes, and systemd refuses the whole unit (checked with `systemd-analyze verify` on systemd 252):
+
+```text
+/home/you/.config/systemd/user/deciduous-server.service:8: WorkingDirectory= path is not absolute: "/home/you/.config/deciduous/server"
+deciduous-server.service: Unit configuration has fatal error, unit will not be started.
+Unit deciduous-server.service has a bad unit file setting.
+```
+
+Until that is fixed, remove the quotes from that one line, then start the service:
+
+```bash
+sed -i 's/^WorkingDirectory="\(.*\)"$/WorkingDirectory=\1/' ~/.config/systemd/user/deciduous-server.service
+systemctl --user daemon-reload && systemctl --user restart deciduous-server.service
+```
+
+Checked on debian:12: before the edit `systemd-analyze verify` refuses the unit, after it the unit verifies clean. The quoted `ExecStart=` and `Environment=` lines are fine. macOS (launchd) is not affected.
 
 The server binds `127.0.0.1` because `DECIDUOUS_BIND_ADDRESS` says so; a server started by hand without that setting listens on every interface. Every start re-runs the migrations (`DECIDUOUS_PREPARE_DATABASE=true`), and `deciduous update` in a project that writes to this server replaces an older executable and restarts the service. Docker installs are not upgraded by `update`.
 
@@ -1915,7 +1952,7 @@ Claude Code has the same shape of problem: one user-scope `deciduous` entry. For
 
 ## No server at all
 
-`deciduous init` will not finish without a server. In a terminal it asks; without one it prints the four `remote setup` forms and exits 1. To opt out, say so:
+`deciduous init` does not complete without a server. In a terminal it asks; without one it writes its files (`.claude/`, `CLAUDE.md`, `.gitignore`, `.github/` and the rest), then prints the four `remote setup` forms and exits 1. To opt out, say so:
 
 ```text
 $ DECIDUOUS_NO_SERVER=1 deciduous init
@@ -2014,7 +2051,7 @@ Remote: http://127.0.0.1:4000
 
 # Troubleshooting
 
-Most problems are one of four things: the CLI and the agent are talking to different servers, the token in use belongs to a different server, the workspace name collides with another repository, or the server was unreachable and writes are waiting. Each entry below starts from the exact text deciduous 1.1.0 prints, captured by provoking it.
+Most problems are one of four things: the CLI and the agent are talking to different servers, the token in use belongs to a different server, the workspace name collides with another repository, or the server was unreachable and writes are waiting. Each entry below starts from the text deciduous 1.1.0 prints. Every entry was captured by provoking it, except where the entry says otherwise.
 
 Two commands answer most questions:
 
@@ -2040,7 +2077,7 @@ Error: /home/you/code/my-app has no server configured ([remote] in .deciduous/co
 then rerun this command. Tests and CI in a throwaway directory can set DECIDUOUS_NO_SERVER=1.
 ```
 
-**Cause.** `init` was run from a script, an agent's shell, or anything else without a terminal on stdin, in a project with no `[remote]`. It exits 1, but it has already written `.claude/`, `CLAUDE.md`, `.deciduous/`, `.gitignore` and `.gitattributes` before stopping, so the directory looks initialized.
+**Cause.** `init` was run from a script, an agent's shell, or anything else without a terminal on stdin, in a project with no `[remote]`. It exits 1, but it has already written `.claude/`, `CLAUDE.md`, `.deciduous/`, `.gitignore`, `.gitattributes` and `.github/workflows/cleanup-decision-graphs.yml` before stopping, so the directory looks initialized.
 
 **Fix.** Run the `remote setup` form that fits, then `deciduous init` again. To join a team server: `DECIDUOUS_MCP_TOKEN=<token> deciduous remote setup --url https://deciduous.example.com`. `DECIDUOUS_NO_SERVER=1` is for throwaway directories; it gives a project with no server at all (see [Without a shared server](local.md#no-server-at-all)).
 
@@ -2052,7 +2089,7 @@ Error: reached https://deciduous.example.com but the server rejected the token (
 Nothing was stored or written.
 ```
 
-`remote init` says the same with `Nothing was written; the project is unchanged.` Both exit 1 and change nothing.
+`remote init` words it slightly differently: `Error: the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.` followed by `Nothing was written; the project is unchanged.` Both exit 1 and change nothing.
 
 **Causes**, in the order worth checking:
 
@@ -2083,7 +2120,15 @@ A name that does not resolve fails the same way, with `Dns Failed: resolve dns n
 Error: cannot reach http://127.0.0.1:4000/deciduous-mcp: no such endpoint (404). Is the URL right, including any path prefix?
 ```
 
-The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (the reference deployment is `https://bobbby.online/deciduous-mcp`); a server reached directly has none. The base URL is whatever `<base>/health` answers `ok` on.
+The host answered but not at that path. A server behind a reverse proxy usually lives under a prefix (the reference deployment is `https://bobbby.online/deciduous-mcp`); a server reached directly has none. The base URL is the one where `curl <base>/health` prints the body `ok`. An empty 200 does not count.
+
+### "the server's response was not a graph" / "was not a claim"
+
+```text
+Error: reached https://example.com but the server's response was not a graph: Failed to read JSON: EOF while parsing a value at line 1 column 0
+```
+
+`remote init` prints `the server's response was not a claim: ...` with the same JSON error. This is the same mistake as the 404 above, a missing path prefix, behind a proxy that answers unknown paths with an empty 200 instead of a 404. Caddy does this with only a `handle_path` block. Fix the URL, and give the proxy a catch-all 404 ([Run a server](run-a-server.md#3-put-https-in-front-of-it)).
 
 ### "timed out reading response"
 
@@ -2359,7 +2404,7 @@ Every node records the git branch it was written on, in its metadata. The CLI de
 
 The `deciduous` commands people actually use, grouped by what you are trying to do, with flags as `deciduous <command> --help` prints them in 1.1.0. In a project with a `[remote]`, every write command writes the local database, queues an op in `.deciduous/remote-log.jsonl`, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by `remote pull`. Commands marked **server** need a `[remote]`; commands marked **no server** only matter without one.
 
-Anywhere a command takes a node, it accepts a local number, a change_id prefix, or a server UUID.
+Anywhere a command takes a node, it accepts a local number or a change_id prefix. In a project with a `[remote]` it also accepts a server UUID, once the node is in the local cache.
 
 ## Connect a project to a server
 
@@ -2404,9 +2449,11 @@ Remote: http://127.0.0.1:4000
 Written to .deciduous/config.toml. The token stays in ~/.config/deciduous/credentials (or DECIDUOUS_MCP_TOKEN), never here.
 ```
 
+The message names `~/.config` even when `XDG_CONFIG_HOME` has moved the file.
+
 ### `remote adopt [ROOT] --url <URL>` (server)
 
-Walk a directory for projects that already have a `.deciduous` and point each at the server. Existing configuration is left alone. `-n, --dry-run` shows what would change.
+Walk a directory for projects that already have a `.deciduous` and point each at the server. Existing configuration is left alone. `-n, --dry-run` shows what would change, but in 1.1.0 it is not free of side effects: it leaves a `.deciduous/deciduous.db` in the directory it walks. That stray `.deciduous` then captures any repository below it that has no `.deciduous` of its own, including a worktree, which writes to that file instead of its main checkout's server. Delete it after a dry run.
 
 ## Check and repair the connection
 
@@ -2546,9 +2593,9 @@ See [Documents and transcripts](evidence.md).
 
 ## Coordinate agents
 
-`board post --subject <S> [-m <BODY>]` (body from stdin if omitted), `--as <LABEL>` (default `$DECIDUOUS_AGENT_LABEL`), `--reply-to <ID>`, `--branch`, `--json`. `@label` in the subject or body addresses someone.
+`board post -s, --subject <S> [-m <BODY>]` (body from stdin if omitted), `--as <LABEL>` (default `$DECIDUOUS_AGENT_LABEL`), `--reply-to <ID>`, `--branch`, `--json`. `@label` in the subject or body addresses someone.
 
-`board read`: `--unanswered <LABEL>` (what is waiting on you), `--to`, `--from`, `--since <ID>`, `-q, --query`, `--limit` (default 50, max 200), `--json`. `board show <ID>`.
+`board read`: `--unanswered <LABEL>` (what is waiting on you), `--to`, `--from`, `--since <ID>`, `-q, --query`, `--limit` (default 50, max 200), `--json`. `board show <ID> [--json]`.
 
 With a `[remote]` the board lives on the server, per workspace; without one, in the main worktree's database. Messages are not graph nodes and are never exported. See [Many agents, one graph](teams.md).
 
@@ -2596,7 +2643,10 @@ See [Without a shared server](local.md#no-server-at-all).
 | --- | --- |
 | `DECIDUOUS_MCP_TOKEN` | Token for the server. Read before the stored token. |
 | `XDG_CONFIG_HOME` | Moves `~/.config/deciduous/` (credentials, and this machine's server settings). |
-| `DECIDUOUS_NO_SERVER` | `1` makes `init` and `update` skip the server step. |
+| `DECIDUOUS_NO_SERVER` | Any value other than empty or `0` makes `init` and `update` skip the server step. |
+| `DECIDUOUS_PORT` | Port for this machine's server the first time `remote setup --local` installs it. |
+| `DECIDUOUS_DB_PATH` | Use this SQLite file instead of finding `.deciduous/deciduous.db` by walking up (Claude Desktop, unusual layouts). |
+| `DECIDUOUS_API_DATA_DIR`, `DECIDUOUS_API_TOKEN` | Fallbacks for `serve --api`'s `--data-dir` and `--token`. |
 | `DECIDUOUS_OPS_TIMEOUT` | Seconds per `remote push` request (default 120). |
 | `DECIDUOUS_AGENT_LABEL` | Default `--as` for `board post`. |
 | `DECIDUOUS_QUIET_LOCAL_ONLY` | Silences the "written to ... only; this project has no shared server" note. |
@@ -2608,7 +2658,7 @@ See [Without a shared server](local.md#no-server-at-all).
 
 # MCP tools
 
-There are two MCP servers with different tool sets, and an agent gets whichever one its client is configured for. The graph server answers at `<base>/mcp` over HTTP with 21 tools and writes PostgreSQL directly; this is what `remote setup` registers with Claude Code and what this page is mostly about. `deciduous mcp` is a stdio server with 34 tools under different names. It writes the local database, and in a project with a `[remote]` those writes go on to the server through the CLI's op log, exactly like `deciduous add`. Nothing configures it for you, and it does not send the server's logging instructions. The two lists below are from `tools/list` against deciduous 1.1.0 on 2026-11-08.
+There are two MCP servers with different tool sets, and an agent gets whichever one its client is configured for. The graph server answers at `<base>/mcp` over HTTP with 21 tools and writes PostgreSQL directly; this is what `remote setup` registers with Claude Code and what this page is mostly about. `deciduous mcp` is a stdio server with a different set of 34 tools. Seven share a name with a graph-server tool, and even those take different arguments and ids. It writes the local database, and in a project with a `[remote]` those writes go on to the server through the CLI's op log, exactly like `deciduous add`. Nothing configures it for you, and it does not send the server's logging instructions. The two lists below are from `tools/list` against deciduous 1.1.0 on 2026-11-08.
 
 ## Which one an agent has
 
@@ -2746,7 +2796,7 @@ The graph lives in PostgreSQL behind one server process. Agents reach that serve
 | `.deciduous/config.toml` | Each clone, committed | `[remote] url` and `workspace`. Never a token. |
 | `~/.config/deciduous/credentials` | Each machine | The one stored token. |
 
-The server's HTTP routes: `/health` (unauthenticated, process liveness), `/ready` (database and migrations), `/mcp`, `/ops`, `/export`, `/import`, `/claim`, `/locate`, `PUT /blob/:hash`, `/documents/:id`, `/messages`, `/events`. Everything except `/health` requires the token.
+The server's HTTP routes: `/health` (unauthenticated, process liveness), `/ready` (database and migrations), `/mcp`, `/ops`, `/export`, `/import`, `/claim`, `/locate`, `PUT /blob/:hash`, `/documents/:id`, `/messages`, `/events`. Everything except `/health` and `/ready` requires the token.
 
 ## Two write paths, one store
 
@@ -2811,7 +2861,7 @@ Set by `DB_SSL` and `DB_SSL_VERIFY` in the server's environment or settings file
 
 The chain is checked against the system CA store, or against `DB_SSL_CA_FILE` (a PEM file) for a private CA. A missing or empty CA file stops the server at boot instead of failing every connection later. Each boot logs the mode in effect; this machine's native server, on a local PostgreSQL, logs `Database TLS: off (DB_SSL unset or false)`.
 
-Earlier versions of these docs said the server used `verify_none` whenever `DB_SSL=true`. That was true of 1.0.1 only. Since then, `true` alone means full verification, and unverified TLS has to be asked for by name. A 1.0.1 deployment upgrading with a private CA needs `DB_SSL_CA_FILE`; one whose certificate does not name the address it connects to needs `DB_SSL_VERIFY=ca`.
+Earlier versions of these docs said the server used `verify_none` whenever `DB_SSL=true`. That was true of 1.0.0 and 1.0.1. Since then, `true` alone means full verification, and unverified TLS has to be asked for by name. A 1.0.1 deployment upgrading with a private CA needs `DB_SSL_CA_FILE`; one whose certificate does not name the address it connects to needs `DB_SSL_VERIFY=ca`.
 
 ## Source map
 

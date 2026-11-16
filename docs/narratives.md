@@ -120,7 +120,7 @@ It reads the local cache; `remote pull` first. `-t` filters by type, `-l` limits
 
 ## Narratives
 
-A narrative is the prose version: how one part of the system got the way it is, with its pivots. `deciduous narratives init` writes `.deciduous/narratives.md` with one section per active goal to fill in:
+A narrative is the prose version: how one part of the system got the way it is, with its pivots. `deciduous narratives init` writes `.deciduous/narratives.md` with one section per goal that is not superseded or abandoned (pending and completed goals included) to fill in:
 
 ```console
 $ deciduous narratives init

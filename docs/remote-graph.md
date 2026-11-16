@@ -47,13 +47,13 @@ Rerun this command to rebuild and upgrade. Your settings and database volume are
 Everything that defines the install is in `.env`, which is created with mode 0600:
 
 ```
-COMPOSE_PROJECT_NAME=deciduous-mcp
+COMPOSE_PROJECT_NAME=deciduous
 DECIDUOUS_SERVER_MODE=docker
 DECIDUOUS_DATABASE_MODE=local
 DECIDUOUS_BIND_ADDRESS=127.0.0.1
 DECIDUOUS_PORT=24555
-DECIDUOUS_MCP_TOKEN=<64 hex digits>
-POSTGRES_PASSWORD=<64 hex digits>
+DECIDUOUS_MCP_TOKEN='<64 hex digits>'
+POSTGRES_PASSWORD='<64 hex digits>'
 DATABASE_URL='ecto://deciduous:<password>@db:5432/deciduous'
 DB_SSL=false
 DB_SSL_VERIFY=full
@@ -83,7 +83,7 @@ deciduous.example.com {
 }
 ```
 
-`flush_interval -1` is required. MCP responses are streamed (Server-Sent Events). If the proxy buffers them, the client waits for a response the server has already written, and agents appear to hang. Any proxy you use needs the same setting, and it must also pass WebSocket upgrades through, because `deciduous remote watch` streams events over `/events`.
+What the proxy must do is pass WebSocket upgrades through, because `deciduous remote watch` streams events over `/events`. Caddy does this by default. `flush_interval -1` is optional in 1.1.0. Earlier versions of this page said it was required for MCP streaming, but the 1.1.0 server does not stream: `POST /mcp` returns plain JSON with a `Content-Length`, and `GET /mcp` is refused with 405 (`this server does not offer a server-to-client stream`). Behind a Caddy without the setting, `initialize`, `add_node` and `remote watch` all worked. It is kept here because it costs nothing and protects you if a later server streams.
 
 To share a domain with something else, serve the server under a path, as the reference install does. `handle_path` strips the prefix, so the server still sees `/mcp` at its own root:
 
@@ -94,8 +94,13 @@ example.com {
 			flush_interval -1
 		}
 	}
+	handle {
+		respond 404
+	}
 }
 ```
+
+Keep the final `handle` if nothing else is served on that domain. Without it, Caddy answers every other path with an empty 200. A developer who leaves the prefix off the URL then gets `the server's response was not a graph: Failed to read JSON: EOF while parsing` instead of the CLI's clear `no such endpoint (404). Is the URL right, including any path prefix?`. Both behaviours were tested. If the domain already serves something else, that site answers instead, and the error depends on what it returns.
 
 If Caddy runs in a container, join it to the bundle's Compose network and proxy to `server:4000`. Port 4000 is the port inside the network; `DECIDUOUS_PORT` applies only on the host. The path-prefix form was tested exactly this way: health, readiness, CLI writes, an MCP `add_node`, and `remote watch` all went through Caddy.
 
@@ -106,7 +111,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/health  #
 curl -s -o /dev/null -w '%{http_code}\n' https://deciduous.example.com/mcp     # 401
 ```
 
-`/health` is public on purpose, so that proxies and uptime checks can use it without a token. Every other route requires the token.
+`/health` and `/ready` are public on purpose, so that proxies and uptime checks can use them without a token. Every other route requires the token.
 
 ## 4. Hand out the URL and the token
 
