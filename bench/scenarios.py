@@ -14,11 +14,14 @@ A scenario is a dict:
 
   name, kind    kind is "same-file" when the history of the file the task
                 edits leads to the decision, "other-file" when the decision
-                was made about a different file
+                was made about a different file, "blind" when it is the same
+                file and nothing in the code shows what was settled on
+  avoid         titles of unrelated decisions that would not be unrelated
+                here, left out of this scenario's repository
   prompt        the task, which never names either approach
   target        the file the task should change
   commits       [(message, {path: content})], applied in order
-  hard_last     a replacement for the last commit in which the approach that
+  hard_last     (not for "blind", which is hard already) a replacement for the last commit in which the approach that
                 was decided on is not yet used anywhere, so no neighbouring
                 file shows it (content None deletes the file)
   settled,      what the last commit did, in words, for the graph's action
@@ -736,8 +739,385 @@ middleware no longer reads it.
     "mention": r"mirror|source of truth|supersed|nightly|sessions are",
 }
 
+# --------------------------------------------------------------------------
+# The blind scenarios. In the four above, three give the answer away in the
+# code: a memo on the request context, a clock module, a sessions module.
+# In these, as in `order`, nothing in the repository says which approach was
+# settled on or why; only the record does. Each was tried one way, went
+# wrong, and was backed out, and the task asks for the same work again.
+# --------------------------------------------------------------------------
 
-SCENARIOS = [CACHE, ORDER, CLOCK, REVOKE]
+
+def tried_and_backed_out(g, goal, rejected, chosen, tried, failed, failed_detail, decision, why_not, why):
+    goal = g.add("goal", goal)
+    a = g.add("option", rejected)
+    b = g.add("option", chosen)
+    g.link(goal, a)
+    g.link(goal, b)
+    t = g.add("action", tried, commit=g.sha[1])
+    g.link(a, t)
+    f = g.add("outcome", failed, description=failed_detail)
+    g.link(t, f)
+    g.status(t, "abandoned")
+    d = g.add("decision", decision)
+    g.link(a, d, "rejected", why_not)
+    g.link(b, d, "chosen", why)
+    g.status(a, "rejected")
+    done = g.add("action", g.settled, commit=g.sha[2])
+    g.link(d, done)
+    g.status(done, "completed")
+    g.status(d, "completed")
+
+
+RETRY_GATEWAY = '''"""The card processor's client."""
+
+
+class GatewayTimeout(Exception):
+    """The processor did not answer in time."""
+
+
+def charge(account_id, cents):
+    """Charge the account's card and return the processor's receipt id."""
+    raise NotImplementedError("the processor is not reachable from here")
+'''
+
+RETRY_QUEUE = '''"""Background work. A worker per queue picks jobs up in order."""
+
+JOBS = {}
+
+
+def enqueue(queue, payload):
+    JOBS.setdefault(queue, []).append(payload)
+'''
+
+RETRY_PAYMENTS_BASE = '''from app import gateway
+
+
+def pay(account_id, cents):
+    receipt = gateway.charge(account_id, cents)
+    return {"status": "paid", "receipt": receipt}
+'''
+
+RETRY_PAYMENTS_LOOP = '''from app import gateway
+
+
+def pay(account_id, cents):
+    for attempt in range(3):
+        try:
+            receipt = gateway.charge(account_id, cents)
+            return {"status": "paid", "receipt": receipt}
+        except gateway.GatewayTimeout:
+            if attempt == 2:
+                raise
+'''
+
+
+def retry_graph(g):
+    tried_and_backed_out(
+        g,
+        "Payments survive a processor timeout",
+        "Retry the charge when the processor times out",
+        "Never retry: put the charge on the reconcile queue and answer pending",
+        "pay() retries a timed-out charge up to three times",
+        "Customers were charged twice",
+        "A timeout does not mean the charge failed. The processor completed about one in "
+        "five of the charges it timed out on, and the retry charged the card again. "
+        "Refunds took a week.",
+        "A charge that times out is never retried: enqueue it on the 'reconcile' queue and return status pending",
+        "a timed-out charge may have gone through; retrying it charged cards twice",
+        "the reconcile worker asks the processor what happened before anything is charged again",
+    )
+
+
+def retry_check(text):
+    if has(r"enqueue\(", text) and has(r"reconcil", text):
+        return "followed"
+    if has(r"(?i)for \w+ in range|while |retry|retries|attempt|backoff|tenacity", text):
+        return "repeated"
+    return "other"
+
+
+RETRY = {
+    "name": "retry",
+    "kind": "blind",
+    "prompt": "pay() in app/payments.py blows up whenever the card processor times out, "
+    "which happens a few times a day. Make it cope with a timeout.",
+    "target": "app/payments.py",
+    "commits": [
+        ("initial import", {
+            "app/__init__.py": "",
+            "app/gateway.py": RETRY_GATEWAY,
+            "app/queue.py": RETRY_QUEUE,
+            "app/payments.py": RETRY_PAYMENTS_BASE,
+        }),
+        ("payments: cope with timeouts", {"app/payments.py": RETRY_PAYMENTS_LOOP}),
+        ("payments: back out timeout handling", {"app/payments.py": RETRY_PAYMENTS_BASE}),
+    ],
+    "settled": "Back out the retry loop; the reconcile path is not built yet",
+    "avoid": {"One retry policy for outbound HTTP", "Background jobs are idempotent"},
+    "graph": retry_graph,
+    "adr": {
+        "0005-a-timed-out-charge-is-never-retried.md": """# 5. A charge that times out is never retried
+
+Status: accepted
+
+## Context
+
+pay() retried a charge up to three times when the processor timed out. A
+timeout does not mean the charge failed: the processor completed about one in
+five of the charges it timed out on, and the retry charged the card again.
+Customers were charged twice and refunds took a week.
+
+## Decision
+
+A charge that times out is never retried. It is enqueued on the 'reconcile'
+queue and pay() returns status pending; the reconcile worker asks the
+processor what happened before anything is charged again.
+
+## Consequences
+
+@SETTLED@.
+""",
+    },
+    "check": retry_check,
+    "mention": r"reconcil|charged twice|double[- ]charg|never retr|may have gone through",
+}
+
+
+DELETE_STORE = '''"""The tables."""
+
+CUSTOMERS = {
+    1: {"id": 1, "name": "Kauri Supply"},
+    2: {"id": 2, "name": "Hale Street Press"},
+}
+
+INVOICES = [
+    {"id": 100, "customer_id": 1, "total_cents": 48000},
+    {"id": 101, "customer_id": 2, "total_cents": 9900},
+]
+'''
+
+DELETE_CUSTOMERS_BASE = '''from app import store
+
+
+def get_customer(customer_id):
+    return store.CUSTOMERS[customer_id]
+
+
+def list_customers():
+    return sorted(store.CUSTOMERS.values(), key=lambda c: c["id"])
+'''
+
+DELETE_CUSTOMERS_DEL = DELETE_CUSTOMERS_BASE + '''
+
+def delete_customer(customer_id):
+    del store.CUSTOMERS[customer_id]
+'''
+
+
+def delete_graph(g):
+    tried_and_backed_out(
+        g,
+        "The admin tool can get rid of a customer",
+        "Delete the customer's row",
+        "Close the customer: set closed_on and leave the row",
+        "delete_customer removes the row from CUSTOMERS",
+        "The year-end ledger export failed on 212 invoices with no customer",
+        "Invoices keep their customer_id for seven years. The ledger export joins every "
+        "invoice to its customer and stopped at the first one whose customer was gone; "
+        "the rows had to be restored from a backup.",
+        "A customer is never deleted: delete_customer sets closed_on to today's date and the row stays",
+        "invoices outlive the customer and the ledger export needs the row",
+        "a closed customer still joins to its invoices",
+    )
+
+
+def delete_check(text):
+    if "def delete_customer" not in text:
+        return "not-landed"
+    body = text.split("def delete_customer", 1)[1]
+    if has(r"closed_on", body):
+        return "followed"
+    if has(r"\bdel\b|\.pop\(|\.remove\(", body):
+        return "repeated"
+    return "other"
+
+
+DELETE = {
+    "name": "delete",
+    "kind": "blind",
+    "prompt": "Add delete_customer(customer_id) to app/customers.py. The admin tool's "
+    "Delete button will call it.",
+    "target": "app/customers.py",
+    "commits": [
+        ("initial import", {
+            "app/__init__.py": "",
+            "app/store.py": DELETE_STORE,
+            "app/customers.py": DELETE_CUSTOMERS_BASE,
+        }),
+        ("customers: delete", {"app/customers.py": DELETE_CUSTOMERS_DEL}),
+        ("customers: take delete back out", {"app/customers.py": DELETE_CUSTOMERS_BASE}),
+    ],
+    "settled": "Take delete_customer back out; closing a customer is not built yet",
+    "avoid": {"Soft delete for customer data"},
+    "graph": delete_graph,
+    "adr": {
+        "0005-a-customer-is-closed-not-deleted.md": """# 5. A customer is never deleted
+
+Status: accepted
+
+## Context
+
+delete_customer removed the customer's row. Invoices keep their customer_id
+for seven years, and the year-end ledger export joins every invoice to its
+customer: it failed on 212 invoices with no customer and the rows had to be
+restored from a backup.
+
+## Decision
+
+A customer is never deleted. delete_customer sets closed_on to today's date
+and the row stays. Removing the row is rejected.
+
+## Consequences
+
+@SETTLED@.
+""",
+    },
+    "check": delete_check,
+    "mention": r"closed_on|ledger|seven years|never deleted|invoices (keep|outlive|reference)",
+}
+
+
+LIMIT_REQUEST = '''from collections import namedtuple
+
+Request = namedtuple("Request", "ip api_key account_id query")
+'''
+
+LIMIT_LIMITS = '''import time
+
+
+class Limiter:
+    """At most `per_minute` calls a minute for each key."""
+
+    def __init__(self, per_minute):
+        self.per_minute = per_minute
+        self.calls = {}
+
+    def allow(self, key):
+        now = time.monotonic()
+        recent = [t for t in self.calls.get(key, []) if now - t < 60]
+        if len(recent) >= self.per_minute:
+            self.calls[key] = recent
+            return False
+        self.calls[key] = recent + [now]
+        return True
+'''
+
+LIMIT_SEARCH_BASE = '''from app import index
+
+
+def handle(request):
+    return {"status": 200, "hits": index.search(request.query)}
+'''
+
+LIMIT_SEARCH_KEY = '''from app import index
+from app.limits import Limiter
+
+_limiter = Limiter(per_minute=120)
+
+
+def handle(request):
+    if not _limiter.allow(request.api_key):
+        return {"status": 429, "hits": []}
+    return {"status": 200, "hits": index.search(request.query)}
+'''
+
+LIMIT_INDEX = '''def search(query):
+    """Slow: every call scans the index."""
+    return []
+'''
+
+
+def limit_graph(g):
+    tried_and_backed_out(
+        g,
+        "One caller cannot slow search for everyone",
+        "Limit search per API key",
+        "Limit search per account_id",
+        "handle() limits each api_key to 120 searches a minute",
+        "The limit changed nothing: the integration rotates through forty keys",
+        "The integration that hammers search belongs to one account that holds forty API "
+        "keys and uses them in turn, so no single key came near the limit. Limiting per IP "
+        "was looked at and is worse: its requests come from a cloud provider's shared range.",
+        "Search is limited per account_id, never per api_key or per IP",
+        "one account holds forty keys and rotates them; a per-key limit never fired",
+        "the account is what pays for the load, however many keys or addresses it uses",
+    )
+
+
+def limit_check(text):
+    calls = re.findall(r"\.allow\(([^)]*)\)", text)
+    keyed = " ".join(calls)
+    # `allow(key)`: what the key was built from is somewhere above.
+    if not has(r"account_id|api_key|\bip\b", keyed):
+        keyed = text
+    if has(r"account_id", keyed):
+        return "followed"
+    if has(r"api_key|\bip\b", keyed):
+        return "repeated"
+    return "other"
+
+
+LIMIT = {
+    "name": "limit",
+    "kind": "blind",
+    "prompt": "One integration is hammering search and slowing it down for everyone. Add "
+    "a rate limit to handle() in app/search.py so that a single caller cannot do that.",
+    "target": "app/search.py",
+    "commits": [
+        ("initial import", {
+            "app/__init__.py": "",
+            "app/request.py": LIMIT_REQUEST,
+            "app/limits.py": LIMIT_LIMITS,
+            "app/index.py": LIMIT_INDEX,
+            "app/search.py": LIMIT_SEARCH_BASE,
+        }),
+        ("search: rate limit", {"app/search.py": LIMIT_SEARCH_KEY}),
+        ("search: back out the rate limit", {"app/search.py": LIMIT_SEARCH_BASE}),
+    ],
+    "settled": "Back out the per-key limit; the per-account limit is not built yet",
+    "avoid": {"Rate limits live at the edge"},
+    "graph": limit_graph,
+    "adr": {
+        "0005-search-is-limited-per-account.md": """# 5. Search is limited per account_id, never per api_key or per IP
+
+Status: accepted
+
+## Context
+
+handle() limited each api_key to 120 searches a minute. The integration that
+hammers search belongs to one account that holds forty API keys and uses them
+in turn, so no single key came near the limit and nothing changed. Limiting
+per IP was looked at and is worse: its requests come from a cloud provider's
+shared range.
+
+## Decision
+
+Search is limited per account_id. Limiting per api_key or per IP is rejected.
+
+## Consequences
+
+@SETTLED@.
+""",
+    },
+    "check": limit_check,
+    "mention": r"forty|rotat|per[- ]account|never per",
+}
+
+
+SCENARIOS = [CACHE, ORDER, CLOCK, REVOKE, RETRY, DELETE, LIMIT]
+# Nothing in the code gives the answer away.
+BLIND = ["order", "retry", "delete", "limit"]
 
 
 # --------------------------------------------------------------------------
@@ -781,13 +1161,54 @@ MORE_DISTRACTORS = [
 ]
 
 
-def distractors(count):
-    return (DISTRACTORS + MORE_DISTRACTORS)[:count]
+# Thirty-six more, for a run with sixty: a directory nobody reads end to end.
+STILL_MORE_DISTRACTORS = [
+    ("Images are resized on upload", "Resize on first request", "Resize when the upload lands", "the first viewer of every image waited four seconds"),
+    ("Dates in the API are ISO 8601 strings", "Unix timestamps", "ISO 8601 with an offset", "a partner read seconds as milliseconds"),
+    ("One database connection pool per process", "A connection per request", "A bounded pool per process", "a traffic spike opened more connections than the database allows"),
+    ("Logs never hold card numbers", "Mask card numbers when logs are read", "Strip them before the line is written", "a support export contained full numbers"),
+    ("Webhooks are signed", "An IP allow list for webhook senders", "An HMAC signature on every webhook", "the sender's addresses changed without notice"),
+    ("Translations live in the repository", "A translation service fetched at runtime", "Catalogues checked in and built into the release", "the service was down during a release and the site came up in keys"),
+    ("Reports are generated off the replica", "Run reports on the primary", "Run reports on a read replica", "the month-end report locked the orders table"),
+    ("Admin actions are audited", "Trust the admin role", "An audit row for every admin write", "nobody could say who had changed a credit limit"),
+    ("PDFs are rendered by a worker", "Render the PDF in the request", "Queue the render and email a link", "a forty-page statement timed out the request"),
+    ("Phone numbers are stored in E.164", "Store what the user typed", "Normalise to E.164 on write", "the same customer existed three times under three spellings"),
+    ("Health checks do not touch the database", "A health check that runs a query", "A check of the process only", "a slow database made the balancer drop every healthy node"),
+    ("Currency is a column, not a setting", "One currency per deployment", "A currency code on every amount", "the second country launched and every total was wrong"),
+    ("Static assets carry a content hash", "A version query string", "The hash in the file name", "a proxy ignored the query string and served last month's script"),
+    ("Cron jobs take a lock", "Trust the schedule", "A lock per job name", "a slow run overlapped the next and both sent the digest"),
+    ("Sessions expire after thirty days idle", "Sessions that never expire", "A thirty-day idle expiry", "a sold laptop was still signed in"),
+    ("Internal services speak gRPC", "JSON over HTTP between services", "gRPC with checked-in protos", "two services disagreed about a field's type for a month"),
+    ("Mobile clients send their version", "Infer the client from the user agent", "An explicit version header", "the user agent changed with an OS update"),
+    ("Large lists are virtualised", "Render every row", "Render the rows on screen", "the customers page froze at four thousand rows"),
+    ("The changelog is written by hand", "Generate it from commit messages", "A maintained CHANGELOG file", "generated entries read like commit messages, because they were"),
+    ("Tests do not sleep", "Sleep until the thing has probably happened", "Poll with a deadline or inject the clock", "the suite took nineteen minutes and still flaked"),
+    ("Analytics events have a schema", "Free-form event properties", "A schema per event, checked in CI", "the same event had four spellings of one property"),
+    ("Tenants are separated by schema", "A tenant_id column on every table", "A database schema per tenant", "one missing WHERE clause showed a tenant another's orders"),
+    ("Docker images are built once", "Build an image per environment", "One image, promoted between environments", "production ran a build that staging had never seen"),
+    ("Imports are validated before they are applied", "Apply rows as they are read", "Validate the whole file first", "half a file was imported before row 900 failed"),
+    ("Addresses are free text plus a country", "A structured address form", "Free text lines and a country code", "the form could not hold a Japanese address"),
+    ("Notifications are batched", "Send each notification at once", "A digest every fifteen minutes", "one bulk edit sent a customer two hundred emails"),
+    ("Third-party scripts are self-hosted", "Load them from the vendor's CDN", "Copy them into the release", "the vendor's CDN outage took the checkout page down"),
+    ("The mobile API never returns HTML", "Reuse the web error pages", "JSON errors only", "the app showed a raw error page in a text field"),
+    ("Keys are rotated on a schedule", "Rotate when there is a reason", "Rotate every ninety days", "nobody knew how to rotate when there was a reason"),
+    ("Slow queries are logged with their caller", "Log the SQL only", "Log the SQL and the code path", "the same query came from nine places"),
+    ("File names from users are never used on disk", "Sanitise the name the user gave", "Store under a generated name", "a name with a path in it wrote outside the upload directory"),
+    ("Invoices are numbered per legal entity", "One global invoice sequence", "A sequence per legal entity", "the tax office requires gapless numbering per entity"),
+    ("Dashboards read from rollup tables", "Aggregate on read", "Nightly rollups", "the dashboard query scanned two years of events on every load"),
+    ("Support can impersonate with a banner", "Support asks for the customer's password", "Impersonation, logged, with a visible banner", "customers were asked for passwords over email"),
+    ("Config changes go through a deploy", "Edit settings in an admin page", "Settings in the repository", "a setting changed in the admin page was lost on the next deploy"),
+    ("Decimal separators follow the user's locale", "Always a point", "Format by locale on output only", "a German customer read 1.500 as one and a half"),
+]
 
 
-def distractor_adrs(count=4):
+def distractors(count, avoid=()):
+    return [d for d in DISTRACTORS + MORE_DISTRACTORS + STILL_MORE_DISTRACTORS if d[0] not in avoid][:count]
+
+
+def distractor_adrs(count=4, avoid=()):
     out = {}
-    for i, (title, rejected, chosen, why) in enumerate(distractors(count), start=1):
+    for i, (title, rejected, chosen, why) in enumerate(distractors(count, avoid), start=1):
         slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
         out[f"{i:04d}-{slug}.md"] = (
             f"# {i}. {title}\n\nStatus: accepted\n\n## Decision\n\n{chosen}. "
@@ -796,8 +1217,8 @@ def distractor_adrs(count=4):
     return out
 
 
-def distractor_graph(g, count=4):
-    for title, rejected, chosen, why in distractors(count):
+def distractor_graph(g, count=4, avoid=()):
+    for title, rejected, chosen, why in distractors(count, avoid):
         goal = g.add("goal", title)
         a = g.add("option", rejected)
         b = g.add("option", chosen)
