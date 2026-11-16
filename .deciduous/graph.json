@@ -969,6 +969,16 @@
       "to_change_id": "61c08e5c-1d87-4939-aea8-28a50d5dd43e",
       "weight": 1.0
     },
+    "124ce6618129df0d1c50": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-16T17:29:22.101675-05:00",
+      "edge_id": "124ce6618129df0d1c50",
+      "edge_type": "leads_to",
+      "from_change_id": "6555d6bc-3b09-4a25-b5bc-52fb749b4cde",
+      "rationale": "the one open PR that merged as it was",
+      "to_change_id": "fd5b85bf-6603-4508-a770-045a08b9d6d2",
+      "weight": 1.0
+    },
     "127f834dda78019acb63": {
       "author": "Bobby Grayson",
       "created_at": "2026-03-18T11:46:58.132652-04:00",
@@ -1806,6 +1816,16 @@
       "from_change_id": "9f5f3f95-1a7b-4329-8bfb-912720e3b8e1",
       "rationale": "Completed derivation",
       "to_change_id": "9fb15b16-9fef-45e7-a8b0-d096edeb9680",
+      "weight": 1.0
+    },
+    "21e69caea56783a2372a": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-16T17:29:22.377565-05:00",
+      "edge_id": "21e69caea56783a2372a",
+      "edge_type": "leads_to",
+      "from_change_id": "6555d6bc-3b09-4a25-b5bc-52fb749b4cde",
+      "rationale": "audit of the September stack",
+      "to_change_id": "46648e54-320e-4770-b369-fa2d3cfc433f",
       "weight": 1.0
     },
     "22807bb4f4aef1e860fc": {
@@ -2718,6 +2738,16 @@
       "from_change_id": "1640683a-8168-4929-99a9-ac8ded733f50",
       "rationale": "Success",
       "to_change_id": "27f1b7ef-c1ae-489a-aa8f-1d1a1b341de4",
+      "weight": 1.0
+    },
+    "3499cb10cb7148873584": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-16T17:29:22.309491-05:00",
+      "edge_id": "3499cb10cb7148873584",
+      "edge_type": "leads_to",
+      "from_change_id": "602c2533-ed5f-4c3a-adcc-e179a23ab0fc",
+      "rationale": "measured",
+      "to_change_id": "52cc4787-e479-4050-a722-bd3332217bca",
       "weight": 1.0
     },
     "34b19c25663aa839f26b": {
@@ -4809,6 +4839,16 @@
       "to_change_id": "b0202b78-6622-4a9a-979b-7096292a9fd7",
       "weight": 1.0
     },
+    "58df6efdc93377528f94": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-16T17:29:22.240740-05:00",
+      "edge_id": "58df6efdc93377528f94",
+      "edge_type": "leads_to",
+      "from_change_id": "6555d6bc-3b09-4a25-b5bc-52fb749b4cde",
+      "rationale": "#214's fix, redone on main",
+      "to_change_id": "602c2533-ed5f-4c3a-adcc-e179a23ab0fc",
+      "weight": 1.0
+    },
     "58feeaef6a11c9c48266": {
       "author": "Bobby Grayson",
       "created_at": "2026-07-09T23:19:54.115928-04:00",
@@ -5606,6 +5646,16 @@
       "from_change_id": "dd598996-6ee2-45a3-ac8d-3645ec2edf5b",
       "rationale": "Option: Approval modes",
       "to_change_id": "24ec1e9b-f497-47a0-b0a6-fac5291a927f",
+      "weight": 1.0
+    },
+    "66aa5dd79b222e052ac6": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-16T17:29:22.171922-05:00",
+      "edge_id": "66aa5dd79b222e052ac6",
+      "edge_type": "leads_to",
+      "from_change_id": "6555d6bc-3b09-4a25-b5bc-52fb749b4cde",
+      "rationale": "found while porting #312",
+      "to_change_id": "ac272681-5e34-46a5-9248-6fb4ccd1cca1",
       "weight": 1.0
     },
     "67044b3a3a2bee6c23dd": {
@@ -20126,6 +20176,20 @@
       "title": "DAG recency filtering - show recent chains first",
       "updated_at": "2026-01-05T23:12:32.228577-05:00"
     },
+    "46648e54-320e-4770-b369-fa2d3cfc433f": {
+      "author": "Bobby Grayson",
+      "change_id": "46648e54-320e-4770-b369-fa2d3cfc433f",
+      "created_at": "2026-11-16T17:29:08.504898-05:00",
+      "description": "113 of #237's 120 files and 10 of #253's 14 were imported into main in 8c31848 and then rewritten for 1.1.0. Only on the branches: the 'Many minds. One memory.' landing page (replaced by #333), the deciduous setup command of #238 (built on helpers main deleted, and on the premise that CLI writes do not reach the server, false since the op log), Homebrew caveats whose wording is wrong for 1.1.0. Still true on main: release.yml's formula homepage is the github.io site.",
+      "metadata": {
+        "branch": "99-the-graph-pane-is-reachable-on-a-phone",
+        "confidence": 85
+      },
+      "node_type": "observation",
+      "status": "completed",
+      "title": "#237/#238/#253: nothing main wants is only on those branches",
+      "updated_at": "2026-11-16T17:29:08.504898-05:00"
+    },
     "468960b7-ae33-4709-bc14-e0c8f3a68bc5": {
       "author": "Bobby Grayson",
       "change_id": "468960b7-ae33-4709-bc14-e0c8f3a68bc5",
@@ -21265,6 +21329,19 @@
       "title": "Add rebuild and checkpoint CLI commands",
       "updated_at": "2026-02-05T15:20:37.468432-05:00"
     },
+    "52cc4787-e479-4050-a722-bd3332217bca": {
+      "author": "Bobby Grayson",
+      "change_id": "52cc4787-e479-4050-a722-bd3332217bca",
+      "created_at": "2026-11-16T17:29:08.433241-05:00",
+      "metadata": {
+        "branch": "99-the-graph-pane-is-reachable-on-a-phone",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "At 390px a wheel scroll reaches the graph pane (0 before, 312 after); desktop unchanged; header still does not fit a phone",
+      "updated_at": "2026-11-16T17:29:08.433241-05:00"
+    },
     "52ddc4b7-42d0-4894-be9b-9b3c98f1c3d3": {
       "author": "Bobby Grayson",
       "change_id": "52ddc4b7-42d0-4894-be9b-9b3c98f1c3d3",
@@ -22144,6 +22221,23 @@
       "title": "React archaeology: 218 nodes, 330 edges - deep but manual, cherry-picked PRs/issues",
       "updated_at": "2026-01-10T03:55:51.201570-05:00"
     },
+    "602c2533-ed5f-4c3a-adcc-e179a23ab0fc": {
+      "author": "Bobby Grayson",
+      "change_id": "602c2533-ed5f-4c3a-adcc-e179a23ab0fc",
+      "created_at": "2026-11-16T17:29:08.362498-05:00",
+      "metadata": {
+        "branch": "99-the-graph-pane-is-reachable-on-a-phone",
+        "commit": "a00700d5f3f276da15f9cfd457094990664a4e62",
+        "confidence": 90,
+        "files": [
+          "web/src/App.tsx"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Viewer: the panel/graph row scrolls sideways and the panel is no wider than the window (#214 redone on main)",
+      "updated_at": "2026-11-16T17:29:22.511246-05:00"
+    },
     "60667830-0cb4-4808-b859-00b2fd919632": {
       "author": "Bobby Grayson",
       "change_id": "60667830-0cb4-4808-b859-00b2fd919632",
@@ -22670,6 +22764,20 @@
       "status": "pending",
       "title": "Add shift-R to reverse timeline order (chronological vs reverse-chrono)",
       "updated_at": "2025-12-11T00:57:50.493645-05:00"
+    },
+    "6555d6bc-3b09-4a25-b5bc-52fb749b4cde": {
+      "author": "Bobby Grayson",
+      "change_id": "6555d6bc-3b09-4a25-b5bc-52fb749b4cde",
+      "created_at": "2026-11-16T17:16:47.018819-05:00",
+      "metadata": {
+        "branch": "main",
+        "confidence": 80,
+        "prompt": "hows it going can we keep things up"
+      },
+      "node_type": "goal",
+      "status": "pending",
+      "title": "Clear the six pull requests still open after the stack merged",
+      "updated_at": "2026-11-16T17:16:47.018819-05:00"
     },
     "65db1491-95a6-4cbd-a470-886929fec2bf": {
       "author": "Bobby Grayson",
@@ -28548,6 +28656,20 @@
       "status": "pending",
       "title": "GitHub Pages deployment for deciduous",
       "updated_at": "2025-12-09T22:09:58.072197-05:00"
+    },
+    "ac272681-5e34-46a5-9248-6fb4ccd1cca1": {
+      "author": "Bobby Grayson",
+      "change_id": "ac272681-5e34-46a5-9248-6fb4ccd1cca1",
+      "created_at": "2026-11-16T17:21:45.995062-05:00",
+      "description": "Ported onto main and run with a throwaway HOME naming a dead port: add printed 'written to ... only; this project has no shared server' and made no remote-log.jsonl, while remote status asked for a token. OpLog::for_db reads only the project's own [remote] (and, on main, the worktree's main checkout); it did the same at the PR's commit. The PR's tests never make a write. Its stated reason, worktrees with no [remote] writing only locally, is fixed on main by inherited_remote: a worktree with no config queued its write for the main checkout's server in the same probe.",
+      "metadata": {
+        "branch": "main",
+        "confidence": 90
+      },
+      "node_type": "observation",
+      "status": "completed",
+      "title": "#312 (machine-wide default server) does not deliver writes, and main already covers what it was written for",
+      "updated_at": "2026-11-16T17:21:45.995062-05:00"
     },
     "ac3df99d-f2b6-417d-869e-ef7db898f87b": {
       "author": "Bobby Grayson",
@@ -34739,6 +34861,20 @@
       "status": "pending",
       "title": "ROADMAP.md as source of truth (rejected)",
       "updated_at": "2025-12-13T18:29:25.658420-05:00"
+    },
+    "fd5b85bf-6603-4508-a770-045a08b9d6d2": {
+      "author": "Bobby Grayson",
+      "change_id": "fd5b85bf-6603-4508-a770-045a08b9d6d2",
+      "created_at": "2026-11-16T17:21:45.923839-05:00",
+      "description": "Checked first: bash -n clean, --help prints, refuses a non-https URL and a server whose /health does not answer; remote login --url, remote init <url> --workspace and remote setup --url still exist with those arguments.",
+      "metadata": {
+        "branch": "main",
+        "confidence": 90
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Merged #311: scripts/remote-connect.sh",
+      "updated_at": "2026-11-16T17:29:22.444119-05:00"
     },
     "fd8d17a8-606d-478c-9b2c-763ffd7b9656": {
       "author": "Bobby Grayson",
