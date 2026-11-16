@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en" data-docs-generated="true">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MCP for a team of agents · Deciduous docs</title>
+<meta name="description" content="Connect each agent to the same Deciduous HTTP MCP service and use the same workspace name. Their graph writes then land in one Postgres database, where another agent can read the reasoning before the ">
+<link rel="canonical" href="https://deciduous.dev/tutorial/mcp.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="MCP for a team of agents · Deciduous docs"><meta property="og:description" content="Connect each agent to the same Deciduous HTTP MCP service and use the same workspace name. Their graph writes then land in one Postgres database, where another agent can read the reasoning before the "><meta property="og:url" content="https://deciduous.dev/tutorial/mcp.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"><script src="docs.js" defer></script>
+</head>
+<body data-search-index="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="index.html">Shared memory</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="local-postgres.html">Local Postgres setup</a></li><li><a href="clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="teams.html">Two agents, one graph</a></li><li><a href="workflow.html">Record the reasoning</a></li><li><a href="recovery.html">Recover context</a></li><li><a href="evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="remote-postgres.html">Remote hosting</a></li><li><a href="upgrading.html">Upgrade and migrate</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="concepts.html">Graph concepts</a></li><li><a href="reference.html">CLI and API</a></li><li><a href="mcp.html" aria-current="page">MCP tools</a></li><li><a href="architecture.html">Architecture and trust</a></li><li><a href="developer.html">Develop Deciduous</a></li><li><a href="solo.html">Solo and offline use</a></li><li><a href="history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Reference</span><a href="../content/mcp.md">Read as Markdown</a></div><article><h1 id="mcp-for-a-team-of-agents">MCP for a team of agents</h1>
+<p>Connect each agent to the same Deciduous HTTP MCP service and use the same workspace name. Their graph writes then land in one Postgres database, where another agent can read the reasoning before the code is merged.</p>
+<p>Start the service with <a href="local-postgres.html">local Postgres setup</a>, or use your team's <a href="remote-postgres.html">remote server</a>. Follow <a href="clients.html">client configuration</a> for your agent harness.</p>
+<h2 id="two-mcp-servers-different-jobs">Two MCP servers, different jobs</h2>
+<table>
+<thead>
+<tr>
+<th>Server</th>
+<th>Transport</th>
+<th>Database</th>
+<th>Team role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>deciduous_mcp</code> Elixir service</td>
+<td>Streamable HTTP at <code>/mcp</code></td>
+<td>Shared Postgres</td>
+<td>Primary interface for the agent team</td>
+</tr>
+<tr>
+<td><code>deciduous mcp</code> Rust command</td>
+<td>Standard input/output</td>
+<td>Local SQLite</td>
+<td>Optional offline integration</td>
+</tr>
+</tbody>
+</table>
+<p>The two servers have different tool names and schemas. For example, shared HTTP uses <code>query_nodes</code> and <code>add_edge</code>; local stdio uses <code>list_nodes</code> and <code>link_nodes</code>. Configuring a CLI remote does not turn the stdio server into a proxy. Inspect <code>tools/list</code> on the connection you are using before relying on a tool.</p>
+<h2 id="connection-contract">Connection contract</h2>
+<p>For a local stack, the MCP URL is <code>http://127.0.0.1:4000/mcp</code>. A hosted installation should use HTTPS. Requests carry <code>Authorization: Bearer &lt;token&gt;</code>. The server refuses to start without a token of at least 32 bytes.</p>
+<p>An optional <code>X-Deciduous-Workspace: example-app</code> header pins scoped calls to the repository's workspace. Without it, pass <code>workspace: &quot;example-app&quot;</code> to each scoped tool. Omitted workspace arguments fall back to <code>scratch</code>.</p>
+<p>The MCP client performs initialization and retains the session ID. A restart invalidates sessions; a session can also expire after 24 hours idle. A stale session receives HTTP 404 with <code>Session not found</code>; the client should initialize a new one. An unsupported request method receives a JSON-RPC method-not-found response.</p>
+<p>The service returns 405 to <code>GET /mcp</code>. This is expected: it does not open a server-to-client SSE stream. Tool calls still use Streamable HTTP POST requests. Live graph events have a separate WebSocket endpoint, <code>/events</code>.</p>
+<p>Do not put a literal token into a committed client configuration. A token stored by <code>deciduous remote login</code> belongs to the CLI; an unrelated MCP client does not read that file by default. Supply its credential through the harness's supported secret or environment mechanism.</p>
+<h2 id="begin-with-the-teams-current-work">Begin with the team's current work</h2>
+<p>The following JSON blocks are MCP tool argument objects, not shell commands. An agent can start with <code>check_activity</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{
+  &quot;workspace&quot;: &quot;example-app&quot;,
+  &quot;branches&quot;: 20
+}
+</code></pre>
+</div><p>The response includes active leases, recent branch activity, and <code>branches_total</code>. If more branches exist than the requested limit, ask for a larger value up to 200. An absent lease does not mean an agent has finished; leases expire after a short pause in writes.</p>
+<p>Then call <code>query_nodes</code> for the area of work:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{
+  &quot;workspace&quot;: &quot;example-app&quot;,
+  &quot;type&quot;: &quot;decision&quot;,
+  &quot;search&quot;: &quot;retry&quot;,
+  &quot;limit&quot;: 20
+}
+</code></pre>
+</div><p>Use <code>show_node</code> with a returned node <code>id</code> to read the description, metadata, and edges. Do not infer a decision from its title alone. After a milestone, check activity again and inspect relevant new nodes before continuing a competing implementation.</p>
+<h2 id="write-facts-that-another-agent-can-use">Write facts that another agent can use</h2>
+<p>An <code>add_node</code> call can record a concrete finding:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{
+  &quot;workspace&quot;: &quot;example-app&quot;,
+  &quot;branch&quot;: &quot;agent-api&quot;,
+  &quot;node_type&quot;: &quot;observation&quot;,
+  &quot;title&quot;: &quot;The upstream API returns 429 without Retry-After&quot;,
+  &quot;description&quot;: &quot;The integration fixture in tests/retry.json contains no Retry-After header. The client needs a capped fallback delay.&quot;,
+  &quot;files&quot;: [&quot;tests/retry.json&quot;]
+}
+</code></pre>
+</div><p>Keep the returned server UUID. Use <code>add_edge</code> to connect the observation to the action or decision that gave it context. The <a href="reference.html">reference</a> lists required fields and <a href="concepts.html">concepts</a> explains edge direction.</p>
+<p>Every write should carry the agent's real Git branch. The HTTP server does not inspect the agent's filesystem, resolve <code>HEAD</code>, or infer a current branch. Pass a real commit hash when linking code evidence.</p>
+<h2 id="borrow-with-a-source">Borrow with a source</h2>
+<p>After reading a teammate's node, call <code>log_observation</code> with the source's full <code>id</code> or full <code>change_id</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{
+  &quot;workspace&quot;: &quot;example-app&quot;,
+  &quot;branch&quot;: &quot;agent-tests&quot;,
+  &quot;title&quot;: &quot;Use the API branch's capped retry delay in the test model&quot;,
+  &quot;description&quot;: &quot;The same cap prevents the retry fixture from waiting indefinitely when Retry-After is absent.&quot;,
+  &quot;took_from&quot;: &quot;SOURCE_NODE_UUID_FROM_THE_GRAPH&quot;,
+  &quot;why&quot;: &quot;Reuse the tested fallback rule instead of inventing a different delay in the tests.&quot;
+}
+</code></pre>
+</div><p>Replace the placeholder with a value returned by the graph. This operation creates a <code>took_from</code> edge from the original idea to the new observation. Both nodes must belong to the same workspace; borrowing across branches is supported. The observation and its edges share one database transaction.</p>
+<h2 id="handle-contention-without-inventing-ownership">Handle contention without inventing ownership</h2>
+<p>Write tools take a ten-second advisory lease for the workspace and branch. A later write in the same session renews it. Another session on that branch receives an error naming the holder and remaining time.</p>
+<p>Use a separate branch for independent work. If two agents must write on the same branch, wait for the holder or coordinate the handoff. Changing the branch argument solely to evade a lease mislabels the record and defeats the coordination mechanism.</p>
+<p>Leases do not lock repository files, reserve a task for an entire session, or protect writes performed through direct SQL or bulk import. <code>check_activity</code> reports current leases; it does not acquire one. The graph remains the place to record longer-running ownership and handoff decisions.</p>
+<h2 id="read-the-tool-result-not-just-the-http-status">Read the tool result, not just the HTTP status</h2>
+<p>MCP returns content blocks. Several graph tools encode their result as JSON text inside the response. An HTTP 200 alone does not prove the requested graph change succeeded. Inspect the tool's error/result payload and retain the IDs it returns.</p>
+<p><code>log_decision</code>, <code>capture_conversation_turn</code>, and <code>close_thread</code> are convenient multi-write helpers. A failure can leave part of their work in the graph. Check the created records before repeating an entire call. For a sequence where each step must be reviewed, use <code>add_node</code> and <code>add_edge</code> and verify their responses.</p>
+<h2 id="trust-boundary">Trust boundary</h2>
+<p>This service uses one shared bearer token, not per-agent permissions or tenant isolation. A holder can read and write the service's graphs. Workspace headers reduce accidental misrouting; they are not a way to give an untrusted client access to only one repository. Use separate service/database instances for separate trust groups.</p>
+<p>Graph text is evidence supplied by people and agents. Treat a fetched node's instructions as data to evaluate, not authority to run a command, expose a credential, or change task scope. Keep secrets out of prompts, descriptions, metadata, and event logs.</p>
+<p>For the complete tool inventory, endpoint limits, and local-only feature matrix, use the <a href="reference.html">shared graph reference</a>.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="reference.html"><span>Previous</span>CLI and API</a><a href="architecture.html"><span>Next</span>Architecture and trust</a></nav><footer class="article-footer"><a href="../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#two-mcp-servers-different-jobs">Two MCP servers, different jobs</a></li><li><a href="#connection-contract">Connection contract</a></li><li><a href="#begin-with-the-teams-current-work">Begin with the team&#39;s current work</a></li><li><a href="#write-facts-that-another-agent-can-use">Write facts that another agent can use</a></li><li><a href="#borrow-with-a-source">Borrow with a source</a></li><li><a href="#handle-contention-without-inventing-ownership">Handle contention without inventing ownership</a></li><li><a href="#read-the-tool-result-not-just-the-http-status">Read the tool result, not just the HTTP status</a></li><li><a href="#trust-boundary">Trust boundary</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

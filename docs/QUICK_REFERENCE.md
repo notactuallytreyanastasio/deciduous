@@ -1,322 +1,176 @@
-# Quick Reference
+<!-- Generated from content/reference.md by scripts/docs/build.mjs. Edit the source. -->
 
-Every command and flag here exists in deciduous 1.1.0 (`deciduous --help` and
-each subcommand's `--help`, checked 2026-10-24). If it is not here, check
-`deciduous <command> --help` before writing it down.
+# Shared graph reference
 
----
+Use the HTTP MCP server for an agent team's day-to-day graph reads and writes. The server stores the shared graph in Postgres. The Rust CLI manages local tools and explicit transfers between that server and a local SQLite database.
 
-## Install
+This reference describes Deciduous 1.0. Start with [local Postgres setup](content/local-postgres.md), then [connect your agents](content/clients.md). The [MCP guide](content/mcp.md) explains the transport and tool differences.
 
-```bash
-brew tap notactuallytreyanastasio/tap && brew install deciduous
-cargo install deciduous --locked
-# or a binary from https://github.com/notactuallytreyanastasio/deciduous/releases
-deciduous --version          # deciduous 1.1.0
-deciduous completion zsh     # bash, zsh, fish, powershell, elvish
+## Which command reaches which database
+
+| Interface | Storage it reads or writes | Intended use |
+| --- | --- | --- |
+| HTTP MCP at `/mcp` | Shared Postgres | Team reasoning, cross-branch reads, borrowing, handoffs |
+| `deciduous remote status`, `push`, `pull`, `watch` | The configured HTTP server; some commands also use local SQLite | Check connectivity, migrate history, refresh a local graph, watch writes |
+| `deciduous add`, `link`, `nodes`, `show`, `status`, `graph` | Local SQLite | Offline work or inspection of a pulled copy |
+| `deciduous mcp` | Local SQLite over stdio | Optional local-only MCP integration |
+| `deciduous serve` | Local SQLite | Local graph viewer |
+| `deciduous serve --api` | Per-graph SQLite stores | Separate Rust HTTP API; not the Postgres service |
+| `deciduous sync` | Local SQLite and `.deciduous/graph.json` | Optional Git-based sharing, not remote Postgres synchronization |
+
+Configuring `[remote]` does not reroute ordinary CLI commands or `deciduous mcp`. A successful local `deciduous add` is not evidence that your teammates can see the node.
+
+## Setup commands in newer source builds
+
+The onboarding change in the current source checkout adds `deciduous setup`. It is not included in the published `v1.0.0` binary. Check whether your build supports it with `deciduous setup --help`.
+
+```sh
+deciduous setup
 ```
 
-## Set up a project
+With no flags, this prints the shared Postgres setup and upgrade guide to stdout. It does not open a local graph, write configuration, generate credentials, or start a service.
 
-```bash
-deciduous init                 # Claude Code (default): .claude/, CLAUDE.md section, .deciduous/
-deciduous init --opencode      # OpenCode: .opencode/, AGENTS.md
-deciduous init --windsurf      # Windsurf: .windsurf/
-deciduous init --both          # Claude Code + OpenCode
-deciduous init --no-auto-update
+To generate a standalone database project instead:
+
+```sh
+deciduous setup --postgres --output ./deciduous-postgres --port 55432
 ```
 
-`init` asks where the graph lives: this machine's server against PostgreSQL on
-localhost:5432 (default), a PostgreSQL you name, PostgreSQL and the server in
-Docker, or a server someone else runs. It writes `[remote]` to
-`.deciduous/config.toml` and registers the server with Claude Code. With no
-terminal it stops and names the flags:
+This creates `Dockerfile`, `compose.yaml`, `README.md`, `.gitignore`, and a private `.env` in a new directory. It refuses existing output paths and a symlink parent. The parent must already exist. Omit `--output` and `--port` to use `./deciduous-postgres` and port `55432`.
 
-```bash
-deciduous remote setup --local                 # background service, PostgreSQL on localhost:5432
-deciduous remote setup --database-url <url>    # ... against a PostgreSQL you name
-deciduous remote setup --docker-postgres       # PostgreSQL and the server in Docker
-deciduous remote setup --docker                # the server in Docker, PostgreSQL from --local/--database-url
-deciduous remote setup --url <url>             # a server someone else runs (token from DECIDUOUS_MCP_TOKEN or stored)
-deciduous remote setup --port <n>              # the server's port, first setup only
-DECIDUOUS_NO_SERVER=1 deciduous init           # skip the server step (tests, CI)
+Generation does not start Docker or alter a database. The generated Compose project runs Postgres only, with loopback access and a persistent named volume. It does not include the MCP service; agents still need that separate service.
+
+For released `v1.0.0` installations, use the current Python helper from the [Postgres-only setup guide](content/local-postgres.md#generate-just-postgres). Both generators use the same templates. Follow the generated README before starting containers or connecting an app.
+
+## Workspace and branch arguments
+
+Use one stable workspace name for the repository, such as `example-app`, across machines and worktrees. Pass the actual Git branch on writes, such as `agent-api` or `agent-tests`.
+
+Scoped HTTP tools resolve the workspace in this order:
+
+1. The `X-Deciduous-Workspace` request header, if present.
+2. The tool's `workspace` argument.
+3. `scratch`, if neither is present.
+
+Names are trimmed and lowercased. Path separators and names longer than 128 characters are rejected. Unknown names are created, so a typo can create a second workspace.
+
+`query_nodes`, `get_graph`, `find_orphans`, and `ask_graph` accept `workspace: "*"` for cross-project reads when the client is not pinned. `check_activity` requires one workspace. Scoped writes reject `"*"`.
+
+The header is a routing safeguard, not an access-control boundary. The shared bearer token grants access to the service's data. `list_workspaces` and ID-based reads are not confined by a workspace header. See [security boundaries](content/architecture.md#security-boundaries).
+
+## Shared HTTP MCP tools
+
+The server registers 18 tools. Discover their current schemas with your MCP client's `tools/list`; the local stdio server exposes a different set.
+
+### Read and recover
+
+| Tool | Arguments | Result |
+| --- | --- | --- |
+| `list_workspaces` | None | Workspace names and live node/edge counts |
+| `check_activity` | `workspace`; optional `branches` from 0 to 200, default 20 | Active write leases and the newest created node on each returned branch |
+| `query_nodes` | `workspace`; optional `type`, `status`, `branch`, `search`, `limit` | Matching live node summaries, newest first; default limit 100 |
+| `show_node` | `node_id` | Full node metadata, descriptions, incoming/outgoing edges, documents, themes |
+| `get_graph` | `workspace`; optional `branch` | Graph snapshot with nodes, edges, document metadata, themes, and node-theme links |
+| `find_orphans` | `workspace` | Non-goal nodes with no incoming edge |
+| `get_ancestors` | `node_id` | Walk incoming edges, including the starting node |
+| `get_descendants` | `node_id` | Walk outgoing edges, including the starting node |
+| `ask_graph` | `question`, `workspace`; optional `scope`, `include_context` | Heuristic search results and optional connected-node context |
+
+`query_nodes.search` matches titles and descriptions. The MCP schema does not expose an offset. Narrow the filters or use `get_graph` when you need the complete workspace. A branch-filtered graph omits edges whose other endpoint is outside the returned branch; read the workspace graph to inspect cross-branch borrowing.
+
+The traversal tools currently stop after a budget of 50 visited nodes. They are useful for context recovery, not an exhaustive export of an arbitrarily large graph.
+
+`ask_graph` uses text matching and inferred type/status filters. It does not call a language model, produce a verified answer, or perform semantic vector search. Its `scope` values are `all`, `active`, `decisions`, `goals`, `observations`, and `recent`. Read the returned records before drawing a conclusion.
+
+### Write and connect
+
+| Tool | Required arguments | Useful optional arguments |
+| --- | --- | --- |
+| `add_node` | `node_type`, `title` | `workspace`, `branch`, `description`, `status`, `confidence`, `commit`, `prompt`, `files` |
+| `add_edge` | `from_node_id`, `to_node_id` | `workspace`, `branch`, `edge_type`, `rationale` |
+| `update_node` | `node_id` | `title`, `description`, `status`, `metadata`, `branch` |
+| `delete_node` | `node_id` | `branch` |
+| `delete_edge` | `from_node_id`, `to_node_id` | `edge_type`, `branch` |
+
+`add_node` returns both `id` and `change_id`. Use the returned server UUID `id` in ordinary node and edge tools. Local integer IDs and local change-ID prefixes are not interchangeable with server IDs.
+
+`update_node.metadata` replaces the metadata map. Read it first and preserve fields you still need. Its top-level `branch` selects the write lease; changing the node's recorded branch requires `metadata.branch`.
+
+`delete_node` sets a deletion timestamp. `delete_edge` removes the edge row. Prefer `superseded` or `abandoned` for a decision that remains useful history. A routine export is not a backup of deleted records.
+
+### Capture helpers
+
+| Tool | Required arguments | Purpose |
+| --- | --- | --- |
+| `log_observation` | `title` | Add an observation, optionally connected through `related_to` and `took_from`; also accepts `description`, `why`, `tags`, `workspace`, `branch` |
+| `log_decision` | `title`, `chosen_option` | Add a decision with a chosen option and optional rejected options, rationale, parent, confidence, workspace, branch |
+| `capture_conversation_turn` | `summary` | Add supplied goal, observations, options, decision, action, and outcome structures; optional parent, workspace, branch, confidence |
+| `close_thread` | `title` | Add an outcome; optional parent, goal to complete, lessons, follow-up goals, success, workspace, branch |
+
+`log_observation.related_to` and `took_from` accept a full server node UUID or full `change_id` in the same workspace. `why` becomes the borrowing edge's rationale. The observation and its edges are written in one transaction.
+
+The other capture helpers perform multiple writes. Their current implementations do not wrap the entire operation in one transaction. After an error, inspect the graph for partial results before retrying. None of these helpers is a general idempotency endpoint.
+
+`log_decision` draws `chosen` and `rejected` edges from the decision to its option nodes. Use the lower-level tools if your team requires a different connection pattern. `close_thread` does not finish an MCP session or release a lease through a separate unlock operation.
+
+## Vocabulary
+
+| Node type | Record |
+| --- | --- |
+| `goal` | The requested result and relevant user prompt |
+| `option` | An approach worth considering |
+| `decision` | The choice and its rationale |
+| `action` | Work planned or performed, with evidence |
+| `outcome` | What happened after the action |
+| `observation` | A fact learned during the work |
+| `revisit` | A decision being reconsidered |
+
+Normal tool statuses are `pending`, `active`, `completed`, `rejected`, `superseded`, and `abandoned`. Imports also preserve legacy `feedback` nodes and `done` statuses; new work should use the documented vocabulary above. Confidence is an optional value from 0 to 100, not a measured probability.
+
+Edge types are `leads_to`, `chosen`, `rejected`, `requires`, `blocks`, `enables`, and `took_from`. Both endpoints must exist in the same workspace. They may be on different branches. A `took_from` edge runs from the source idea to the node that reused it.
+
+## CLI remote commands
+
+Use the service's base URL for the CLI, without `/mcp`:
+
+```sh
+deciduous remote login --url http://127.0.0.1:4000
+deciduous remote init http://127.0.0.1:4000 --workspace example-app
+deciduous remote status
+deciduous remote watch
 ```
 
-```bash
-deciduous update               # refresh commands, skills, hooks, the CLAUDE.md section; keeps what you edited
-deciduous update --all ~/code  # every project under a directory
-deciduous check-update         # exit 1 if .deciduous/.version is behind the binary
-deciduous auto-update on|off
-```
+Run repository commands from an initialized project. `login` reads the token from standard input and keeps it outside the repository. A non-empty `DECIDUOUS_MCP_TOKEN` environment value takes precedence over the stored credential.
 
-## Node types, edge types, statuses
+| Command | Behavior |
+| --- | --- |
+| `remote login [--url URL]` | Store a token; optional URL verifies it first |
+| `remote logout` | Remove the stored credential; does not clear a token already set in the environment |
+| `remote init URL [--workspace NAME]` | Check health/authentication and save `[remote]` configuration |
+| `remote status` | Compare local and server node and edge counts; matching counts do not prove identical content |
+| `remote pull` | Merge server nodes and edges into the local graph; does not retrieve attachment bytes or provide a complete server backup |
+| `remote push` | Bulk-import the local graph into the server; a controlled migration/backfill operation, not routine synchronization |
+| `remote adopt ROOT --url URL --dry-run` | Preview configuration of existing `.deciduous` projects below a directory; omit `--dry-run` only after reviewing |
+| `remote watch` | Connect to the event stream, print changes, and reconnect with backoff |
 
-| Node types | `goal` `option` `decision` `action` `outcome` `observation` `revisit` |
-|---|---|
-| Edge types | `leads_to` (default) `requires` `chosen` `rejected` `blocks` `enables` `took_from` |
-| Statuses | `pending` (default) `active` `completed` `rejected` `superseded` `abandoned` |
+In 1.0, `remote watch` supports `--types outcome,observation`, repeated `--branch NAME`, `--edges`, and `--json`. `--url` and `--claude-code` print connection information instead of watching; that output contains a token-bearing URL. Keep it out of logs, screenshots, and the decision graph. Older 0.19 builds print a URL by default, so check `deciduous --version` and `deciduous remote watch --help`.
 
-`add --help` lists six types and `status --help` four statuses; all seven and
-six are accepted. The flow is `goal -> options -> decision -> actions -> outcomes`.
+`remote push` can overwrite newer server fields with a stale local copy. `remote pull` does not reconcile server deletions into a faithful local mirror. Read [upgrading and migrating](content/upgrading.md) before using either on valuable history.
 
-## Add nodes
+## HTTP endpoints
 
-```bash
-deciduous add goal "Rate limit the public API" -c 90 -p "the user's message, verbatim"
-deciduous add goal "Add auth" --prompt-stdin << 'EOF'
-The full multi-line request...
-EOF
-deciduous add option "Token bucket per API key" -c 80
-deciduous add decision "Token bucket per key over fixed window per IP" -c 85
-deciduous add action "Add token bucket middleware" -c 85 -f "src/middleware/rate_limit.rs"
-deciduous add outcome "Passes load test at 10k rps" -c 90 --commit HEAD
-deciduous add observation "Shared IPs behind carrier NAT" -d "the detail goes in the description"
-deciduous add revisit "Reconsidering per-IP fallback"
+| Method and path | Purpose |
+| --- | --- |
+| `GET /health` | Unauthenticated liveness response, `ok` |
+| `POST /mcp` | Authenticated MCP Streamable HTTP requests |
+| `GET /export?workspace=example-app` | Authenticated graph snapshot; metadata, not attachment bytes |
+| `POST /import` | Authenticated bulk import of a local-export-shaped graph |
+| `PUT /blob/:sha256` | Authenticated raw document upload, verified against its SHA-256 hash |
+| `GET /documents/:id` | Authenticated document bytes by document ID or content hash |
+| `GET /events?workspace=example-app` | Authenticated WebSocket upgrade for write notifications |
 
-# flags
--c, --confidence 0-100     -d, --description     -f, --files "a.rs,b.rs"
--p, --prompt "..."         --prompt-stdin        --commit HEAD|<branch>|<tag>|<hash>  (stored as the full hash)
--b, --branch <name>        --no-branch           --date "YYYY-MM-DD"  (backdate, for archaeology)
-```
+`GET /mcp` returns 405 because the server does not offer a server-to-client SSE stream. Tool responses arrive through the MCP POST transport. Use `/events` for live write notifications.
 
-Node arguments everywhere take a local id, a `change_id` prefix (4+ hex
-characters, the CHANGE column of `nodes`), or a server id.
+Imports and blob uploads have a 64 MiB request-body limit. Document reads return 404 for an unknown attachment and 410 when the metadata exists but content is missing. The event stream can miss notifications during disconnects; query the graph after reconnecting.
 
-## Link
-
-```bash
-deciduous link 1 2 -r "possible approach"             # leads_to
-deciduous link 2 4 -t chosen -r "survives NAT"
-deciduous link 3 4 -t rejected -r "carrier NAT"
-deciduous link 7 3 -t blocks
-deciduous link <their_change_id> 42 -t took_from -r "borrowed the lock-delay reset"
-deciduous unlink 1 2                                   # -t <type> when two edges join the pair
-```
-
-## Read
-
-```bash
-deciduous nodes                        # ID  CHANGE  TYPE  STATUS  TITLE
-deciduous nodes -b main                # by branch
-deciduous nodes -t revisit             # by type
-deciduous nodes --theme rate-limiting  # by theme
-deciduous edges
-deciduous show 4                       # metadata, evidence, consulted files, hashes, connections
-deciduous show 918ffbe9 --json         # raw record with metadata_json
-deciduous graph                        # {"nodes","edges","themes","node_themes"[,"documents"]} as JSON
-```
-
-There is no `nodes --status`.
-
-## Change
-
-```bash
-deciduous status 4 superseded
-deciduous prompt 1 "the verbatim prompt"      # or: deciduous prompt 1 < prompt.txt
-deciduous delete 9 --dry-run                  # then without, to delete the node and its edges
-```
-
-## Transcripts (1.1.0)
-
-```bash
-deciduous transcript list                     # this project's sessions under ~/.claude/projects/<slug>/
-deciduous transcript list --dir <dir> --json
-deciduous transcript import 328f8485          # a session id prefix, or a path to the .jsonl
-deciduous transcript import --dry-run <session>
-deciduous transcript import --no-hash <session>   # skip hashing the files actions touched
-deciduous transcript import --json <session>...
-```
-
-Goals from prompts (verbatim), actions from edits and commits, outcomes from
-test runs, each with `metadata.evidence.kind` of `proven` or `inferred`.
-Importing twice adds nothing. See [transcripts.md](transcripts.md).
-
-## Shared server (`[remote]`)
-
-```bash
-deciduous remote status            # local vs server, field by field; exit 1 when anything differs
-deciduous remote pull              # refresh the local database from the server
-deciduous remote push              # send the writes waiting in .deciduous/remote-log.jsonl
-deciduous remote push --seed       # also send history from before the project had a remote
-deciduous remote push --repair     # also send fields `status` lists as Different; --overwrite-server to win
-deciduous remote push --drop-rejected | --retry-rejected | --drop <op_id>
-deciduous remote watch             # one line per write, live; --types, --branch, --edges, --json, --url, --claude-code
-deciduous remote login --url <url> # store a token read from stdin, mode 0600
-deciduous remote logout
-deciduous remote init <url> --workspace <name>   # point one repo at a server (setup does this for you)
-deciduous remote adopt ~/code --url <url> -n     # point every project under a directory; -n = dry run
-```
-
-## Git model (no `[remote]`)
-
-```bash
-git pull
-deciduous sync             # reconcile .deciduous/graph.json with the local database, both ways
-deciduous sync --check     # exit 1 if anything is pending (pre-push check)
-git add .deciduous/graph.json && git commit -m "graph: ..." && git push
-```
-
-`sync` does not write `docs/graph-data.json`; that export was removed in 1.0.5.
-
-## Message board
-
-```bash
-deciduous board post --as lead -s "@w1 middleware signature" -m "rate_limit(req, key) -> Result<(), Retry>"
-deciduous board post --as w1 -s "re: signature" -m "ok" --reply-to 1
-deciduous board read --unanswered w1          # what is addressed to w1 and unanswered
-deciduous board read --since 3 --from lead --to w1 -q "signature" --limit 20 --json
-deciduous board show 1
-```
-
-`--as` defaults to `$DECIDUOUS_AGENT_LABEL`. Messages are not graph: never in
-`graph.json`, never exported.
-
-## Documents
-
-```bash
-deciduous doc attach 1 spec.pdf -d "Rate limit spec from kickoff"
-deciduous doc attach 5 diagram.png --ai-describe        # description written by the claude CLI
-deciduous doc list [node] [--include-detached] [--json]
-deciduous doc show 1 [--json]
-deciduous doc describe 1 "better description"            # or --ai, or text on stdin
-deciduous doc open 1
-deciduous doc detach 1                                   # soft delete
-deciduous doc gc --dry-run && deciduous doc gc           # remove files no record references
-```
-
-## Themes and tags
-
-```bash
-deciduous themes create rate-limiting -c "#ef4444" -d "Everything about throttling"
-deciduous themes list
-deciduous themes delete rate-limiting
-deciduous tag add 1 rate-limiting
-deciduous tag remove 1 rate-limiting
-deciduous tag list 1
-deciduous tag suggest [node] [--apply]       # keyword and AI suggestions; omit node for all untagged
-deciduous tag confirm 1 rate-limiting        # suggested -> manual
-```
-
-## Health, history, archaeology
-
-```bash
-deciduous pulse [--summary] [--json] [-b branch] [-r 10]
-deciduous audit --associate-commits [--min-score 50] [--dry-run] [--yes]   # the only audit action
-deciduous narratives init [--force] [-o path]      # .deciduous/narratives.md with a section per active goal
-deciduous narratives show
-deciduous narratives pivots [--json] [-b branch]   # every revisit with its chain
-deciduous archaeology pivot <old_id> "<what was learned>" "<new approach>" -c 80 -r "why it failed" [--dry-run]
-deciduous archaeology supersede <id> [--cascade] [--dry-run]
-deciduous archaeology timeline [-l 20] [-t type] [-b branch] [--json]
-```
-
-## Visualize and write up
-
-```bash
-deciduous serve                     # viewer on http://localhost:3000, reads the local database
-deciduous serve -p 8080
-deciduous dot -o graph.dot          # Graphviz DOT; --png needs graphviz; --rankdir TB|LR|BT|RL
-deciduous dot --auto --nodes 1-15 --png        # docs/decision-graph-<branch>.{dot,png}
-deciduous writeup -t "Rate limiting" --nodes 1-15 -o PR.md
-deciduous writeup --auto -t "Rate limiting" --roots 1 [--no-dot] [--no-test-plan]
-gh pr edit N --body "$(deciduous writeup --auto -t 'Rate limiting' --nodes 1-15)"
-```
-
-## MCP
-
-```bash
-deciduous mcp        # stdio server, 34 tools: {"command":"deciduous","args":["mcp"]}
-```
-
-The shared server's MCP endpoint is `<url>/mcp` (21 tools: `add_node`,
-`capture_conversation_turn`, `ask_graph`, `query_nodes`, `check_activity`,
-`post_message`, ...). `init` registers it with Claude Code at user scope.
-
-## Roadmap
-
-```bash
-deciduous roadmap init [-p ROADMAP.md]
-deciduous roadmap refresh
-deciduous roadmap sync [--execute] [--create-issues] [-r owner/repo]   # dry run by default
-deciduous roadmap list [-s section] [--with-issues|--without-issues]
-deciduous roadmap link <item> <outcome_id> / unlink <item>
-deciduous roadmap conflicts [--resolve] / status / check [--incomplete|--complete]
-```
-
-## Hooks and integration status
-
-```bash
-deciduous hooks install      # the hooks listed in .deciduous/config.toml (none by default)
-deciduous hooks status / uninstall
-deciduous integration        # Claude Code hooks, commands, skills
-deciduous opencode install / status / uninstall
-```
-
-`init` installs two non-blocking hooks: `version-check.sh` and
-`board-mentions.sh`. No hook blocks a tool call (removed in 1.0.3).
-
-## Database
-
-```bash
-deciduous backup [-o file.db]
-deciduous migrate            # add change_id columns to a pre-0.17 database
-deciduous commands [-l 20]   # the command log; empty in 1.1.0 projects, nothing writes it
-```
-
-## Session start
-
-```bash
-deciduous board read --unanswered "$DECIDUOUS_AGENT_LABEL"
-deciduous nodes -b "$(git branch --show-current)"
-deciduous pulse --summary
-deciduous remote status      # with a [remote]
-deciduous sync --check       # without one
-git log --oneline -10 && git status
-```
-
-## Environment variables
-
-| Variable | Read by | Effect |
-|---|---|---|
-| `DECIDUOUS_DB_PATH` | every command | Use this database instead of walking up to `.deciduous/deciduous.db`. Worktrees that want their own graph set it. |
-| `DECIDUOUS_MCP_TOKEN` | `remote`, MCP registration | The server token; beats `~/.config/deciduous/credentials`. Use `${DECIDUOUS_MCP_TOKEN}` in `.mcp.json`, never a literal. |
-| `DECIDUOUS_PORT` | `remote setup`, the server's `.env` | Port for this machine's server, first setup only. |
-| `DECIDUOUS_AGENT_LABEL` | `board post`, `board-mentions.sh` | This session's label: the default `--as`, and what the hook shows unanswered messages for. |
-| `DECIDUOUS_NO_SERVER` | `init`, `update` | Skip the shared-server step (tests, CI). |
-| `DECIDUOUS_QUIET_LOCAL_ONLY` | every write | Silence the stderr line that says a write stayed on this machine because the project has no server. |
-| `DECIDUOUS_OPS_TIMEOUT` | `remote push` | Seconds one `POST /ops` request may take (default 120). |
-| `DECIDUOUS_API_TOKEN`, `DECIDUOUS_API_DATA_DIR` | `serve --api` | Bearer token and data directory for the multi-graph API daemon. |
-| `DECIDUOUS_ENV_FILE`, `DECIDUOUS_MCP_INSTALL_DIR`, `DECIDUOUS_SERVER_MODE`, `DECIDUOUS_BIND_ADDRESS` | the server service | Written into `~/.config/deciduous/server/.env` and the launchd/systemd unit by `remote setup`; not for you to set. |
-
-## Slash commands and skills `init` writes
-
-| Command | Purpose |
-|---|---|
-| `/decision` | Add nodes, link edges, sync |
-| `/recover` | Rebuild context at session start, including unanswered board messages |
-| `/work` | Create the goal node before implementing |
-| `/document` | Document a file or directory |
-| `/build-test` | Build and run the tests |
-| `/serve-ui` | Start the viewer |
-| `/decision-graph` | Build a graph from commit history |
-| `/sync` | Git model: reconcile `graph.json`; remote model: check against the server and refresh |
-| `/demo-swarm` | The multi-agent demonstration (iTerm2 and Ghostty) |
-| `/pulse`, `/narratives`, `/archaeology` | The three skills; see [narratives.md](narratives.md) |
-
-There is no `/sync-graph`; it went with the GitHub Pages export in 1.0.5.
-
-## Files
-
-| Path | Holds | In git |
-|---|---|---|
-| `.deciduous/deciduous.db` | the local database (cache) | no |
-| `.deciduous/graph.json` | the shared graph, git model | yes |
-| `.deciduous/config.toml` | `[branch]`, `[github]`, `[hooks]`, `[remote]` | yes |
-| `.deciduous/remote-log.jsonl` | ops waiting for the server | no |
-| `.deciduous/documents/` | attached files, `<name>.<hash8>` | no |
-| `.deciduous/narratives.md` | the narratives file | your call |
-| `.deciduous/.version`, `.latest_version`, `.last_version_check` | update checks | no |
-| `.deciduous/harness.json`, `update-backups/`, `update-templates/` | what `update` wrote, backed up, and would have written | no |
-| `~/.config/deciduous/credentials` | the server token, mode 0600 | outside the repo |
-| `~/.config/deciduous/server/` | this machine's server, its `.env` and logs | outside the repo |
-| `.claude/commands/`, `.claude/skills/`, `.claude/hooks/`, `.claude/agents.toml` | the Claude Code harness | yes |
+See [architecture](content/architecture.md) for persistence and security limits, or [solo and offline use](content/solo.md) for the local CLI and Git-based workflow.

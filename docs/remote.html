@@ -1,876 +1,108 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-docs-generated="true">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shared Graph - Deciduous</title>
-    <meta property="og:title" content="Shared Graph - Deciduous">
-    <meta property="og:description" content="One Postgres server, every project's decision graph, one workspace per repository. Your local database becomes a cache; the server is the truth.">
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; color: #24292f; line-height: 1.6; }
-      .container { max-width: 1400px; margin: 0 auto; padding: 60px 20px; }
-      .narrow { max-width: 900px; margin: 0 auto; }
-      .top-nav { display: flex; justify-content: center; gap: 30px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #d0d7de; }
-      .top-nav a { color: #57606a; text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.15s; }
-      .top-nav a:hover { color: #0969da; }
-      .top-nav a.active { color: #0969da; }
-      header { text-align: center; margin-bottom: 20px; }
-      header h1 { font-size: 2.8rem; font-weight: 700; color: #24292f; margin-bottom: 12px; letter-spacing: -0.5px; }
-      .tagline { font-size: 1.1rem; color: #57606a; max-width: 640px; margin: 0 auto 30px; }
-      section { margin-top: 50px; padding-top: 30px; border-top: 1px solid #d0d7de; }
-      h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 12px; }
-      h3 { font-size: 1.1rem; color: #24292f; margin: 20px 0 8px; }
-      p { color: #57606a; margin-bottom: 12px; }
-      a { color: #0969da; text-decoration: none; }
-      a:hover { text-decoration: underline; }
-      code { background: #f6f8fa; padding: 2px 6px; border-radius: 4px; font-family: "SF Mono", Consolas, monospace; font-size: 0.88em; color: #24292f; }
-      ul, ol { margin: 8px 0 16px 24px; color: #57606a; }
-      li { margin-bottom: 6px; }
-
-      /* Terminal windows */
-      .session-demo { background: #1e1e1e; border-radius: 12px; overflow: hidden; margin: 20px 0; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); }
-      .session-header { background: #2d2d2d; padding: 12px 16px; display: flex; align-items: center; gap: 8px; }
-      .session-dot { width: 12px; height: 12px; border-radius: 50%; }
-      .session-dot.red { background: #ff5f56; }
-      .session-dot.yellow { background: #ffbd2e; }
-      .session-dot.green { background: #27c93f; }
-      .session-title { color: #888; font-size: 0.85rem; margin-left: 8px; }
-      .session-content { padding: 20px; font-family: "SF Mono", Monaco, "Courier New", monospace; font-size: 0.88rem; line-height: 1.7; }
-      .cmd-line { color: #e5e5e5; }
-      .cmd-line .prompt { color: #7ee787; }
-      .cmd-out { color: #8b949e; }
-      .cmd-ok { color: #4ade80; }
-      .cmd-warn { color: #f2cc60; }
-      .cmd-block { margin-bottom: 16px; }
-      .cmd-block:last-child { margin-bottom: 0; }
-
-      .config-block { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 10px; padding: 20px 24px; margin: 16px 0; }
-      .config-block h4 { font-size: 0.85rem; color: #57606a; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
-      .config-block pre { background: #24292f; border-radius: 6px; padding: 14px 16px; color: #e6edf3; font-size: 0.85rem; overflow-x: auto; margin: 0; }
-      .config-block code { background: transparent; color: inherit; padding: 0; }
-      .config-block p { font-size: 0.88rem; margin-top: 10px; margin-bottom: 0; }
-
-      .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; margin-bottom: 8px; }
-      .badge-new { background: #dcfce7; color: #166534; }
-      .badge-warn { background: #fef3c7; color: #854d0e; }
-
-      .note { background: #fff8e1; border: 1px solid #f0d78c; border-radius: 8px; padding: 14px 18px; margin: 16px 0; font-size: 0.92rem; color: #4a3f10; }
-      .note strong { color: #8a6d00; }
-
-      table.cmdref { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92rem; }
-      table.cmdref th, table.cmdref td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eaeef2; vertical-align: top; }
-      table.cmdref th { color: #57606a; font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; }
-      table.cmdref td code { white-space: nowrap; }
-
-      .api-link { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 20px; margin-top: 30px; text-align: center; }
-      .api-link a { font-weight: 600; font-size: 1.05rem; }
-
-      footer { text-align: center; margin-top: 60px; padding-top: 30px; border-top: 1px solid #d0d7de; color: #8c959f; font-size: 0.9rem; }
-    </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Two agents. One shared memory. · Deciduous docs</title>
+<meta name="description" content="Connect your agents to the same Deciduous server and project workspace. Their decisions go into Postgres, where the next agent can read them before repeating the work.">
+<link rel="canonical" href="https://deciduous.dev/tutorial/quickstart.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Two agents. One shared memory. · Deciduous docs"><meta property="og:description" content="Connect your agents to the same Deciduous server and project workspace. Their decisions go into Postgres, where the next agent can read them before repeating the work."><meta property="og:url" content="https://deciduous.dev/tutorial/quickstart.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tutorial/style.css"><script src="tutorial/docs.js" defer></script>
 </head>
-<body>
-    <div class="container">
-      <div class="narrow">
-        <nav class="top-nav">
-          <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a>
-          <a href="remote.html" class="active">Shared Graph</a>
-          <a href="mcp.html">MCP</a>
-          <a href="story.html">Story</a>
-          <a href="demo/">Live Graph</a>
-          <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
-        </nav>
-
-        <header>
-          <span class="badge badge-new">As of 1.1.0</span>
-          <h1>One Graph, Every Project</h1>
-          <p class="tagline">
-            One Postgres server holds every repository's decision graph, one workspace each &mdash;
-            queryable alone or all at once. The server is the truth; your local database becomes
-            a cache of it.
-          </p>
-        </header>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Why a server</h2>
-          <p>
-            Agents write through the HTTP MCP server, so a project with no server is a project
-            whose agents have nowhere to write. Every project points at one, and
-            <code>deciduous init</code> does not finish until the project points at one that
-            answers.
-          </p>
-          <p>
-            The server does not have to be somewhere else. By default it runs on this machine, as
-            a background service installed under <code>~/.config/deciduous/server/</code> (a launchd
-            LaunchAgent on macOS, a systemd user unit on Linux), and keeps its data in a PostgreSQL
-            on <code>localhost:5432</code>, connecting as the current OS user to a database called
-            <code>deciduous</code> that it creates and migrates itself. That is the PostgreSQL a
-            <code>brew install postgresql@17</code> or a distribution package already runs. If
-            nothing answers on 5432, <code>init</code> says so in the menu and prints what to do:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">when nothing answers on localhost:5432</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-out">  Nothing answers on localhost:5432, so choice 1 needs a PostgreSQL first:</div>
-              <div class="cmd-out">    macOS:          brew install postgresql@17 &amp;&amp; brew services start postgresql@17</div>
-              <div class="cmd-out">    Debian/Ubuntu:  sudo apt install postgresql</div>
-              <div class="cmd-out">  Or name another PostgreSQL (choice 2, --database-url), or let Docker run one</div>
-              <div class="cmd-out">  for you (choice 3, --docker-postgres).</div>
-            </div>
-          </div>
-          <p>
-            Any other PostgreSQL works if you give its URL. Docker can run both PostgreSQL and the
-            server, if you would rather install neither. A team can run one server on a shared
-            machine and hand out its URL and token; that runbook is
-            <code>deciduous_mcp/DEPLOY.md</code>, and the projects that use it take choice 4 below.
-          </p>
-          <p>
-            Wherever it runs, every repository gets its own workspace, and one query can cross all
-            of them. &ldquo;What did I decide about auth, across every project I've touched?&rdquo;
-            has an answer because the data is in one place.
-          </p>
-          <div class="note">
-            <strong>Two writable stores.</strong> Once a project has a remote, the CLI
-            (<code>deciduous add</code>) and any MCP client (<code>add_node</code>) can both write.
-            The CLI writes locally and queues an op that is sent to the server before the command
-            exits; an MCP write never reaches the local database until <code>pull</code>. Treat the
-            server as the source of truth and the local database as a cache you refresh with
-            <code>pull</code>, not a second copy you edit independently;
-            <code>deciduous remote status</code> reports the gap.
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="setup">
-          <h2>Setting up a repository</h2>
-          <p>
-            <code>deciduous init</code> (and <code>deciduous update</code>) in a project whose
-            <code>.deciduous/config.toml</code> has no <code>[remote]</code> asks, in a terminal,
-            where the project's graph should live:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">deciduous init, the server step</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous init</div>
-                <div class="cmd-out">...</div>
-                <div class="cmd-out">Shared graph server</div>
-                <div class="cmd-out">   This project has no server yet ([remote] in .deciduous/config.toml).</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">Where should this project's graph live?</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">  1) This machine: the deciduous server as a background service, using PostgreSQL on</div>
-                <div class="cmd-out">     localhost:5432 as you (<span class="cmd-ok">answering now</span>)</div>
-                <div class="cmd-out">  2) This machine: the server as a background service, using a PostgreSQL you name</div>
-                <div class="cmd-out">     (any host, port, user, password)</div>
-                <div class="cmd-out">  3) This machine, in Docker: a new PostgreSQL and the server in containers</div>
-                <div class="cmd-out">  4) A server someone else runs: you need its URL and token</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">  1 and 2 install the release's server executable in /Users/you/.config/deciduous/server</div>
-                <div class="cmd-out">  and start it at login. --docker runs that server in Docker instead.</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-line">Choose 1-4 [1]: </div>
-              </div>
-            </div>
-          </div>
-          <ul>
-            <li><strong>1</strong>, the default. The first time on a machine, <code>init</code>
-            downloads the server executable for its own version (one file with Erlang and Elixir
-            inside), checks it against the release's <code>checksums.txt</code>, and runs it once
-            to create the database <code>deciduous</code> and apply migrations. If PostgreSQL
-            refuses (no such role, wrong password, no CREATEDB), you see its reason and the menu
-            again. Then it installs the server as a user service that starts at login. It listens
-            on <code>127.0.0.1</code> only.</li>
-            <li><strong>2</strong>. The same server, against a PostgreSQL you name:
-            <code>postgres://USER@HOST:PORT/DATABASE</code>, with <code>?sslmode=require</code> or
-            <code>verify-full</code> for TLS. The password is asked separately and not shown.</li>
-            <li><strong>3</strong>. Downloads the Docker bundle for its own version, checks it, and
-            starts PostgreSQL 17 and the server in containers (a few minutes the first time). This
-            is what 1.0.10 and earlier always did; an existing Docker install stays as it is.</li>
-            <li><strong>4</strong>. Asks for the URL and the token (typed without being shown), and
-            checks both against the server before storing anything.</li>
-          </ul>
-          <p>
-            For 1 to 3 the server needs a port on this machine, and <code>init</code> asks for it
-            with a free one suggested from 20000-32767. The port is asked rather than fixed so that
-            the server never squats one the machine already wants:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">choice 1, on a Mac</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-block">
-                <div class="cmd-line">Choose 1-4 [1]: 1</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">   <span class="cmd-ok">Downloading</span> https://github.com/notactuallytreyanastasio/deciduous/releases/download/v1.1.0/deciduous-mcp-darwin-arm64</div>
-                <div class="cmd-out">   <span class="cmd-ok">Installed</span> /Users/you/.config/deciduous/server/bin/deciduous-mcp</div>
-                <div class="cmd-out">   <span class="cmd-ok">Preparing</span> postgres://you@localhost:5432/deciduous (created if missing, then migrated; the first run unpacks the server)</div>
-                <div class="cmd-out">   <span class="cmd-ok">Created</span> database deciduous</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">The server needs a port on this machine. 24871 is free right now; anything</div>
-                <div class="cmd-out">already using the port you pick (a dev server on 4000, say) would stop this</div>
-                <div class="cmd-out">server from starting.</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-line">Port [24871]: </div>
-                <div class="cmd-out">   <span class="cmd-ok">Wrote</span> /Users/you/.config/deciduous/server/.env (mode 600: database URL, token, port 24871)</div>
-                <div class="cmd-out">   <span class="cmd-ok">Started</span> launchd agent dev.deciduous.server (/Users/you/Library/LaunchAgents/dev.deciduous.server.plist), logs in /Users/you/.config/deciduous/server/logs/server.log</div>
-                <div class="cmd-out">   <span class="cmd-ok">Ready</span> http://127.0.0.1:24871/ready</div>
-                <div class="cmd-out">   <span class="cmd-ok">Stored</span> token in /Users/you/.config/deciduous/credentials</div>
-                <div class="cmd-out">   <span class="cmd-ok">Wrote</span> .deciduous/config.toml [remote] url = http://127.0.0.1:24871</div>
-                <div class="cmd-out">   <span class="cmd-ok">Connected</span> http://127.0.0.1:24871 holds 0 nodes, 0 edges in workspace my-project</div>
-                <div class="cmd-out">   <span class="cmd-ok">Registered</span> Claude Code: deciduous MCP at http://127.0.0.1:24871/mcp (user scope; restart Claude Code)</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-ok">Done: this project writes to http://127.0.0.1:24871. Restart Claude Code so it picks up the server;</div>
-                <div class="cmd-ok">it sends the logging instructions when it connects.</div>
-              </div>
-            </div>
-          </div>
-          <p>
-            On Linux the <em>Started</em> line names <code>deciduous-server.service</code> under
-            <code>~/.config/systemd/user/</code>, followed by a note that user services stop at
-            logout unless <code>loginctl enable-linger &lt;user&gt;</code> is on.
-          </p>
-          <p>
-            <strong>Restart Claude Code.</strong> When it connects, the server sends the logging
-            instructions (when to write, and how to write one step in one call). There is no hook to
-            install. If anything is missing (no PostgreSQL, a server that does not answer, no
-            token), <code>init</code> and <code>update</code> stop with exit 1 and say how to fix it.
-          </p>
-
-          <h3>What setup wrote</h3>
-          <table class="cmdref">
-            <tr><th>File</th><th>Holds</th><th>Commit it?</th></tr>
-            <tr><td><code>.deciduous/config.toml</code>, <code>[remote]</code></td><td>the server's <code>url</code> and this repository's <code>workspace</code> name</td><td>yes: every clone and worktree finds the same workspace through it, and it holds no credential</td></tr>
-            <tr><td><code>~/.config/deciduous/credentials</code> (mode 0600)</td><td>the token</td><td>no: it is outside every repository on purpose</td></tr>
-            <tr><td><code>~/.config/deciduous/server/.env</code> (mode 600)</td><td>this machine's server: database URL, token, port, server mode and version</td><td>no</td></tr>
-            <tr><td>Claude Code's user-scope MCP list</td><td><code>deciduous</code> at <code>&lt;url&gt;/mcp</code> with the bearer header</td><td>not a file in the repo</td></tr>
-          </table>
-          <div class="config-block">
-            <h4>.deciduous/config.toml</h4>
-<pre><code>[remote]
-url = "http://127.0.0.1:24871"
-workspace = "my-project"</code></pre>
-            <p>
-              The token is read from <code>DECIDUOUS_MCP_TOKEN</code> in the environment first,
-              then from the credentials file. The variable is for CI and one-off overrides; on a
-              developer machine nothing needs to be exported.
-            </p>
-          </div>
-          <p>The Claude Code registration is this, run for you:</p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">what setup ran</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-line"><span class="prompt">$</span> claude mcp add --scope user --transport http deciduous http://127.0.0.1:24871/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</div>
-            </div>
-          </div>
-          <p>
-            An existing <code>deciduous</code> server in Claude Code is left alone (<em>Unchanged
-            Claude Code already has a deciduous MCP server</em>). If <code>claude</code> is not on
-            <code>PATH</code>, setup prints <em>Claude Code not found; register the server in your
-            client: &lt;url&gt;/mcp</em> and the line above is what to run, or what to translate for
-            another MCP client.
-          </p>
-
-          <h3>The second project on this machine</h3>
-          <p>
-            Every later <code>deciduous init</code> finds the server that is already running, in
-            about a second, and skips the installation:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">deciduous init, in a second project</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-out">   <span class="cmd-ok">Found</span> local server at http://127.0.0.1:24871</div>
-              <div class="cmd-out">   <span class="cmd-ok">Wrote</span> .deciduous/config.toml [remote] url = http://127.0.0.1:24871</div>
-              <div class="cmd-out">   <span class="cmd-ok">Connected</span> http://127.0.0.1:24871 holds 0 nodes, 0 edges in workspace other-project</div>
-              <div class="cmd-out">   Unchanged Claude Code already has a deciduous MCP server</div>
-            </div>
-          </div>
-          <p>
-            <code>deciduous remote setup</code> asks the same question on its own, in a project that
-            already has <code>[remote]</code> too (it offers to keep the current server first). Once
-            this machine has a server, the menu shrinks to two choices: that server, or one someone
-            else runs. <code>deciduous update</code> also upgrades this machine's server executable
-            when it is older than the CLI.
-          </p>
-
-          <h3>In a script</h3>
-          <p>
-            There is no terminal to ask, so give the answer instead; without one
-            <code>init</code> stops and prints these:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">deciduous remote setup, scripted</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-line"><span class="prompt">$</span> deciduous remote setup --local                  <span class="cmd-out"># this machine: a background service, PostgreSQL on localhost:5432</span></div>
-              <div class="cmd-line"><span class="prompt">$</span> deciduous remote setup --database-url &lt;url&gt;     <span class="cmd-out"># this machine's server, a PostgreSQL you name</span></div>
-              <div class="cmd-line"><span class="prompt">$</span> deciduous remote setup --docker-postgres        <span class="cmd-out"># this machine: PostgreSQL and the server in Docker</span></div>
-              <div class="cmd-line"><span class="prompt">$</span> deciduous remote setup --url &lt;url&gt;              <span class="cmd-out"># a server someone else runs</span></div>
-            </div>
-          </div>
-          <p>
-            <code>--docker</code> runs this machine's server in Docker against the PostgreSQL from
-            <code>--local</code> or <code>--database-url</code>. <code>--port &lt;n&gt;</code> or
-            <code>DECIDUOUS_PORT</code> answers the port question the first time; after that the
-            port in <code>~/.config/deciduous/server/.env</code> stands. <code>--url</code> takes
-            its token from <code>DECIDUOUS_MCP_TOKEN</code> or the stored one.
-            <code>DATABASE_URL</code> in your environment is never used unless you pass it with
-            <code>--database-url</code>. Tests and CI in a throwaway directory set
-            <code>DECIDUOUS_NO_SERVER=1</code> to skip the step.
-          </p>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="init">
-          <h2>The lower-level commands</h2>
-          <p>Setup is built from three commands that still work on their own.</p>
-          <p>
-            <code>deciduous remote login</code> stores a token by hand. It reads from stdin so the
-            token never lands in shell history or the process list, and with <code>--url</code> it
-            checks the token against that server before storing anything:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">deciduous remote login</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous remote login --url https://example.com/deciduous-mcp</div>
-                <div class="cmd-out">Token (read from stdin, not saved to shell history): </div>
-                <div class="cmd-ok">Token: stored in /Users/you/.config/deciduous/credentials</div>
-                <div class="cmd-out">  mode 0600, outside every repository</div>
-              </div>
-            </div>
-          </div>
-          <p>
-            <code>deciduous remote init &lt;url&gt;</code> points one repository at a server whose
-            token is already stored or in the environment. It verifies the server answers
-            <em>and</em> claims the workspace before writing; if either fails it says which and
-            leaves the project untouched. Then it sends the server the local history it lacks:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">deciduous remote init</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous remote init https://example.com/deciduous-mcp</div>
-                <div class="cmd-ok">Remote: https://example.com/deciduous-mcp</div>
-                <div class="cmd-out">  workspace: blog</div>
-                <div class="cmd-out">  claim: verified (by this repository's root commit)</div>
-                <div class="cmd-out">  server holds 719 nodes, 845 edges, 0 documents</div>
-                <div class="cmd-out">  sent 12 local node(s), 9 edge(s) the server lacked</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">Written to .deciduous/config.toml. The token stays in ~/.config/deciduous/credentials (or DECIDUOUS_MCP_TOKEN), never here.</div>
-              </div>
-            </div>
-          </div>
-          <p>
-            The workspace name is the git repository root's directory name, lowercased,
-            not the current directory, so running the CLI from a subdirectory can't split one
-            project across two workspaces. Override it if the directory name isn't what the graph
-            should be called:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">custom workspace name</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-line"><span class="prompt">$</span> deciduous remote init https://example.com/deciduous-mcp --workspace my-project</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="adopt">
-          <h2>Configure many projects at once</h2>
-          <p>
-            <code>adopt</code> walks a directory for projects that already have a
-            <code>.deciduous</code>, and points each at the server. It never repoints a project
-            already aimed somewhere else &mdash; that moves where its decisions land, and is not a
-            bulk operation's call. Dry-run first if you have a lot of repositories:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">deciduous remote adopt</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous remote adopt ~/code --url https://example.com/deciduous-mcp --dry-run</div>
-                <div class="cmd-out">Would configure: 91 projects under /Users/you/code</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">  blog                                         already configured</div>
-                <div class="cmd-out">  scratch  (some-experiment)                   would configure</div>
-                <div class="cmd-out">  my-app                                       would configure</div>
-                <div class="cmd-out">  ...</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">90 would be configured, 1 left alone</div>
-              </div>
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous remote adopt ~/code --url https://example.com/deciduous-mcp</div>
-                <div class="cmd-ok">90 configured, 1 left alone</div>
-              </div>
-            </div>
-          </div>
-          <p>
-            Several directories can share one workspace name: anything outside a git repository
-            pools into <code>scratch</code> rather than minting a workspace per temporary
-            directory, so <code>adopt</code> prints the directory alongside the workspace whenever
-            they'd otherwise be indistinguishable.
-          </p>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="status">
-          <h2>Checking for drift</h2>
-          <p>
-            <code>status</code> compares content, not counts: what is waiting in the log, and every
-            node, edge and document that differs, field by field, each with the command that fixes
-            it. It exits 1 when anything differs.
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">deciduous remote status, in sync</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous remote status</div>
-                <div class="cmd-out">Remote: http://127.0.0.1:24871</div>
-                <div class="cmd-out">Workspace: blog</div>
-                <div class="cmd-out">Log: 0 write(s) waiting, 0 rejected  (.deciduous/remote-log.jsonl)</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">                 local    server</div>
-                <div class="cmd-out">  nodes            719       719</div>
-                <div class="cmd-out">  edges            845       845</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-ok">In sync: no writes waiting, and every node, edge and document matches field by field.</div>
-                <div class="cmd-out">Themes and tags are not sent to the server, so they are not compared.</div>
-              </div>
-            </div>
-          </div>
-          <p>
-            Two graphs can hold the same number of nodes and different nodes, which is why the
-            table is not the verdict. When they differ, each side's extra rows are listed by name:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">drift, in both directions at once</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-block">
-                <div class="cmd-out">Log: 1 write(s) waiting, 0 rejected  (.deciduous/remote-log.jsonl)</div>
-                <div class="cmd-out">  waiting   b220f13c  create goal 6645c7fc "bobs unpushed goal"</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">                 local    server</div>
-                <div class="cmd-out">  nodes              2         2</div>
-                <div class="cmd-out">  edges              0         0</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">Only here (1)</div>
-                <div class="cmd-out">  goal 6645c7fc "bobs unpushed goal"  (waiting in the log)</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">Only on the server (1)</div>
-                <div class="cmd-out">  goal 0e355b0b "agents goal"</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-warn">Differs: `deciduous remote push` sends what is waiting and what this machine set aside; `deciduous remote pull` takes the server's side.</div>
-              </div>
-            </div>
-          </div>
-          <p>
-            A node listed under <em>Different</em> says which fields differ and which side edited
-            it later: <code>status: here completed, server pending  (edited here since the last
-            pull: `deciduous remote push --repair` sends it)</code>. When this copy did, the edit's
-            op never reached the log; it may have been made before this clone's config had a
-            <code>[remote]</code>, or while the log could not be written. A node an agent deleted
-            is listed under <em>Deleted on the server</em>, and <code>remote pull</code> removes it
-            here; <code>--seed</code> never sends it back. Ops the server refused are listed with
-            the start of their op id and the reason, until <code>remote push --drop-rejected</code>,
-            <code>--drop &lt;op id&gt;</code> or <code>--retry-rejected</code>.
-          </p>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="pull-push">
-          <h2>Pull and push</h2>
-          <p>
-            <code>pull</code> is the normal way to refresh &mdash; it fetches the server's graph
-            and merges it into the local cache through the same reconcile logic
-            <code>deciduous sync</code> already uses between machines: newer <code>updated_at</code>
-            wins, deletes are tombstones, an edge waits until both endpoints exist locally.
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">a node written via MCP, pulled into local SQLite</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous remote status</div>
-                <div class="cmd-out">                 local    server</div>
-                <div class="cmd-out">  nodes              2         3</div>
-                <div class="cmd-out">  edges              1         1</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-out">Only on the server (1)</div>
-                <div class="cmd-out">  observation 68701826 "Written remotely, never seen locally"</div>
-                <div class="cmd-out"></div>
-                <div class="cmd-warn">Differs: `deciduous remote pull` takes the server's side.</div>
-              </div>
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous remote pull</div>
-                <div class="cmd-ok">Pulled: roundtrip &lt;- http://127.0.0.1:24871</div>
-                <div class="cmd-out">  fetched 3 nodes, 1 edges, 0 deletion(s)</div>
-                <div class="cmd-out">  imported 1 new node(s), updated 0, removed 0; imported 0 edge(s), removed 0</div>
-              </div>
-              <div class="cmd-block">
-                <div class="cmd-line"><span class="prompt">$</span> deciduous nodes</div>
-                <div class="cmd-out">3   68701826   observation   pending   Written remotely, never seen locally</div>
-              </div>
-            </div>
-          </div>
-          <p>
-            <code>push</code> is not the normal write path &mdash; routine writes should go through
-            MCP or the CLI's own <code>add</code>, which writes locally and reaches the server through
-            the log before the command exits. <code>push</code> exists to seed a new workspace, or to
-            carry history that predates the server:
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">seeding a workspace</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-line"><span class="prompt">$</span> deciduous remote push</div>
-              <div class="cmd-ok">Pushed: roundtrip -&gt; http://127.0.0.1:24871</div>
-              <div class="cmd-out">  nodes 2 of 2</div>
-              <div class="cmd-out">  edges 1 of 1</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="global">
-          <h2>Asking across every project</h2>
-          <p>Read tools accept <code>workspace: "*"</code>, over MCP, for the cross-project view:</p>
-          <table class="cmdref">
-            <tr><th>Call</th><th>Result</th></tr>
-            <tr><td><code>query_nodes workspace="blog"</code></td><td>just that repository</td></tr>
-            <tr><td><code>query_nodes workspace="*"</code></td><td>every repository, each node tagged with its own</td></tr>
-            <tr><td><code>list_workspaces</code></td><td>the index &mdash; what exists, how big, when it last changed</td></tr>
-          </table>
-          <p>Writes refuse the global token, because a node has to land somewhere specific:</p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">add_node workspace="*"</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-out">{"code": -32000, "message": "workspace \"*\" is read-only: a node must be written to one project. Pass the repo name."}</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="pin">
-          <h2>Pinning a repository</h2>
-          <p>
-            Setup registers the server with Claude Code at user scope, which is all one machine
-            needs. A repository that wants its workspace unambiguous &mdash; regardless of what any tool
-            call says &mdash; adds a <code>.mcp.json</code> with a header. The header beats the
-            <code>workspace</code> argument, on reads and writes alike, and a pinned repository
-            ignores <code>workspace: "*"</code> on reads too: a project that opted into isolation
-            can't be made to read its neighbours.
-          </p>
-          <div class="config-block">
-            <h4>.mcp.json</h4>
-<pre><code>{
-  "mcpServers": {
-    "deciduous": {
-      "type": "http",
-      "url": "https://example.com/deciduous-mcp/mcp",
-      "headers": {
-        "Authorization": "Bearer ${DECIDUOUS_MCP_TOKEN}",
-        "X-Deciduous-Workspace": "my-project"
-      }
-    }
-  }
-}</code></pre>
-          </div>
-          <div class="note">
-            <strong>Use <code>${DECIDUOUS_MCP_TOKEN}</code>, never a literal token.</strong>
-            <code>.mcp.json</code> is a file people commit &mdash; that's how a team shares server
-            config &mdash; and Claude Code expands <code>${VAR}</code> from the environment when it
-            connects. With the variable unset it refuses and says so:
-            <code>Missing environment variables: DECIDUOUS_MCP_TOKEN</code>. A literal token here is
-            a credential committed to your repository.
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="alongside">
-          <h2>Working alongside other agents</h2>
-          <p>
-            Two sessions writing to one workspace need to know the other exists and to find out
-            when it writes. The branch is the unit for both.
-          </p>
-          <h3>No locks: every write is recorded, none is refused</h3>
-          <p>
-            Until 1.0.8 every write claimed an advisory lock on <code>(workspace, branch)</code>
-            with a ten-second lease, and a second session on the branch was refused with the
-            holder's name. It stopped the writer it should never stop and could not stop the other
-            one:
-          </p>
-          <ul>
-            <li>A one-shot client (initialize, one call, exit) left its lease behind, and its own
-            next process was refused for ten seconds: <code>locked by battery (0), session
-            GNgCXo-N</code>. A server cannot tell that a session's process is gone.</li>
-            <li>The CLI took no lock: its writes are replayed from
-            <code>.deciduous/remote-log.jsonl</code> through <code>POST /ops</code>, possibly days
-            after they were made.</li>
-          </ul>
-          <p>
-            And nothing needs the exclusion. Every write is atomic on its own: a node insert, an
-            update read <code>FOR UPDATE</code>, <code>capture_conversation_turn</code> and
-            <code>log_decision</code> in one transaction each, <code>/ops</code> compare-and-set
-            field by field. Two agents on one branch interleave their nodes, as two people on one
-            branch do, and no write is lost or torn.
-          </p>
-          <p>
-            So a write now records who wrote where: workspace, branch, session and clientInfo for
-            MCP; <code>deciduous CLI</code> and the repository's root commit for <code>/ops</code>.
-            It never refuses. Pass <code>branch</code> on every write so the record says which one.
-            The workspace setting <code>lock_scope</code> no longer does anything.
-          </p>
-          <h3>check_activity</h3>
-          <p>
-            The read side. Call it before a burst of writes, and after every milestone, instead of
-            polling <code>query_nodes</code>.
-          </p>
-          <table class="cmdref">
-            <tr><th>Field</th><th>What it holds</th></tr>
-            <tr><td><code>sessions</code></td><td>every session, MCP or CLI, that wrote in the last five minutes (<code>window_seconds</code>): <code>branch</code>, <code>client</code>, <code>client_version</code>, <code>session</code>, <code>is_you</code>, <code>first_seen_at</code>, <code>last_seen_at</code>, <code>seconds_ago</code></td></tr>
-            <tr><td><code>active_sessions</code></td><td>how many distinct sessions that is</td></tr>
-            <tr><td><code>branches</code></td><td>the twenty most recently written branches: each with <code>last_node</code> (id, change_id, node_type, title, status, created_at) and <code>writers</code>, the sessions above that wrote it. Pass <code>branches: N</code> for more; <code>branches_total</code> says how many the workspace has in all</td></tr>
-          </table>
-          <p>
-            It used to list unexpired locks, which had always lapsed by the time anyone looked, so
-            a run of short-lived clients read <code>active_sessions: 0</code> throughout, and CLI
-            writes, which took no lock, never appeared at all.
-          </p>
-          <h3>Events</h3>
-          <p>
-            Postgres triggers call <code>pg_notify</code> on every insert or update to
-            <code>decision_nodes</code> and every insert to <code>decision_edges</code>. One listener
-            bridges that to a WebSocket at <code>GET /events</code>, scoped to a workspace or to
-            <code>"*"</code> for all of them. A frame is a pointer with enough text to quote, not the
-            row:
-          </p>
-          <div class="config-block">
-            <h4>one frame</h4>
-<pre><code>{"table":"decision_nodes","op":"INSERT","workspace":"tetris-arena",
- "id":"…","change_id":"8d2f482a-…","node_type":"observation","status":"pending",
- "branch":"agent-7",
- "title":"Took the step-reset for lock delay from agent-8's decision, …"}</code></pre>
-          </div>
-          <p>
-            Edge frames carry <code>edge_type</code>, both endpoints' <code>change_id</code>, and the
-            branch of the source node. Edges have no branch of their own; before 1.0 a watcher could not
-            tell whose edge it was looking at.
-          </p>
-          <p>
-            The handshake cannot carry an <code>Authorization</code> header from a browser
-            <code>WebSocket</code> or anything built on one, so <code>?token=</code> is accepted as a
-            fallback. It is a bearer token in a URL: do not paste it anywhere that logs.
-          </p>
-          <h3>deciduous remote watch</h3>
-          <p>
-            Connects to that socket for the current repository's workspace and prints one line per
-            write. It quotes; it does not count. It reconnects with backoff when the socket closes.
-          </p>
-          <div class="session-demo">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">deciduous remote watch</span>
-            </div>
-            <div class="session-content">
-              <div class="cmd-out">Watching: tetris-arena</div>
-              <div class="cmd-out">04:45:14  agent-9   observation  "Took 4 hidden rows from agent-3: SRS kicks can lift a piece 2 rows at the ceiling"</div>
-              <div class="cmd-out">04:46:13  agent-10  observation  "Took 4 hidden rows (agent-9, from agent-3) and lock-out (agent-2, from agent-1); dropped my y&lt;0 exemption"</div>
-              <div class="cmd-out">04:47:15  agent-7   observation  "Took the step-reset for lock delay from agent-8's decision, and spawn-then-step-down and lock-out from agent-8 and agent-3"</div>
-            </div>
-          </div>
-          <table class="cmdref">
-            <tr><th>Flag</th><th>Effect</th></tr>
-            <tr><td><code>--types outcome,observation</code></td><td>only these node types</td></tr>
-            <tr><td><code>--branch agent-3</code></td><td>only this branch</td></tr>
-            <tr><td><code>--edges</code></td><td>include edge frames, printed as <code>agent-3  edge chosen  a1b2c3d4 -&gt; e5f6a7b8</code></td></tr>
-            <tr><td><code>--json</code></td><td>the raw frame, one per line</td></tr>
-            <tr><td><code>--url</code></td><td>print the socket URL and exit, for another client</td></tr>
-            <tr><td><code>--claude-code</code></td><td>with <code>--url</code>: also print a <code>Monitor(...)</code> call to paste into Claude Code</td></tr>
-          </table>
-          <div class="note">
-            <strong>Why quote rather than count.</strong> During the arena a session watching the raw
-            stream kept a per-branch tally and reported that a "second goal" convention was spreading
-            through the agents. The graph had ten goals, one per agent; the tally had counted updates as
-            inserts. A line that quotes the title and the operation cannot invent that.
-          </div>
-          <h3>The message board</h3>
-          <p>
-            Agents working at the same time coordinate through <code>post_message</code> and
-            <code>read_messages</code> (server 1.0.9), or <code>deciduous board post|read|show</code>,
-            which in a project with a <code>[remote]</code> go to <code>POST</code> and
-            <code>GET /messages</code> with the same token and workspace as <code>/export</code>.
-            <code>@label</code> addresses a message, <code>reply_to</code> answers one, and
-            <code>read_messages</code> with <code>unanswered_for</code> your label is your inbox.
-            An older server answers 404, and the CLI says which version it needs instead of
-            writing to the local table, where no other agent would look. <code>deciduous remote
-            watch</code> prints each post: <code>message #18 re #16  board-server -&gt; board-cli "choices"</code>.
-          </p>
-          <h3>took_from</h3>
-          <p>
-            An edge type for a borrow. <code>from</code> is the node you took from, <code>to</code> is
-            your node that used it, and it crosses branches on purpose. <code>log_observation</code>
-            takes <code>took_from</code> (a node UUID or a full change_id) and <code>why</code> (the edge's rationale) and writes the observation and the edge
-            in one call; <code>add_edge</code> and <code>deciduous link -t took_from</code> take it
-            directly.
-          </p>
-          <div class="config-block">
-            <h4>log_observation</h4>
-<pre><code>log_observation({
-  workspace: "tetris-arena", branch: "agent-7",
-  title: "Took the step-reset for lock delay from agent-8's decision",
-  took_from: "767cce30-9d0b-4e56-a4d8-2f0b1c8e7a11",
-  why: "Resetting the lock timer on every step is what makes fast play at the floor feel fair.",
-  description: "agent-8's game.js did not have it coded yet when I read it, so this implements the idea from the graph rather than from code."
-})</code></pre>
-          </div>
-          <p>
-            In the arena zero of 471 edges crossed a branch. The agents cited each other in 89 of 91
-            observation titles, four of them by change_id, and never linked to the node, because the
-            rules said to link every node to its parent and did not say the node you borrowed from
-            counts. The borrow figures in the write-up come from a regular expression over titles. That
-            is the wrong place for that information to live; <code>took_from</code> is the right one.
-          </p>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="run-your-own">
-          <h2>Running the server</h2>
-          <p>
-            The server is an Elixir app (<code>deciduous_mcp/</code> in the repository) backed by
-            PostgreSQL, with an MCP endpoint over Streamable HTTP. Documents are stored in
-            PostgreSQL too, keyed by content hash, so a file attached to more than one project's
-            graph is stored once. On your own machine, <a href="#setup">setup</a> installs and runs
-            it; there is nothing else to do.
-          </p>
-          <p>
-            For a team, one server on a shared machine behind a reverse proxy, with one URL and
-            token handed out and every project taking choice 4: see
-            <code>deciduous_mcp/DEPLOY.md</code> in the repository for the runbook, the native
-            executable and the Docker Compose service alike.
-          </p>
-        </section>
-
-        <!-- =========================================================== -->
-        <section id="limits">
-          <h2>What this doesn't do</h2>
-          <ul>
-            <li><strong>Themes don't transfer.</strong> The graph export used to move data to the
-            server doesn't carry theme assignments yet, so they stay local to each repository's
-            SQLite.</li>
-            <li><strong><code>push</code> isn't the normal write path.</strong> It exists to seed a
-            workspace and to carry history that predates the server.</li>
-            <li><strong>MCP writes do not come back on their own.</strong> A CLI write made while
-            the server is down waits in <code>.deciduous/remote-log.jsonl</code> and goes on the
-            next write or <code>deciduous remote push</code>; a node an agent wrote through MCP
-            reaches the local cache only on <code>deciduous remote pull</code>.</li>
-            <li><strong>Self-loop edges are rejected</strong> by the server's schema, and reported
-            per project rather than silently dropped.</li>
-            <li><strong>A session that outlives the server is refused, not resumed.</strong> Sessions
-            expire after 24 idle hours, and a restart drops all of them. The next call on an old
-            <code>mcp-session-id</code> gets <em>404</em> with JSON-RPC error <code>-32001 Session not
-            found</code> under the request's own id, and the client starts a new session. Before 1.0 the
-            server answered such a call with a <em>200</em> under a made-up id, and Claude Code waited
-            300 seconds for a reply it could never match, on every call, until the process was
-            restarted.</li>
-            <li><strong>The event stream is advisory.</strong> Postgres does not queue a
-            <code>NOTIFY</code> that fires while the listener's connection is down, and a reconnect
-            races new <code>LISTEN</code>s against notifications issued at the same moment. A gap in
-            the stream is not proof that nothing happened; a subscriber that needs certainty calls
-            <code>check_activity</code> or <code>query_nodes</code> to catch up.</li>
-            <li><strong>Activity is a record, not a lock.</strong> Two sessions can write one branch
-            at once; <code>check_activity</code> is how each learns of the other.</li>
-            <li><strong>A document can outlive its bytes.</strong> If a file referenced by a
-            document row is missing at import time, the row still imports as history and a fetch
-            answers <em>410 Gone</em> rather than <em>404</em> &mdash; the attachment was real; the
-            bytes are gone.</li>
-          </ul>
-        </section>
-
-        <!-- =========================================================== -->
-        <div class="api-link">
-          <p><a href="mcp.html">MCP Server Setup &rarr;</a></p>
-          <p style="color:#57606a; font-size:0.9rem; margin-top:6px;">Connecting Claude Code or Claude Desktop to a running server.</p>
-        </div>
-        <p style="text-align:center; color:#8c959f; font-size:0.85rem; margin-top:16px;">Prefer plain text? <a href="remote-graph.md">Read this page as markdown</a>.</p>
-
-        <footer>
-          <a href="index.html">Home</a> &middot; <a href="mcp.html">MCP</a> &middot; <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a> &middot; <a href="demo/">Live Graph</a> &middot; <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
-        </footer>
-      </div>
-    </div>
-</body>
-</html>
+<body data-search-index="tutorial/search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="tutorial/index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="tutorial/index.html">Shared memory</a></li><li><a href="tutorial/quickstart.html" aria-current="page">Quickstart</a></li><li><a href="tutorial/local-postgres.html">Local Postgres setup</a></li><li><a href="tutorial/clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="tutorial/teams.html">Two agents, one graph</a></li><li><a href="tutorial/workflow.html">Record the reasoning</a></li><li><a href="tutorial/recovery.html">Recover context</a></li><li><a href="tutorial/evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="tutorial/remote-postgres.html">Remote hosting</a></li><li><a href="tutorial/upgrading.html">Upgrade and migrate</a></li><li><a href="tutorial/troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="tutorial/concepts.html">Graph concepts</a></li><li><a href="tutorial/reference.html">CLI and API</a></li><li><a href="tutorial/mcp.html">MCP tools</a></li><li><a href="tutorial/architecture.html">Architecture and trust</a></li><li><a href="tutorial/developer.html">Develop Deciduous</a></li><li><a href="tutorial/solo.html">Solo and offline use</a></li><li><a href="tutorial/history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Get connected</span><a href="content/quickstart.md">Read as Markdown</a></div><article><h1 id="two-agents-one-shared-memory">Two agents. One shared memory.</h1>
+<p>Connect your agents to the same Deciduous server and project workspace. Their decisions go into Postgres, where the next agent can read them before repeating the work.</p>
+<p>The examples use workspace <code>example-app</code>, a server at <code>http://127.0.0.1:4000</code>, and Deciduous 1.0. A local server is enough for agents running on your machine. Agents on other machines need a reachable server address; see <a href="tutorial/remote-postgres.html">Remote Postgres</a>.</p>
+<h2 id="start-the-shared-server">Start the shared server</h2>
+<p>Follow <a href="tutorial/local-postgres.html">Local Postgres</a> to install the prerequisites and build the CLI. From the Deciduous source checkout, the setup scripts are:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">python3 scripts/team-memory/local-stack.py configure --apply
+python3 scripts/team-memory/local-stack.py up --apply
+curl --fail http://127.0.0.1:4000/health
+</code></pre>
+</div><p>Expect <code>ok</code> from the health endpoint. The local stack keeps Postgres on a private container network and publishes the MCP server on loopback. Agents speak HTTP to Deciduous; they do not need a Postgres password or a SQL connection.</p>
+<p>The generated credentials live outside the repository in an owner-only file. Set <code>DECIDUOUS_SOURCE</code> to the absolute path of that checkout. Store the CLI token through a pipe, without printing it:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">DECIDUOUS_SOURCE=&quot;/absolute/path/to/deciduous&quot;
+python3 &quot;$DECIDUOUS_SOURCE/scripts/team-memory/local-stack.py&quot; token \
+  | deciduous remote login --url http://127.0.0.1:4000
+</code></pre>
+</div><p>Do not run the <code>token</code> command by itself in a recorded terminal. It emits a bearer credential. For a hosted server, obtain the token from its operator through your team's secret manager.</p>
+<h2 id="connect-both-agents">Connect both agents</h2>
+<p>Use the <a href="tutorial/clients.html">client configuration</a> for your coding agent. Set these values in both clients:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Transport</td>
+<td>Streamable HTTP</td>
+</tr>
+<tr>
+<td>MCP endpoint</td>
+<td><code>http://127.0.0.1:4000/mcp</code></td>
+</tr>
+<tr>
+<td>Authentication</td>
+<td>Bearer token from <code>DECIDUOUS_MCP_TOKEN</code></td>
+</tr>
+<tr>
+<td><code>X-Deciduous-Workspace</code> header</td>
+<td><code>example-app</code></td>
+</tr>
+</tbody>
+</table>
+<p>For a new workspace, connect one client first and call <code>check_activity({workspace: &quot;example-app&quot;})</code>. Wait for that call to succeed before connecting the second client. Concurrent first connections can race workspace creation in the current server; once the workspace exists, agents can work in parallel.</p>
+<p>The CLI's stored credential does not configure your MCP client. Supply the same token through the client process's environment or secret mechanism. Keep literal credentials out of project configuration.</p>
+<p>Give the agents separate Git worktrees and branches, such as <code>agent-api</code> and <code>agent-tests</code>. Both use workspace <code>example-app</code>. A workspace groups the project's memory; a branch identifies each agent's line of work inside it.</p>
+<h2 id="prove-that-they-share-a-graph">Prove that they share a graph</h2>
+<p>These are MCP tool calls, shown as <code>tool_name(arguments)</code>, not shell commands. Your client may prefix the tool names with the server name.</p>
+<p>Ask agent A to run:</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">check_activity({workspace: &quot;example-app&quot;})
+add_node({
+  workspace: &quot;example-app&quot;,
+  branch: &quot;agent-api&quot;,
+  node_type: &quot;goal&quot;,
+  title: &quot;Share an API change with the test agent&quot;,
+  prompt: &quot;Add request validation and tests for the create-item endpoint.&quot;,
+  status: &quot;active&quot;
+})
+</code></pre>
+</div><p>Record the returned <code>id</code> and <code>change_id</code>. Ask agent B to read it:</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">query_nodes({
+  workspace: &quot;example-app&quot;,
+  branch: &quot;agent-api&quot;,
+  search: &quot;Share an API change&quot;,
+  limit: 10
+})
+</code></pre>
+</div><p>Both clients should return the same server node UUID and full <code>change_id</code>. If agent B sees nothing, check its endpoint and workspace header before creating another goal. Continue with the <a href="tutorial/teams.html">two-agent workflow</a> to record a decision, reuse it, and connect the result.</p>
+<h2 id="connect-the-optional-cli-cache">Connect the optional CLI cache</h2>
+<p>The MCP connection above can work without a local Deciduous database. The CLI adds a local viewer, exports, and an event watcher.</p>
+<p>Inside the code repository, run <code>deciduous init</code> once if it has no <code>.deciduous</code> directory. This also installs assistant integration files; review its changes and keep your instructions aligned with the server-first workflow. Then configure the base URL, without <code>/mcp</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous remote init http://127.0.0.1:4000 --workspace example-app
+deciduous remote status
+deciduous remote pull
+deciduous serve
+</code></pre>
+</div><p>Use the viewer address printed by <code>serve</code>. <code>remote pull</code> refreshes local node and edge records; it does not download document attachments or turn the viewer into a live Postgres client.</p>
+<p>With Deciduous 1.0, watch new server writes in another terminal:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous remote watch --types decision,observation,outcome
+</code></pre>
+</div><p>Check <code>deciduous --version</code> first. Earlier <code>remote watch</code> implementations print a credential-bearing WebSocket URL instead of starting this stream.</p>
+<h2 id="keep-one-normal-write-path">Keep one normal write path</h2>
+<p>Have agents write through the shared HTTP MCP connection. <code>deciduous add</code>, <code>deciduous link</code>, and the local <code>deciduous mcp</code> stdio server still write SQLite, even after <code>remote init</code>.</p>
+<p>Use <a href="tutorial/upgrading.html">Upgrading</a> to bring an existing local graph into Postgres. Do not use a stale <code>remote push</code> as a routine sync: importing matching records can replace newer server content. <a href="tutorial/solo.html">Solo and offline</a> covers the separate SQLite workflow.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="tutorial/index.html"><span>Previous</span>Shared memory</a><a href="tutorial/local-postgres.html"><span>Next</span>Local Postgres setup</a></nav><footer class="article-footer"><a href="index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#start-the-shared-server">Start the shared server</a></li><li><a href="#connect-both-agents">Connect both agents</a></li><li><a href="#prove-that-they-share-a-graph">Prove that they share a graph</a></li><li><a href="#connect-the-optional-cli-cache">Connect the optional CLI cache</a></li><li><a href="#keep-one-normal-write-path">Keep one normal write path</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

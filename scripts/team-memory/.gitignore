@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.env
+local.env
+backups/

@@ -1,0 +1,27 @@
+{
+  "groups": [
+    {"title":"Get connected","pages":["index","quickstart","local-postgres","clients"]},
+    {"title":"Work as a team","pages":["teams","workflow","recovery","evidence"]},
+    {"title":"Run the service","pages":["remote-postgres","upgrading","troubleshooting"]},
+    {"title":"Reference","pages":["concepts","reference","mcp","architecture","developer","solo","history"]}
+  ],
+  "labels": {
+    "index":"Shared memory","quickstart":"Quickstart","local-postgres":"Local Postgres setup","clients":"Connect your agents",
+    "teams":"Two agents, one graph","workflow":"Record the reasoning","recovery":"Recover context","evidence":"Attach evidence",
+    "remote-postgres":"Remote hosting","upgrading":"Upgrade and migrate","troubleshooting":"Troubleshooting",
+    "concepts":"Graph concepts","reference":"CLI and API","mcp":"MCP tools","architecture":"Architecture and trust","developer":"Develop Deciduous","solo":"Solo and offline use","history":"Explore design history"
+  },
+  "aliases": {
+    "guide.html":"quickstart","remote.html":"quickstart","mcp.html":"mcp","mcp-api.html":"reference","story.html":"history","developer/index.html":"developer",
+    "tutorial/introduction/what-is-deciduous.html":"index","tutorial/introduction/how-to-read.html":"concepts",
+    "tutorial/getting-started/installing.html":"local-postgres","tutorial/getting-started/initializing.html":"quickstart","tutorial/getting-started/ai-integration.html":"clients",
+    "tutorial/real-work/starting-work.html":"workflow","tutorial/real-work/implementing.html":"teams","tutorial/real-work/editing-and-fixing.html":"workflow","tutorial/real-work/attaching-evidence.html":"evidence",
+    "tutorial/sharing/exporting-your-work.html":"upgrading","tutorial/sharing/pr-workflow.html":"teams",
+    "tutorial/advanced/hooks.html":"clients","tutorial/advanced/multi-assistant.html":"teams","tutorial/advanced/themes-and-tags.html":"solo",
+    "tutorial/archaeology/exploring-the-graph.html":"history","tutorial/archaeology/narratives.html":"history","tutorial/archaeology/observations-and-pivots.html":"history","tutorial/archaeology/the-decision-graph-skill.html":"history",
+    "tutorial/reference/index.html":"reference"
+  },
+  "markdownAliases": {
+    "ARCHITECTURE.md":"architecture","CONCEPTS.md":"concepts","MULTI_USER_SYNC.md":"teams","QUICK_REFERENCE.md":"reference","WEB_VIEWER.md":"evidence","DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md":"evidence","narratives.md":"history","remote-graph.md":"remote-postgres"
+  }
+}
