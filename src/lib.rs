@@ -45,6 +45,7 @@ pub mod board;
 pub mod changelog;
 pub mod config;
 pub mod db;
+pub mod decisions;
 pub mod demo_swarm;
 pub mod events;
 pub mod export;

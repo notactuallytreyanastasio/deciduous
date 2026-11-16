@@ -670,6 +670,15 @@
       "to_change_id": "728ef146-fea7-48c0-b4c0-20f102ad6fb1",
       "weight": 1.0
     },
+    "0d33fe14525d42e1d585": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.071900-05:00",
+      "edge_id": "0d33fe14525d42e1d585",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "to_change_id": "0cb29321-7056-4161-8f4d-89eb41497e5f",
+      "weight": 1.0
+    },
     "0db8e52b1726a92eceb9": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-11T00:49:11.648547-05:00",
@@ -2920,6 +2929,16 @@
       "from_change_id": "7aa71fc4-1f6c-41fa-ab8c-1b57eca5d8f1",
       "rationale": "Documenting the workflow",
       "to_change_id": "770ac544-1692-48bc-9350-3bb47e2cba47",
+      "weight": 1.0
+    },
+    "3a2511ac887b00728136": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.014090-05:00",
+      "edge_id": "3a2511ac887b00728136",
+      "edge_type": "leads_to",
+      "from_change_id": "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697",
+      "rationale": "possible approach",
+      "to_change_id": "f0968517-7dfe-4fcf-ab48-2651c87d660b",
       "weight": 1.0
     },
     "3a284e17c5f0fa63b5a3": {
@@ -5662,6 +5681,16 @@
       "to_change_id": "94d1dc63-d620-4cf9-9ff7-61b0d4841870",
       "weight": 1.0
     },
+    "6abcab47c0b1516b63fc": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:07:39.533485-05:00",
+      "edge_id": "6abcab47c0b1516b63fc",
+      "edge_type": "leads_to",
+      "from_change_id": "93c3cdf0-0428-43e4-b51f-f4dbe7eb1f75",
+      "rationale": "result",
+      "to_change_id": "bdaaa528-9be9-43cf-8d79-1480faaa608f",
+      "weight": 1.0
+    },
     "6b0b532ea5aef80b23f5": {
       "author": "Bobby Grayson",
       "created_at": "2026-04-07T21:43:04.088966-04:00",
@@ -5740,6 +5769,16 @@
       "from_change_id": "f65428a5-b039-40ef-bf08-eb059a50bbed",
       "rationale": "leads_to",
       "to_change_id": "1f0e68d9-b6e9-4bb0-9927-9b572733c37a",
+      "weight": 1.0
+    },
+    "6d2535568bc0acdcc6d4": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.190877-05:00",
+      "edge_id": "6d2535568bc0acdcc6d4",
+      "edge_type": "rejected",
+      "from_change_id": "0cb29321-7056-4161-8f4d-89eb41497e5f",
+      "rationale": "a quote proves the words were said, not that they were read right",
+      "to_change_id": "96c7d29a-16b3-423e-814b-1a7f259f4960",
       "weight": 1.0
     },
     "6d5daf9c0543284fc661": {
@@ -7947,6 +7986,16 @@
       "to_change_id": "1426ad46-371d-471d-9a29-fc5c46ba9be8",
       "weight": 1.0
     },
+    "95b4a9f0143fc378b3e9": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.248574-05:00",
+      "edge_id": "95b4a9f0143fc378b3e9",
+      "edge_type": "chosen",
+      "from_change_id": "f0968517-7dfe-4fcf-ab48-2651c87d660b",
+      "rationale": "what was pitched; --accept is there for the impatient",
+      "to_change_id": "96c7d29a-16b3-423e-814b-1a7f259f4960",
+      "weight": 1.0
+    },
     "95f4ee0f11aee54c7224": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-13T03:08:38.131771-05:00",
@@ -9537,6 +9586,16 @@
       "to_change_id": "39f1f463-2a97-4665-8c13-e49f1d327254",
       "weight": 1.0
     },
+    "b47a64492eb1fef50f96": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.305604-05:00",
+      "edge_id": "b47a64492eb1fef50f96",
+      "edge_type": "leads_to",
+      "from_change_id": "96c7d29a-16b3-423e-814b-1a7f259f4960",
+      "rationale": "implementation",
+      "to_change_id": "93c3cdf0-0428-43e4-b51f-f4dbe7eb1f75",
+      "weight": 1.0
+    },
     "b4f460b8e45942278a58": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-11T01:56:21.330871-05:00",
@@ -11086,6 +11145,16 @@
       "to_change_id": "16b8d892-0c1f-417e-9ead-3ed257a65613",
       "weight": 1.0
     },
+    "d5710b8c2d9ba3c628a9": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:15.957003-05:00",
+      "edge_id": "d5710b8c2d9ba3c628a9",
+      "edge_type": "leads_to",
+      "from_change_id": "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697",
+      "rationale": "possible approach",
+      "to_change_id": "0cb29321-7056-4161-8f4d-89eb41497e5f",
+      "weight": 1.0
+    },
     "d5a243b40aed78ee5d1f": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-15T12:09:14.761436-05:00",
@@ -12523,6 +12592,15 @@
       "from_change_id": "ac1fbb01-0dd8-4188-ad67-7bf94ca09518",
       "rationale": "Goal requires build strategy decision",
       "to_change_id": "ac3df99d-f2b6-417d-869e-ef7db898f87b",
+      "weight": 1.0
+    },
+    "ed430acc989146e57221": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.131960-05:00",
+      "edge_id": "ed430acc989146e57221",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "to_change_id": "f0968517-7dfe-4fcf-ab48-2651c87d660b",
       "weight": 1.0
     },
     "edd06d0e4b6dfe9ca9c7": {
@@ -14697,6 +14775,19 @@
       "status": "pending",
       "title": "Simple thread pool with shared queue",
       "updated_at": "2026-01-12T22:39:37.735097-05:00"
+    },
+    "0cb29321-7056-4161-8f4d-89eb41497e5f": {
+      "author": "Bobby Grayson",
+      "change_id": "0cb29321-7056-4161-8f4d-89eb41497e5f",
+      "created_at": "2026-11-14T20:04:15.713946-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 45
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Write model-derived decisions straight into the graph as inferred nodes",
+      "updated_at": "2026-11-14T20:04:16.362626-05:00"
     },
     "0ceb74e4-2a70-443e-9e65-b506bc007890": {
       "author": "Bobby Grayson",
@@ -25617,6 +25708,19 @@
       "title": "Released v0.8.13",
       "updated_at": "2025-12-15T22:51:23.475706-05:00"
     },
+    "93c3cdf0-0428-43e4-b51f-f4dbe7eb1f75": {
+      "author": "Bobby Grayson",
+      "change_id": "93c3cdf0-0428-43e4-b51f-f4dbe7eb1f75",
+      "created_at": "2026-11-14T20:04:15.898399-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "transcript decisions and proposals: src/decisions.rs, a turn digest, CLI, hook switch",
+      "updated_at": "2026-11-14T20:07:39.407380-05:00"
+    },
     "9424b1b4-4968-4c20-ae7c-02af13bf4c1a": {
       "author": "Bobby Grayson",
       "change_id": "9424b1b4-4968-4c20-ae7c-02af13bf4c1a",
@@ -25894,6 +25998,19 @@
       "status": "pending",
       "title": "Independent PRs off main per domain",
       "updated_at": "2026-07-09T23:19:40.924218-04:00"
+    },
+    "96c7d29a-16b3-423e-814b-1a7f259f4960": {
+      "author": "Bobby Grayson",
+      "change_id": "96c7d29a-16b3-423e-814b-1a7f259f4960",
+      "created_at": "2026-11-14T20:04:15.837255-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Proposals with a checked quote, not direct writes: the pre-edit hook would repeat a misread decision to every agent",
+      "updated_at": "2026-11-14T20:04:16.476509-05:00"
     },
     "96dbdbf6-3ed5-4013-acce-05513059a637": {
       "author": "Bobby Grayson",
@@ -29035,6 +29152,19 @@
       "status": "pending",
       "title": "Single large text blob column",
       "updated_at": "2025-12-18T21:03:31.044352-05:00"
+    },
+    "bdaaa528-9be9-43cf-8d79-1480faaa608f": {
+      "author": "Bobby Grayson",
+      "change_id": "bdaaa528-9be9-43cf-8d79-1480faaa608f",
+      "created_at": "2026-11-14T20:07:39.472725-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "On this session's own transcript Sonnet proposed three decisions from five turns in six seconds; all three quotes were in the transcript, one was a preference rather than a decision; 737 tests pass",
+      "updated_at": "2026-11-14T20:07:39.472725-05:00"
     },
     "bdd1ab4b-6eba-4e2e-bae3-c0d0c34c3cd1": {
       "author": "Bobby Grayson",
@@ -32952,6 +33082,19 @@
       "status": "pending",
       "title": "Reconsidering mmap for specific use cases",
       "updated_at": "2026-01-12T22:39:08.939080-05:00"
+    },
+    "f0968517-7dfe-4fcf-ab48-2651c87d660b": {
+      "author": "Bobby Grayson",
+      "change_id": "f0968517-7dfe-4fcf-ab48-2651c87d660b",
+      "created_at": "2026-11-14T20:04:15.776277-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Proposals checked by verbatim quote, held in a file until accepted; --accept and a config switch for those who want them written",
+      "updated_at": "2026-11-14T20:04:16.419653-05:00"
     },
     "f09d4948-1f90-4e94-beb1-3ff3e4723011": {
       "author": "Bobby Grayson",

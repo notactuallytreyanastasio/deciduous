@@ -485,3 +485,244 @@ fn as_a_hook_it_never_fails_the_session() {
     }
     assert!(graph(&db)["nodes"].as_array().unwrap().is_empty());
 }
+
+/// `transcript decisions` with a stand-in for the model: a command that
+/// swallows the prompt and prints a canned reply.
+fn run_with_model(args: &[&str], db: &Path, reply: &Path) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(args)
+        .env("DECIDUOUS_DB_PATH", db)
+        .env("DECIDUOUS_QUIET_LOCAL_ONLY", "1")
+        .env(
+            "DECIDUOUS_DECISIONS_CMD",
+            format!("cat >/dev/null; cat '{}'", reply.display()),
+        )
+        .output()
+        .expect("deciduous runs")
+}
+
+#[test]
+fn a_decision_the_model_quotes_is_proposed_and_one_it_invents_is_dropped() {
+    let (tmp, root, db) = project();
+    let transcript = write_transcript(tmp.path(), &root);
+    let reply = tmp.path().join("reply.json");
+    fs::write(
+        &reply,
+        json!({"decisions": [
+            {
+                "turn": 1,
+                "title": "A widget module of its own, not more code in lib.rs",
+                "quote": "Reading the module, then adding the widget.",
+                "options": [
+                    {"title": "A new src/widget.rs", "verdict": "chosen", "rationale": "lib.rs stays small"},
+                    {"title": "Put the widget in src/lib.rs", "verdict": "rejected", "rationale": ""}
+                ],
+                "files": ["src/widget.rs"]
+            },
+            {
+                "turn": 1,
+                "title": "Blue over green",
+                "quote": "I considered green and decided blue was the better colour.",
+                "options": [
+                    {"title": "blue", "verdict": "chosen"},
+                    {"title": "green", "verdict": "rejected"}
+                ]
+            }
+        ]})
+        .to_string(),
+    )
+    .unwrap();
+    let path = transcript.to_str().unwrap();
+
+    let o = run_with_model(&["transcript", "decisions", path], &db, &reply);
+    assert!(o.status.success(), "{}", err(&o));
+    let text = out(&o);
+    assert!(
+        text.contains("1 proposed, 0 already proposed, 1 dropped"),
+        "{text}"
+    );
+    assert!(
+        text.contains("#1 [proposed] A widget module of its own"),
+        "{text}"
+    );
+    assert!(text.contains("Blue over green"), "{text}");
+    assert!(text.contains("its quote is not in turn 1"), "{text}");
+
+    // Proposed is not written: the graph holds what the import derived.
+    let g = graph(&db);
+    let count = |g: &Value, t: &str| {
+        g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|n| n["node_type"] == t)
+            .count()
+    };
+    assert_eq!(count(&g, "decision"), 0);
+    assert_eq!(goals(&g).len(), 2, "the session was imported first");
+
+    // The same session again is not read again.
+    let o = run_with_model(&["transcript", "decisions", path], &db, &reply);
+    assert!(out(&o).contains("already read"), "{}", out(&o));
+
+    let o = run(&["proposals", "accept", "1"], &db);
+    assert!(o.status.success(), "{}", err(&o));
+    let g = graph(&db);
+    assert_eq!(count(&g, "decision"), 1);
+    assert_eq!(count(&g, "option"), 2);
+    let nodes = g["nodes"].as_array().unwrap();
+    let by_title = |t: &str| nodes.iter().find(|n| n["title"] == t).unwrap();
+    let decision = by_title("A widget module of its own, not more code in lib.rs");
+    assert_eq!(decision["status"], "completed");
+    assert_eq!(
+        by_title("Put the widget in src/lib.rs")["status"],
+        "rejected"
+    );
+    let meta: Value = serde_json::from_str(decision["metadata_json"].as_str().unwrap()).unwrap();
+    assert_eq!(meta["evidence"]["kind"], "inferred");
+    assert_eq!(meta["evidence"]["source"], "transcript-model");
+    assert_eq!(
+        meta["evidence"]["quote"],
+        "Reading the module, then adding the widget."
+    );
+
+    // goal -> option -(rejected)-> decision -> the action that wrote the file.
+    let edges = g["edges"].as_array().unwrap();
+    let id = |n: &Value| n["id"].as_i64().unwrap();
+    let rejected = by_title("Put the widget in src/lib.rs");
+    assert!(edges.iter().any(|e| e["from_node_id"] == id(rejected)
+        && e["to_node_id"] == id(decision)
+        && e["edge_type"] == "rejected"));
+    assert!(edges
+        .iter()
+        .any(|e| e["from_node_id"] == goals(&g)[0].0 && e["to_node_id"] == id(rejected)));
+    let below: Vec<&Value> = edges
+        .iter()
+        .filter(|e| e["from_node_id"] == id(decision))
+        .map(|e| nodes.iter().find(|n| n["id"] == e["to_node_id"]).unwrap())
+        .collect();
+    assert!(!below.is_empty(), "the decision is above no action");
+    assert!(
+        below.iter().all(|n| n["node_type"] == "action"),
+        "{below:?}"
+    );
+
+    // Accepting again adds nothing; nothing is left waiting.
+    let before = (nodes.len(), edges.len());
+    assert!(run(&["proposals", "accept", "1"], &db).status.success());
+    let g = graph(&db);
+    assert_eq!(
+        (
+            g["nodes"].as_array().unwrap().len(),
+            g["edges"].as_array().unwrap().len()
+        ),
+        before
+    );
+    assert!(out(&run(&["proposals"], &db)).contains("No proposals waiting"));
+}
+
+#[test]
+fn a_model_that_answers_in_prose_is_an_error_and_proposes_nothing() {
+    let (tmp, root, db) = project();
+    let transcript = write_transcript(tmp.path(), &root);
+    let reply = tmp.path().join("reply.txt");
+    fs::write(&reply, "I found no decisions in this session.").unwrap();
+    let o = run_with_model(
+        &["transcript", "decisions", transcript.to_str().unwrap()],
+        &db,
+        &reply,
+    );
+    assert!(!o.status.success());
+    assert!(err(&o).contains("holds no JSON"), "{}", err(&o));
+    assert!(out(&run(&["proposals"], &db)).contains("No proposals waiting"));
+    // And the session is not marked read: the next run asks again.
+    fs::write(&reply, r#"{"decisions":[]}"#).unwrap();
+    let o = run_with_model(
+        &["transcript", "decisions", transcript.to_str().unwrap()],
+        &db,
+        &reply,
+    );
+    assert!(out(&o).contains("0 proposed"), "{}{}", out(&o), err(&o));
+}
+
+/// `[transcript] derive_decisions` makes the SessionEnd hook read the
+/// session for decisions, in a process that outlives the hook.
+#[test]
+fn the_hook_reads_for_decisions_in_the_background_when_the_project_asks() {
+    use std::io::Write;
+    let (tmp, root, db) = project();
+    let transcript = write_transcript(tmp.path(), &root);
+    fs::write(
+        root.join(".deciduous/config.toml"),
+        "[transcript]\nderive_decisions = \"propose\"\n",
+    )
+    .unwrap();
+    let reply = tmp.path().join("reply.json");
+    fs::write(
+        &reply,
+        json!({"decisions": [{
+            "turn": 1,
+            "title": "A module of its own",
+            "quote": "Reading the module, then adding the widget.",
+            "options": [
+                {"title": "src/widget.rs", "verdict": "chosen"},
+                {"title": "src/lib.rs", "verdict": "rejected"}
+            ]
+        }]})
+        .to_string(),
+    )
+    .unwrap();
+    let hook = |guarded: bool| {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_deciduous"));
+        cmd.current_dir(&root)
+            .args(["transcript", "import", "--hook"])
+            .env("DECIDUOUS_QUIET_LOCAL_ONLY", "1")
+            .env_remove("DECIDUOUS_DB_PATH")
+            .env(
+                "DECIDUOUS_DECISIONS_CMD",
+                format!("cat >/dev/null; cat '{}'", reply.display()),
+            )
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        if guarded {
+            cmd.env("DECIDUOUS_DERIVING", "1");
+        } else {
+            cmd.env_remove("DECIDUOUS_DERIVING");
+        }
+        let mut child = cmd.spawn().unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(
+                json!({"transcript_path": transcript})
+                    .to_string()
+                    .as_bytes(),
+            )
+            .unwrap();
+        child.wait_with_output().unwrap()
+    };
+    let proposals = root.join(".deciduous/proposals.json");
+
+    // Inside the model call's own session the hook does nothing at all.
+    let o = hook(true);
+    assert!(o.status.success());
+    assert!(
+        graph(&db)["nodes"].as_array().unwrap().is_empty(),
+        "the guarded hook imported"
+    );
+    assert!(!proposals.exists());
+
+    let o = hook(false);
+    assert!(o.status.success(), "{}", err(&o));
+    assert_eq!(out(&o), "");
+    let mut waited = 0;
+    while !proposals.exists() && waited < 100 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        waited += 1;
+    }
+    let store: Value = serde_json::from_str(&fs::read_to_string(&proposals).unwrap()).unwrap();
+    assert_eq!(store["proposals"][0]["title"], "A module of its own");
+    assert_eq!(store["proposals"][0]["state"], "proposed");
+}

@@ -435,6 +435,80 @@ fn turns(t: &Transcript) -> Vec<Turn> {
 }
 
 // ---------------------------------------------------------------------------
+// The digest: a turn as a reader needs it
+// ---------------------------------------------------------------------------
+
+/// One thing that happened in a turn.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DigestItem {
+    /// The assistant said this.
+    Said { timestamp: String, text: String },
+    /// The assistant called a tool: its name and the path or command.
+    Did(String),
+}
+
+/// A user prompt and what followed it, without tool results. This is what
+/// `deciduous transcript decisions` shows a model: choices are made in
+/// prose, and the results are most of a transcript's bytes.
+#[derive(Debug, Clone)]
+pub struct TurnDigest {
+    /// The uuid of the prompt's entry: what the turn's goal is derived from.
+    pub uuid: String,
+    pub timestamp: String,
+    pub prompt: String,
+    pub items: Vec<DigestItem>,
+}
+
+pub fn digest(t: &Transcript) -> Vec<TurnDigest> {
+    turns(t)
+        .into_iter()
+        .map(|turn| TurnDigest {
+            uuid: turn.uuid,
+            timestamp: turn.timestamp,
+            prompt: turn.prompt,
+            items: turn
+                .steps
+                .into_iter()
+                .filter_map(|step| match step {
+                    Step::Text {
+                        text, timestamp, ..
+                    } => (!text.trim().is_empty()).then_some(DigestItem::Said { timestamp, text }),
+                    Step::Tool {
+                        name,
+                        input,
+                        result,
+                        ..
+                    } => {
+                        let what = [
+                            "file_path",
+                            "notebook_path",
+                            "command",
+                            "pattern",
+                            "description",
+                        ]
+                        .iter()
+                        .find_map(|k| input.get(*k).and_then(Value::as_str))
+                        .unwrap_or("");
+                        let what: String = what
+                            .lines()
+                            .next()
+                            .unwrap_or("")
+                            .chars()
+                            .take(160)
+                            .collect();
+                        let failed = result.is_some_and(|r| r.is_error);
+                        Some(DigestItem::Did(format!(
+                            "{name} {what}{}",
+                            if failed { " (failed)" } else { "" }
+                        )))
+                    }
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
 // Derivation
 // ---------------------------------------------------------------------------
 
