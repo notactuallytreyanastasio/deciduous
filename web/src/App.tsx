@@ -50,6 +50,9 @@ const THEME = {
   active: '#10b981',
   completed: '#6b7280',
   pending: '#8b5cf6',
+  rejected: '#ef4444',
+  superseded: '#d97706',
+  abandoned: '#9ca3af',
 
   // Confidence
   confHigh: '#10b981',
@@ -90,6 +93,37 @@ interface Narrative {
 }
 
 type NarrativeMode = 'significant' | 'goals' | 'branches' | 'hubs' | 'custom';
+
+/** Open is pending or active: what `deciduous nodes --open` lists. */
+function isOpen(node: DecisionNode): boolean {
+  return node.status === 'pending' || node.status === 'active';
+}
+
+/** Rejected, superseded or abandoned: closed without being done. */
+function isReversed(node: DecisionNode): boolean {
+  return node.status === 'rejected' || node.status === 'superseded' || node.status === 'abandoned';
+}
+
+function StatusChip({ node }: { node: DecisionNode }) {
+  const color = THEME[node.status as keyof typeof THEME] || THEME.textMuted;
+  return (
+    <span style={{
+      color,
+      border: `1px solid ${color}`,
+      borderRadius: '3px',
+      padding: '0 5px',
+      fontSize: '10px',
+      lineHeight: '16px',
+      whiteSpace: 'nowrap',
+      alignSelf: 'center',
+      justifySelf: 'start',
+    }}>
+      {node.status}
+    </span>
+  );
+}
+
+const TREE_COLUMNS = '24px 60px 50px 50px 84px 1fr';
 
 // Threshold for "significant" narratives - trees with this many nodes or more
 const SIGNIFICANT_TREE_SIZE = 10;
@@ -369,7 +403,9 @@ function buildNarratives(
 // Data Loading
 // =============================================================================
 
-async function loadGraphData(): Promise<GraphData | null> {
+/** The graph, and whether it came from `deciduous serve` (which can be
+ *  asked again) or from a static export (which cannot change). */
+async function loadGraphData(): Promise<{ data: GraphData; live: boolean } | null> {
   const paths = ['/api/graph', './graph-data.json', '/graph-data.json'];
 
   for (const path of paths) {
@@ -378,10 +414,10 @@ async function loadGraphData(): Promise<GraphData | null> {
       if (resp.ok) {
         const data = await resp.json();
         if (data.ok && data.data) {
-          return data.data as GraphData;
+          return { data: data.data as GraphData, live: path === '/api/graph' };
         }
         if (data.nodes) {
-          return data as GraphData;
+          return { data: data as GraphData, live: false };
         }
       }
     } catch {
@@ -390,6 +426,20 @@ async function loadGraphData(): Promise<GraphData | null> {
   }
   return null;
 }
+
+/** Changes whenever the served graph does; null when there is no server. */
+async function loadGraphVersion(): Promise<string | null> {
+  try {
+    const resp = await fetch('/api/graph/version');
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.ok && typeof data.data === 'string' ? data.data : null;
+  } catch {
+    return null;
+  }
+}
+
+const LIVE_POLL_MS = 3000;
 
 // =============================================================================
 // Copy Button Component
@@ -465,16 +515,20 @@ function GitHubLink({ type, value, repo }: { type: 'commit' | 'pr' | 'issue'; va
 // =============================================================================
 
 interface TreeRowProps {
+  selectedNodeId: number | null;
   treeNode: TreeNode;
-  isSelected: boolean;
   expandedNodes: Set<number>;
   onSelect: (id: number) => void;
   onToggle: (id: number) => void;
   edges: DecisionEdge[];
 }
 
-function TreeRow({ treeNode, isSelected, expandedNodes, onSelect, onToggle, edges }: TreeRowProps) {
+function TreeRow({ treeNode, selectedNodeId, expandedNodes, onSelect, onToggle, edges }: TreeRowProps) {
   const { node, children, depth } = treeNode;
+  // Each row is selected on its own id. This used to be the root's flag
+  // handed down, so choosing the root lit every row and choosing a child
+  // lit none.
+  const isSelected = selectedNodeId === node.id;
   const hasChildren = children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
 
@@ -493,10 +547,11 @@ function TreeRow({ treeNode, isSelected, expandedNodes, onSelect, onToggle, edge
         onClick={() => onSelect(node.id)}
         style={{
           display: 'grid',
-          gridTemplateColumns: '24px 60px 50px 50px 1fr',
+          gridTemplateColumns: TREE_COLUMNS,
           gap: '8px',
           padding: '6px 12px',
           paddingLeft: `${12 + depth * 20}px`,
+          opacity: isOpen(node) ? 1 : 0.6,
           cursor: 'pointer',
           backgroundColor: isSelected ? THEME.bgSelected : 'transparent',
           borderLeft: isSelected ? `3px solid ${typeColor}` : '3px solid transparent',
@@ -541,12 +596,16 @@ function TreeRow({ treeNode, isSelected, expandedNodes, onSelect, onToggle, edge
           #{node.id}
         </span>
 
+        {/* STATUS */}
+        <StatusChip node={node} />
+
         {/* TITLE */}
         <span style={{
           color: THEME.text,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
+          textDecoration: isReversed(node) ? 'line-through' : 'none',
         }}>
           <span style={{ color: THEME.textDim, marginRight: '4px', fontSize: '11px' }}>
             {incoming.length > 0 && `←${incoming.length}`}
@@ -561,7 +620,7 @@ function TreeRow({ treeNode, isSelected, expandedNodes, onSelect, onToggle, edge
         <TreeRow
           key={child.node.id}
           treeNode={child}
-          isSelected={isSelected}
+          selectedNodeId={selectedNodeId}
           expandedNodes={expandedNodes}
           onSelect={onSelect}
           onToggle={onToggle}
@@ -606,6 +665,7 @@ function NarrativeCard({ narrative, onClick }: NarrativeCardProps) {
         <span style={{ color: THEME.textMuted, fontSize: '12px' }}>
           #{narrative.root.id}
         </span>
+        <StatusChip node={narrative.root} />
       </div>
 
       <h3 style={{
@@ -625,9 +685,98 @@ function NarrativeCard({ narrative, onClick }: NarrativeCardProps) {
         color: THEME.textMuted,
       }}>
         <span>{narrative.nodeCount} nodes</span>
+        <span style={{ color: narrative.nodes.some(isOpen) ? THEME.pending : THEME.textMuted }}>
+          {narrative.nodes.filter(isOpen).length} open
+        </span>
         <span>{narrative.branches.join(', ')}</span>
         <span>{narrative.dateRange.start.toLocaleDateString()}</span>
       </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Why Panel: the decisions behind a file, from /api/why
+// =============================================================================
+
+interface WhyRef { id: number; node_type: string; title: string; status: string; rationale?: string }
+interface WhyChoice { decision: WhyRef; chosen: WhyRef[]; rejected: WhyRef[]; considered: WhyRef[]; replaced_by?: WhyRef[] }
+interface WhyThread { goal: WhyRef | null; choices: WhyChoice[]; hits: Array<{ node: WhyRef; via: string; hash?: string; date: string }> }
+interface WhyReport { path: string; commits: number; commits_in_graph: number; git_note?: string; threads: WhyThread[] }
+
+function WhyPanel({ path, onSelectNode }: { path: string; onSelectNode: (id: number) => void }) {
+  const [report, setReport] = useState<WhyReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stale = false;
+    setReport(null);
+    setError(null);
+    fetch(`/api/why?path=${encodeURIComponent(path)}`)
+      .then(async resp => {
+        const body = await resp.json().catch(() => null);
+        if (stale) return;
+        if (resp.ok && body?.ok) setReport(body.data as WhyReport);
+        else setError(body?.error || 'Only `deciduous serve` can answer this: it asks git.');
+      })
+      .catch(() => { if (!stale) setError('Only `deciduous serve` can answer this: it asks git.'); });
+    return () => { stale = true; };
+  }, [path]);
+
+  const ref = (label: string, n: WhyRef, indent: number, color?: string) => (
+    <div
+      key={`${label}-${n.id}`}
+      onClick={() => onSelectNode(n.id)}
+      style={{ paddingLeft: `${indent * 14}px`, cursor: 'pointer', lineHeight: '18px' }}
+    >
+      <span style={{ color: color || THEME[n.node_type as keyof typeof THEME] || THEME.textMuted }}>{label}</span>
+      <span style={{ color: THEME.textMuted }}> #{n.id} </span>
+      <span style={{ color: THEME.text }}>{n.title}</span>
+      <span style={{ color: THEME.textDim }}> [{n.status}]</span>
+      {n.rationale && <span style={{ color: THEME.textMuted }}> ({n.rationale})</span>}
+    </div>
+  );
+
+  return (
+    <div style={{
+      marginTop: '8px',
+      padding: '8px 12px',
+      backgroundColor: THEME.bgLight,
+      borderRadius: '4px',
+      fontSize: '12px',
+    }}>
+      {error && <div style={{ color: THEME.textMuted }}>{error}</div>}
+      {!error && !report && <div style={{ color: THEME.textMuted }}>asking git…</div>}
+      {report && (
+        <>
+          <div style={{ color: THEME.textMuted, marginBottom: '6px' }}>
+            {report.git_note
+              ? `git history not used (${report.git_note})`
+              : `${report.commits_in_graph} of ${report.commits} commits that touched it are in the graph`}
+          </div>
+          {report.threads.length === 0 && (
+            <div style={{ color: THEME.textMuted }}>Nothing in the graph is tied to this file.</div>
+          )}
+          {report.threads.map((t, i) => (
+            <div key={i} style={{ marginBottom: '8px' }}>
+              {t.goal ? ref('goal', t.goal, 0) : <div style={{ color: THEME.textDim }}>(no goal above these)</div>}
+              {t.choices.map(c => (
+                <div key={c.decision.id}>
+                  {ref('decision', c.decision, 1)}
+                  {c.chosen.map(o => ref('chose', o, 2, THEME.active))}
+                  {c.rejected.map(o => ref('rejected', o, 2, THEME.rejected))}
+                  {c.considered.map(o => ref('option', o, 2))}
+                  {(c.replaced_by || []).map(o => ref('replaced by', o, 2, THEME.superseded))}
+                </div>
+              ))}
+              {t.hits.slice(0, 6).map(h => ref(h.node.node_type, h.node, 1))}
+              {t.hits.length > 6 && (
+                <div style={{ paddingLeft: '14px', color: THEME.textDim }}>… {t.hits.length - 6} more</div>
+              )}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -646,6 +795,11 @@ interface DetailPanelProps {
 }
 
 function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }: DetailPanelProps) {
+  // The file whose history is being asked about; cleared with the node.
+  const [whyPath, setWhyPath] = useState<string | null>(null);
+  const nodeId = node?.id ?? null;
+  useEffect(() => { setWhyPath(null); }, [nodeId]);
+
   if (!node && !narrative) {
     return (
       <div style={{
@@ -742,6 +896,10 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
   const commit = getCommit(node);
   const prompt = getPrompt(node);
   const files = getFiles(node);
+  const evidence = (metadata?.evidence ?? null) as {
+    kind?: string; source?: string; session?: string; quote?: string; tool_use_ids?: string[];
+  } | null;
+  const fileHashes = Object.entries((metadata?.file_hashes ?? {}) as Record<string, string>);
 
   const incoming = getIncomingEdges(node.id, edges);
   const outgoing = getOutgoingEdges(node.id, edges);
@@ -817,9 +975,7 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
         </span>
 
         <span style={{ color: THEME.textMuted }}>Status</span>
-        <span style={{ color: THEME[node.status as keyof typeof THEME] || THEME.text }}>
-          {node.status}
-        </span>
+        <StatusChip node={node} />
 
         {confidence !== null && <>
           <span style={{ color: THEME.textMuted }}>Confidence</span>
@@ -887,9 +1043,79 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
               }}>
                 <span style={{ color: THEME.text, fontSize: '12px' }}>{file}</span>
                 <CopyButton text={file} label="file path" />
+                <button
+                  onClick={() => setWhyPath(whyPath === file ? null : file)}
+                  title="The decisions behind this file (deciduous why)"
+                  style={{
+                    marginLeft: 'auto',
+                    background: 'none',
+                    border: `1px solid ${THEME.border}`,
+                    borderRadius: '3px',
+                    color: whyPath === file ? THEME.text : THEME.textMuted,
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    padding: '1px 6px',
+                  }}
+                >
+                  why
+                </button>
               </div>
             ))}
           </div>
+          {whyPath && <WhyPanel path={whyPath} onSelectNode={onSelectNode} />}
+        </div>
+      )}
+
+      {/* Evidence: what a transcript-derived node is backed by */}
+      {evidence && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{
+            color: THEME.textMuted,
+            fontSize: '11px',
+            marginBottom: '8px',
+            letterSpacing: '0.5px',
+          }}>
+            EVIDENCE
+          </div>
+          <div style={{
+            padding: '8px 12px',
+            backgroundColor: THEME.bgLight,
+            borderRadius: '4px',
+            borderLeft: `3px solid ${evidence.kind === 'proven' ? THEME.outcome : THEME.goal}`,
+            fontSize: '12px',
+            color: THEME.text,
+          }}>
+            <div>
+              <span style={{ color: evidence.kind === 'proven' ? THEME.outcome : THEME.goal }}>
+                {evidence.kind ?? 'unknown'}
+              </span>
+              <span style={{ color: THEME.textMuted }}>
+                {evidence.kind === 'proven'
+                  ? ' — a tool call and its result, or the user\u2019s own words'
+                  : evidence.source === 'transcript-model'
+                    ? ' — a model read it out of the transcript'
+                    : ' — the assistant said so'}
+              </span>
+            </div>
+            {evidence.quote && (
+              <div style={{ marginTop: '6px', fontStyle: 'italic', color: THEME.text }}>
+                “{evidence.quote}”
+              </div>
+            )}
+            {evidence.session && (
+              <div style={{ marginTop: '6px', color: THEME.textDim }}>
+                session {evidence.session.slice(0, 8)}
+                {evidence.tool_use_ids?.length ? ` · ${evidence.tool_use_ids.length} tool call(s)` : ''}
+              </div>
+            )}
+          </div>
+          {fileHashes.length > 0 && (
+            <div style={{ marginTop: '6px', fontSize: '11px', color: THEME.textDim }}>
+              {fileHashes.map(([file, hash]) => (
+                <div key={file}>{file} <span style={{ color: THEME.textMuted }}>{hash.slice(0, 12)}</span></div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1797,9 +2023,12 @@ interface HeaderProps {
   themes: Theme[];
   activeThemeFilter: string | null;
   onThemeFilterChange: (theme: string | null) => void;
+  openOnly: boolean;
+  onToggleOpenOnly: () => void;
+  live: boolean;
 }
 
-function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, nodeCount, searchQuery, onSearchChange, searchResultCount, searchTypes, onToggleSearchType, qaOpen, onToggleQA, themes, activeThemeFilter, onThemeFilterChange }: HeaderProps) {
+function Header({ openOnly, onToggleOpenOnly, live, mode, onModeChange, focusedNarrative, onBack, narrativeCount, nodeCount, searchQuery, onSearchChange, searchResultCount, searchTypes, onToggleSearchType, qaOpen, onToggleQA, themes, activeThemeFilter, onThemeFilterChange }: HeaderProps) {
   return (
     <div style={{
       display: 'flex',
@@ -1984,6 +2213,25 @@ function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, 
         </select>
       )}
 
+      {/* Open work only */}
+      {!focusedNarrative && !searchQuery && (
+        <button
+          onClick={onToggleOpenOnly}
+          title="Show only narratives whose root is pending or active"
+          style={{
+            padding: '4px 8px',
+            backgroundColor: openOnly ? THEME.bgSelected : THEME.bg,
+            color: openOnly ? THEME.text : THEME.textMuted,
+            border: `1px solid ${openOnly ? THEME.pending : THEME.border}`,
+            borderRadius: '4px',
+            fontSize: '12px',
+            cursor: 'pointer',
+          }}
+        >
+          Open only
+        </button>
+      )}
+
       {/* Count */}
       <div style={{
         marginLeft: 'auto',
@@ -1994,6 +2242,11 @@ function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, 
           ? `${focusedNarrative.nodeCount} nodes`
           : `${narrativeCount} narratives · ${nodeCount} nodes`
         }
+        {live && (
+          <span title="Reloads when the graph changes" style={{ color: THEME.active, marginLeft: '8px' }}>
+            ● live
+          </span>
+        )}
       </div>
     </div>
   );
@@ -2357,6 +2610,8 @@ export function App() {
     new Set(['goal', 'decision', 'action', 'outcome', 'observation', 'option', 'revisit'])
   );
   const [themeFilter, setThemeFilter] = useState<string | null>(null);
+  const [openOnly, setOpenOnly] = useState(false);
+  const [live, setLive] = useState(false);
 
   // Panel sizes in pixels - defaults for good initial layout
   const [leftPanelWidth, setLeftPanelWidth] = useState(Math.max(500, Math.floor(window.innerWidth * 0.4)));
@@ -2422,9 +2677,10 @@ export function App() {
   // Load data
   useEffect(() => {
     loadGraphData()
-      .then(data => {
-        if (data) {
-          setGraphData(data);
+      .then(loaded => {
+        if (loaded) {
+          setGraphData(loaded.data);
+          setLive(loaded.live);
         } else {
           setError('No graph data found. Run `deciduous sync` to export.');
         }
@@ -2433,13 +2689,41 @@ export function App() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Served by `deciduous serve`: ask every few seconds whether the graph
+  // changed, and load it again only when it did. The selection, the
+  // focused narrative and what is expanded are ids, so they survive.
+  useEffect(() => {
+    if (!live) return;
+    let version: string | null = null;
+    let stopped = false;
+    const tick = async () => {
+      const next = await loadGraphVersion();
+      if (stopped || next === null) return;
+      if (version !== null && next !== version) {
+        const loaded = await loadGraphData();
+        if (!stopped && loaded) setGraphData(loaded.data);
+      }
+      version = next;
+    };
+    tick();
+    const timer = window.setInterval(tick, LIVE_POLL_MS);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [live]);
+
   // Build narratives
-  const narratives = useMemo(() => {
+  const modeNarratives = useMemo(() => {
     if (!graphData) return [];
     return buildNarratives(graphData, mode);
   }, [graphData, mode]);
+  const narratives = useMemo(
+    () => (openOnly ? modeNarratives.filter(n => isOpen(n.root)) : modeNarratives),
+    [modeNarratives, openOnly],
+  );
 
-  const focusedNarrative = narratives.find(n => n.id === focusedNarrativeId) || null;
+  const focusedNarrative = modeNarratives.find(n => n.id === focusedNarrativeId) || null;
   const selectedNode = graphData?.nodes.find(n => n.id === selectedNodeId) || null;
   const allThemes = useMemo(() => graphData?.themes || [], [graphData]);
 
@@ -2648,6 +2932,9 @@ export function App() {
       color: THEME.text,
     }}>
       <Header
+        openOnly={openOnly}
+        onToggleOpenOnly={() => setOpenOnly(v => !v)}
+        live={live}
         mode={mode}
         onModeChange={setMode}
         focusedNarrative={focusedNarrative}
@@ -2934,7 +3221,7 @@ export function App() {
             <div style={{ flex: 1, overflow: 'auto' }}>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: '24px 60px 50px 50px 1fr',
+                gridTemplateColumns: TREE_COLUMNS,
                 gap: '8px',
                 padding: '8px 12px',
                 borderBottom: `1px solid ${THEME.border}`,
@@ -2948,11 +3235,12 @@ export function App() {
                 <span>TYPE</span>
                 <span>CONF</span>
                 <span>ID</span>
+                <span>STATUS</span>
                 <span>TITLE</span>
               </div>
               <TreeRow
                 treeNode={focusedNarrative.tree}
-                isSelected={selectedNodeId === focusedNarrative.tree.node.id}
+                selectedNodeId={selectedNodeId}
                 expandedNodes={expandedNodes}
                 onSelect={setSelectedNodeId}
                 onToggle={handleToggle}

@@ -1,0 +1,11 @@
+{
+  "name": "deciduous-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check && node test.mjs"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": { "markdown-it": "14.1.0" }
+}

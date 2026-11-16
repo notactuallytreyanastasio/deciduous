@@ -311,7 +311,7 @@ pub fn init_project(
     );
     println!("\nNext steps:");
     println!(
-        "  1. Restart your assistant so it connects to the server; it sends the logging instructions"
+        "  1. Restart your assistant so it loads the logging instructions and the deciduous MCP tools"
     );
     println!(
         "  2. Use slash commands: {}, {}, {}, {}, etc.",
@@ -460,7 +460,10 @@ pub fn update_tooling() -> Result<(), String> {
     println!("  - Skills (/pulse, /narratives, /archaeology)");
     if has_claude {
         println!("  - Agent configurations (agents.toml)");
-        println!("  - No logging hooks: the ones earlier versions installed are removed");
+        println!(
+            "  - No hooks that make the agent log: the ones earlier versions installed are removed"
+        );
+        println!("  - SessionEnd hook: a session's transcript is imported when it ends ([transcript] auto_import = false in .deciduous/config.toml turns it off)");
         println!("  - Board-mentions hook (silent unless DECIDUOUS_AGENT_LABEL is set)");
     }
     if has_opencode {
@@ -805,18 +808,78 @@ pub fn strip_retired_hook_settings(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The events the board-mentions hook runs on, and the argument it gets.
-const BOARD_HOOK_EVENTS: [(&str, &str); 2] =
-    [("SessionStart", "start"), ("UserPromptSubmit", "prompt")];
+/// The hooks deciduous keeps in `.claude/settings.json`: the event, the text
+/// that identifies an entry as this hook, the command, and its timeout.
+///
+/// The last one imports a session's transcript when the session ends
+/// (`transcript_path` in the hook's input; checked against Claude Code
+/// 2.1.325). It is not one of the logging hooks 1.0.3 retired: those blocked
+/// an edit until the agent had logged, and this one asks nothing of the agent.
+const MANAGED_HOOKS: [(&str, &str, &str, u32, Option<&str>); 3] = [
+    (
+        "SessionStart",
+        "board-mentions.sh",
+        "\"$CLAUDE_PROJECT_DIR/.claude/hooks/board-mentions.sh\" start",
+        10,
+        None,
+    ),
+    (
+        "UserPromptSubmit",
+        "board-mentions.sh",
+        "\"$CLAUDE_PROJECT_DIR/.claude/hooks/board-mentions.sh\" prompt",
+        10,
+        None,
+    ),
+    (
+        "SessionEnd",
+        TRANSCRIPT_HOOK_NEEDLE,
+        TRANSCRIPT_HOOK_COMMAND,
+        60,
+        None,
+    ),
+];
 
-/// Adds the board-mentions hook to `.claude/settings.json` for each event
-/// that does not run it yet. Everything already there, the user's hooks
+const TRANSCRIPT_HOOK_NEEDLE: &str = "transcript import --hook";
+/// Silent when deciduous is not on the hook's PATH: a session must end the
+/// same way on a machine without it.
+pub const TRANSCRIPT_HOOK_COMMAND: &str =
+    "command -v deciduous >/dev/null 2>&1 && deciduous transcript import --hook || true";
+
+/// False when the project's config says `[transcript] auto_import = false`:
+/// the SessionEnd hook is then neither added nor put back.
+pub fn transcript_hook_wanted(project: &Path) -> bool {
+    config_flag(project, "transcript", "auto_import")
+}
+
+/// `[table] key` in the project's config.toml; true unless it says false.
+fn config_flag(project: &Path, table: &str, key: &str) -> bool {
+    fs::read_to_string(project.join(".deciduous").join("config.toml"))
+        .ok()
+        .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
+        .and_then(|doc| doc.get(table)?.get(key)?.as_bool())
+        .unwrap_or(true)
+}
+
+/// Adds each of [`MANAGED_HOOKS`] to `.claude/settings.json` for the event
+/// that does not run it yet (the name is from when there was one hook). Everything already there, the user's hooks
 /// included, is kept in its order; a file that is not valid JSON is reported
 /// and left alone, and a missing file is written from the template.
 pub fn ensure_board_hook_settings(path: &Path) -> Result<(), String> {
     let raw = match fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // The template runs the SessionEnd import; a project that
+            // turned it off gets the template without it.
+            let project = path.parent().and_then(|p| p.parent());
+            if project.is_some_and(|p| !transcript_hook_wanted(p)) {
+                let mut v: serde_json::Value = serde_json::from_str(CLAUDE_SETTINGS_JSON)
+                    .map_err(|e| format!("the settings template is not JSON: {e}"))?;
+                if let Some(hooks) = v["hooks"].as_object_mut() {
+                    hooks.remove("SessionEnd");
+                }
+                let body = render_in_original_order(&v, CLAUDE_SETTINGS_JSON) + "\n";
+                return write_file_if_missing(path, &body, ".claude/settings.json");
+            }
             return write_file_if_missing(path, CLAUDE_SETTINGS_JSON, ".claude/settings.json");
         }
         Err(e) => return Err(format!("Could not read {}: {}", path.display(), e)),
@@ -842,29 +905,35 @@ pub fn ensure_board_hook_settings(path: &Path) -> Result<(), String> {
     let Some(events) = hooks.as_object_mut() else {
         return Ok(());
     };
+    let project = path.parent().and_then(|p| p.parent());
+    let import_wanted = project.is_none_or(transcript_hook_wanted);
     let mut added = Vec::new();
-    for (event, arg) in BOARD_HOOK_EVENTS {
+    for (event, needle, command, timeout, matcher) in MANAGED_HOOKS {
+        if needle == TRANSCRIPT_HOOK_NEEDLE && !import_wanted {
+            continue;
+        }
         let list = events.entry(event).or_insert_with(|| serde_json::json!([]));
         let Some(list) = list.as_array_mut() else {
             continue;
         };
         let present = list.iter().any(|entry| {
             entry["hooks"].as_array().is_some_and(|hs| {
-                hs.iter().any(|h| {
-                    h["command"]
-                        .as_str()
-                        .is_some_and(|c| c.contains("board-mentions.sh"))
-                })
+                hs.iter()
+                    .any(|h| h["command"].as_str().is_some_and(|c| c.contains(needle)))
             })
         });
         if !present {
-            list.push(serde_json::json!({
+            let mut entry = serde_json::json!({
                 "hooks": [{
                     "type": "command",
-                    "command": format!("\"$CLAUDE_PROJECT_DIR/.claude/hooks/board-mentions.sh\" {arg}"),
-                    "timeout": 10
+                    "command": command,
+                    "timeout": timeout
                 }]
-            }));
+            });
+            if let Some(matcher) = matcher {
+                entry["matcher"] = serde_json::json!(matcher);
+            }
+            list.push(entry);
             added.push(event);
         }
     }
@@ -878,7 +947,7 @@ pub fn ensure_board_hook_settings(path: &Path) -> Result<(), String> {
     fs::write(path, body + "\n")
         .map_err(|e| format!("Could not write {}: {}", path.display(), e))?;
     println!(
-        "   {} .claude/settings.json (board-mentions hook on {})",
+        "   {} .claude/settings.json (deciduous hooks added on {})",
         "Updated".green(),
         added.join(", ")
     );
@@ -1988,6 +2057,47 @@ mod tests {
     }
 
     #[test]
+    fn the_import_hook_is_not_added_or_put_back_when_the_project_turned_it_off() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
+        fs::write(
+            tmp.path().join(".deciduous/config.toml"),
+            "[transcript]\nauto_import = false\n",
+        )
+        .unwrap();
+        let p = tmp.path().join(".claude/settings.json");
+        fs::write(&p, "{}\n").unwrap();
+        ensure_board_hook_settings(&p).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(&p).unwrap()).unwrap();
+        assert!(v["hooks"]["SessionEnd"].is_null(), "{v:#}");
+        assert!(!v["hooks"]["SessionStart"].is_null(), "{v:#}");
+    }
+
+    /// With no settings.json, `update` writes the template, and the
+    /// template runs the import. A project that turned it off must not get
+    /// it back that way.
+    #[test]
+    fn a_missing_settings_file_is_written_without_the_import_hook_when_it_is_off() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
+        fs::write(
+            tmp.path().join(".deciduous/config.toml"),
+            "[transcript]\nauto_import = false\n",
+        )
+        .unwrap();
+        let p = tmp.path().join(".claude/settings.json");
+        ensure_board_hook_settings(&p).unwrap();
+        let text = fs::read_to_string(&p).unwrap();
+        assert!(!text.contains("transcript import"), "{text}");
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert!(v["hooks"]["SessionEnd"].is_null(), "{v:#}");
+        assert!(!v["hooks"]["SessionStart"].is_null(), "{v:#}");
+        assert!(!v["hooks"]["PreToolUse"].is_null(), "{v:#}");
+    }
+
+    #[test]
     fn board_hook_is_added_to_settings_once_and_the_users_hooks_stay() {
         let tmp = TempDir::new().unwrap();
         fs::create_dir_all(tmp.path().join(".claude")).unwrap();
@@ -2025,12 +2135,22 @@ mod tests {
             "second run changed the file"
         );
 
+        // The import hook is added once too, beside the user's own.
+        assert!(v["hooks"]["SessionEnd"][0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("deciduous transcript import --hook"));
+
+        // No hook runs before an edit: the one that ran `deciduous why`
+        // there was measured in bench/ and changed nothing.
+        assert!(v["hooks"]["PreToolUse"].is_null(), "{v:#}");
+
         // "{}" (what earlier updates left once they stripped the logging
-        // hooks) gets both entries.
+        // hooks) gets every managed entry.
         fs::write(&p, "{}\n").unwrap();
         ensure_board_hook_settings(&p).unwrap();
         let v: serde_json::Value = serde_json::from_str(&fs::read_to_string(&p).unwrap()).unwrap();
-        assert_eq!(v["hooks"].as_object().unwrap().len(), 2);
+        assert_eq!(v["hooks"].as_object().unwrap().len(), MANAGED_HOOKS.len());
 
         // Not JSON: left alone.
         fs::write(&p, "{ nope").unwrap();
@@ -2039,16 +2159,17 @@ mod tests {
     }
 
     #[test]
-    fn the_settings_template_runs_the_board_hook() {
+    fn the_settings_template_runs_every_managed_hook_as_update_would_add_it() {
         let v: serde_json::Value = serde_json::from_str(CLAUDE_SETTINGS_JSON).unwrap();
-        for (event, arg) in BOARD_HOOK_EVENTS {
-            let cmd = v["hooks"][event][0]["hooks"][0]["command"]
-                .as_str()
-                .unwrap();
-            assert!(
-                cmd.ends_with(&format!("board-mentions.sh\" {arg}")),
-                "{event}: {cmd}"
-            );
+        for (event, _, command, timeout, matcher) in MANAGED_HOOKS {
+            let entry = v["hooks"][event]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|e| e["hooks"][0]["command"] == command)
+                .unwrap_or_else(|| panic!("{event}: no entry runs {command}"));
+            assert_eq!(entry["hooks"][0]["timeout"], timeout, "{event}");
+            assert_eq!(entry["matcher"].as_str(), matcher, "{event}");
         }
     }
 }

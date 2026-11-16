@@ -558,6 +558,15 @@ pub fn note_local_only(db_path: &Path) {
 /// `db_path`. None when no local-only write was noted since the last call.
 pub fn take_local_only() -> Option<String> {
     let db = LOCAL_ONLY.lock().ok()?.take()?;
+    // A project that chose to have no server does not need telling on every
+    // write. One that never chose does: see `print_local_only`.
+    if db
+        .parent()
+        .and_then(Path::parent)
+        .is_some_and(crate::remote::no_server_chosen)
+    {
+        return None;
+    }
     Some(format!(
         "Note: written to {} only; this project has no shared server. \
          `deciduous remote setup` connects one.",

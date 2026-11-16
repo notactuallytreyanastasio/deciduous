@@ -46,7 +46,8 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
           status: %{
             type: "string",
             enum: ["pending", "active", "completed", "rejected", "superseded", "abandoned"],
-            description: "Node status (default: pending)"
+            description:
+              "Node status. Default: completed for an outcome or observation, pending otherwise"
           },
           confidence: %{
             type: "integer",
@@ -111,7 +112,7 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
       node_type: args["node_type"],
       title: args["title"],
       description: args["description"],
-      status: args["status"] || "pending",
+      status: args["status"] || DeciduousMcp.Schema.Node.default_status(args["node_type"]),
       metadata: metadata
     }
 

@@ -192,6 +192,34 @@ and whatever stands in for it (a placeholder, a guess) is refused.
 | About to write/edit code | `action` | "Implementing Redux store" |
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
+| Work lands, is dropped, or is replaced | `status` | `deciduous status 12 completed` |
+
+### Close What You Open
+
+A node that is never closed is listed as open for good. Set its status in the same turn as the work, the way you link a node in the same turn you create it.
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Not started. A goal, option, decision, action or revisit is born with it |
+| `active` | In flight now. Keep it to a handful |
+| `completed` | Done. An outcome or observation is born with it: they record what already happened |
+| `rejected` | An option not taken |
+| `superseded` | Replaced by a later node; link that node |
+| `abandoned` | Dropped without being done |
+
+Open is `pending` or `active`. Everything else is closed.
+
+```bash
+deciduous nodes --open    # what is still open (--status <s>, --json)
+deciduous pulse           # open goals, each with its open work
+deciduous audit           # what drifted: records left open, committed actions never closed, orphans
+deciduous why src/db.rs   # the decisions behind a file (or src/db.rs:120-180): what was chosen, what was rejected
+```
+
+Edge types say what a link means; `leads_to` is the fallback, not the answer to everything:
+
+- option -> decision: `-t chosen` or `-t rejected`
+- one thing waiting on another: `-t blocks`; one thing making another possible: `-t enables`
 
 ### What NOT to Log - CRITICAL
 
@@ -388,14 +416,16 @@ git status                # Current state
 
 ### The Transcript Is the Log
 
-Logging in real time is the rule, and the transcript is the backstop. Claude Code writes every prompt, edit, command and result of a session to a JSONL file; `deciduous transcript import` derives goals (the prompt, verbatim), actions (edit runs, commits) and outcomes (test and build runs with their exit, the closing report) from it, each node carrying `metadata.evidence` as `proven` (a tool call and its result) or `inferred` (the assistant said so). Importing twice adds nothing.
+Logging in real time is the rule, and the transcript is the backstop. Claude Code writes every prompt, edit, command and result of a session to a JSONL file; `deciduous transcript import` derives from it a goal for each prompt that changed something (the prompt verbatim, already `completed`: a prompt that led to no edit, commit or test run is not a goal), actions (edit runs, commits) and outcomes (test and build runs with their exit, the closing report), each node carrying `metadata.evidence` as `proven` (a tool call and its result) or `inferred` (the assistant said so). Importing twice adds nothing.
 
 ```bash
 deciduous transcript list                 # this project's sessions: imported or new
 deciduous transcript import <session-id>  # or a path to the .jsonl; --dry-run to see counts
 ```
 
-What the import cannot derive is a decision or an option: whether one approach was chosen over another is a judgement about prose. Log those as you make them; the import fills in what happened around them.
+When a session ends, a `SessionEnd` hook in `.claude/settings.json` runs the import for it (`[transcript] auto_import = false` in `.deciduous/config.toml` turns that off). What it derives for a prompt hangs under the goal you logged in that turn (found by the id `add goal` printed, or by the prompt verbatim: log the goal with `-p`, and the two meet), and it derives no action where you logged an action in the turn and no outcome where you logged an outcome. A prompt that only says to go on ("ok do it", "sure") is not a goal: its work belongs to the prompt before it.
+
+What the import cannot derive is a decision or an option: whether one approach was chosen over another is a judgement about prose. Log those as you make them. For the ones nobody logged, `deciduous transcript decisions <session-id>` has a model read the session: each decision it finds is proposed with a quote from the transcript (one whose quote is not there is dropped) and waits in `deciduous proposals` for `accept <n>` or `reject <n>`.
 
 ### Parallel Agents: The Message Board
 
@@ -515,8 +545,10 @@ src/
 ├── server.rs            # Installing and running this machine's server as a user service
 ├── local_server.rs      # The server's PostgreSQL on localhost:5432
 ├── transcript.rs        # deciduous transcript: the graph derived from a Claude Code transcript
+├── decisions.rs         # transcript decisions / proposals: decisions a model read out of a transcript
 ├── archaeology.rs       # pivot, timeline, supersede
 ├── pulse.rs, narratives.rs
+├── why.rs               # deciduous why: a file's commits -> their nodes -> the decisions above
 ├── board.rs             # The message board (deciduous board)
 ├── mcp/                 # deciduous mcp: the local stdio MCP server (34 tools)
 ├── api.rs               # deciduous serve --api: the multi-graph JSON daemon
@@ -577,7 +609,7 @@ cargo test
 cargo build --release
 ```
 
-The viewer does not yet show `metadata.evidence` or `file_hashes` on transcript-derived nodes; `deciduous show` does.
+The viewer has no tests of its own (`npm test` finds no test files): check a change by running `deciduous serve` and looking.
 
 ## CLI Commands
 
@@ -596,6 +628,8 @@ The viewer does not yet show `metadata.evidence` or `file_hashes` on transcript-
 | `deciduous commands` | Recent CLI writes, with exit status |
 | `deciduous transcript list` | This project's Claude Code sessions: imported or new |
 | `deciduous transcript import <path\|session-id>` | Derive the graph from a transcript, with evidence on every node (`--dry-run`, `--no-hash`, `--json`) |
+| `deciduous transcript decisions <path\|session-id>` | A model reads the session and proposes its decisions, each with a quote (`--accept`, `--again`, `--model`) |
+| `deciduous proposals [accept\|reject <n>]` | Proposed decisions waiting for review |
 | `deciduous backup` | Create database backup |
 | `deciduous serve` | Start web viewer |
 | `deciduous sync` | Reconcile `.deciduous/graph.json` with the local DB (projects with no server) |
@@ -615,6 +649,7 @@ The viewer does not yet show `metadata.evidence` or `file_hashes` on transcript-
 | `deciduous archaeology pivot\|supersede\|timeline` | Revisit a decision that turned out wrong |
 | `deciduous themes`, `deciduous tag` | Themes and tags |
 | `deciduous audit` | Associate commits with nodes |
+| `deciduous why <file>[:lines]` | The decisions behind a file, through the commits that touched it |
 
 ## DOT Export Options
 

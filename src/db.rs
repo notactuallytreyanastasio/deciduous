@@ -181,6 +181,25 @@ pub const NODE_STATUSES: &[&str] = &[
     "abandoned",
 ];
 
+/// Statuses that mean a node is still open: not started, or in flight.
+/// Every other status is terminal.
+pub const OPEN_STATUSES: &[&str] = &["pending", "active"];
+
+/// Node types that record something that already happened. They are not
+/// work items, so they are born closed.
+pub const RECORD_NODE_TYPES: &[&str] = &["outcome", "observation"];
+
+/// The status a new node of this type is born with. An outcome or an
+/// observation is `completed`: left `pending` it never closes, and on a real
+/// graph those two types were more than half of everything listed as open.
+pub fn default_status(node_type: &str) -> &'static str {
+    if RECORD_NODE_TYPES.contains(&node_type) {
+        "completed"
+    } else {
+        "pending"
+    }
+}
+
 /// Edge types a new edge may have.
 pub const EDGE_TYPES: &[&str] = &[
     "leads_to",
@@ -910,6 +929,19 @@ impl Database {
     /// Get the database path that will be used
     pub fn db_path() -> std::path::PathBuf {
         get_db_path()
+    }
+
+    /// Whether there is a project to open: `DECIDUOUS_DB_PATH` names a
+    /// database, or this directory or one above it has a `.deciduous`.
+    /// [`Database::open`] creates what is missing, so a command run in the
+    /// wrong directory used to succeed against a new, empty graph.
+    pub fn project_exists() -> bool {
+        if std::env::var_os("DECIDUOUS_DB_PATH").is_some() {
+            return true;
+        }
+        std::env::current_dir()
+            .map(|cwd| cwd.ancestors().any(|d| d.join(".deciduous").is_dir()))
+            .unwrap_or(false)
     }
 
     /// Create a new database at a custom path
@@ -2656,7 +2688,7 @@ impl Database {
             node_type,
             title,
             description,
-            status: "pending",
+            status: default_status(node_type),
             created_at: &now,
             updated_at: &now,
             metadata_json: metadata.as_deref(),
@@ -2720,7 +2752,7 @@ impl Database {
             node_type,
             title,
             description,
-            status: "pending",
+            status: default_status(node_type),
             created_at: &now,
             updated_at: &now,
             metadata_json: metadata.as_deref(),
@@ -2801,7 +2833,14 @@ impl Database {
             node_type,
             title,
             description,
-            status: "pending",
+            // A derived action is an edit or a commit the transcript
+            // recorded, and a derived goal is a prompt whose work is in the
+            // same transcript: both happened, so neither is open work.
+            status: if node_type == "action" || node_type == "goal" {
+                "completed"
+            } else {
+                default_status(node_type)
+            },
             created_at,
             updated_at: created_at,
             metadata_json: metadata.as_deref(),
@@ -5029,11 +5068,16 @@ impl Database {
                 "a theme needs a non-empty name".to_string(),
             ));
         }
+        let normalized_name = name.to_lowercase().replace(' ', "-");
+        if self.get_theme_by_name(&normalized_name)?.is_some() {
+            return Err(DbError::Validation(format!(
+                "a theme named '{normalized_name}' already exists; `deciduous themes list` shows them"
+            )));
+        }
         let _mirror = self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
         let change_id = Uuid::new_v4().to_string();
-        let normalized_name = name.to_lowercase().replace(' ', "-");
 
         let new_theme = NewTheme {
             change_id: &change_id,

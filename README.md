@@ -9,9 +9,7 @@
 
 ## See It In Action
 
-**[Browse the Live Decision Graph](https://deciduous.dev/demo/)** — the graph of building deciduous itself: 1,465 nodes and 1,313 edges in `docs/graph-data.json`, from the export of 2026-09-04
-
-**[Interactive Tutorial](https://deciduous.dev/tutorial/)** — the workflow in 15 minutes
+**[Documentation](https://deciduous.dev/tutorial/)**: joining a server, running one, and the workflow
 
 **[Watch the Demo](https://asciinema.org/a/761574)** — a full session
 
@@ -120,8 +118,8 @@ What is not derived: decisions and options (a choice between approaches is a
 judgement about prose; that pass belongs to an agent reading the imported
 graph), subagent transcripts (counted and skipped), and anything but Claude
 Code's format. The web viewer does not yet show evidence or hashes; `show`
-does. [docs/transcripts.md](docs/transcripts.md) has the full derivation table
-and a `SessionEnd` hook that imports at the end of every session.
+does. [Documents and transcripts](https://deciduous.dev/tutorial/evidence.html)
+has a real import against a server, and what to read before sharing one.
 
 ---
 
@@ -129,7 +127,7 @@ and a `SessionEnd` hook that imports at the end of every session.
 
 Ten Claude Code sessions, started at the same second in ten git worktrees of one repository, each building a Tetris from nothing, all logging to one shared deciduous workspace and told to read each other's code and reasoning. Twenty-six minutes later: ten playable games, 386 graph nodes, 170 borrowed ideas with provenance. One finding (some SRS kicks lift a piece two rows, so two hidden rows refuse a legal rotation at the ceiling) reached eight of the nine other branches in eighteen minutes.
 
-**[The arena write-up](https://notactuallytreyanastasio.github.io/tetris-arena/)** · **[the repository](https://github.com/notactuallytreyanastasio/tetris-arena)** · **[how it works](https://deciduous.dev/remote.html#alongside)**
+**[The arena write-up](https://notactuallytreyanastasio.github.io/tetris-arena/)** · **[the repository](https://github.com/notactuallytreyanastasio/tetris-arena)** · **[how it works](https://deciduous.dev/tutorial/teams.html)**
 
 What made it work is one server, reachable over MCP from every directory, with the branch as the unit of coordination:
 
@@ -140,109 +138,92 @@ What made it work is one server, reachable over MCP from every directory, with t
 
 ---
 
-## First-time setup
+## Getting started
 
-Every project writes to a shared graph server, and `deciduous init` does not
-finish until the project points at one that answers.
+The graph lives on a server: PostgreSQL behind the deciduous server, which
+speaks authenticated MCP over HTTPS. One server holds every repository's
+graph, one workspace each. Developers and agents connect to it with a URL and
+a token. Running that server is a one-time job for one person; everyone
+else only joins it.
 
-**1. Install the binary**, and PostgreSQL if the graph will live on this machine:
+### Join your team's server
 
-```bash
-brew install notactuallytreyanastasio/tap/deciduous   # Homebrew, macOS or Linux
-# or
-cargo install deciduous --locked                      # needs a Rust toolchain
-
-deciduous --version
-which -a deciduous    # with both installed, the first one on PATH runs
-```
-
-A graph on this machine is kept in PostgreSQL on localhost:5432 by default:
-the one you already have, or `brew install postgresql@17 && brew services start
-postgresql@17`, or your distribution's package. Any other PostgreSQL works if
-you give its URL. Docker is optional: it can run PostgreSQL and the server for
-you instead (choice 3 below).
-
-**2. Set up a project:**
+From whoever runs the server you need a base URL and a token.
 
 ```bash
-cd your-project
-deciduous init            # Claude Code; --opencode, --windsurf or --both for others
+brew install notactuallytreyanastasio/tap/deciduous     # or: cargo install deciduous --locked
+
+cd your-project                                          # needs at least one commit
+pbpaste | deciduous remote login --url https://deciduous.example.com   # token from stdin, stored 0600
+deciduous remote setup --url https://deciduous.example.com
+deciduous init                                           # Claude Code files; --opencode / --windsurf / --both
+claude mcp get deciduous | grep -E 'Status|URL'          # URL must be <your base URL>/mcp
+deciduous add goal "First goal" -c 90 && deciduous remote status   # "In sync"
 ```
 
-`init` writes the slash commands, skills, hooks and a `CLAUDE.md` section. Then,
-if the project has no server yet, it asks where its graph should live:
+Two things to check, because 1.1.0 does not do them for you:
 
-```
-   This project has no server yet ([remote] in .deciduous/config.toml).
+- **`remote setup` registers the server with Claude Code only when no
+  `deciduous` server is registered yet.** If one is, setup prints
+  `Unchanged Claude Code already has a deciduous MCP server`, even when that
+  registration points at a different server. Your CLI and your agent then
+  write to two different graphs. `claude mcp get deciduous` shows which one
+  it is; [the quickstart](https://deciduous.dev/tutorial/quickstart.html#5-make-sure-claude-code-talks-to-the-same-server)
+  shows how to replace it.
+- **A machine stores one token, not one per server.** `remote login`
+  replaces whatever was in `~/.config/deciduous/credentials`. For a second
+  server, set `DECIDUOUS_MCP_TOKEN` in the environment instead.
 
-Where should this project's graph live?
+The full walk-through, with the output of every step:
+[deciduous.dev/tutorial/quickstart.html](https://deciduous.dev/tutorial/quickstart.html).
+An agent told to set this up should read
+[deciduous.dev/tutorial/for-agents.html](https://deciduous.dev/tutorial/for-agents.html)
+(also at [llms.txt](https://deciduous.dev/llms.txt)).
 
-  1) This machine: the deciduous server as a background service, using PostgreSQL on
-     localhost:5432 as you (answering now)
-  2) This machine: the server as a background service, using a PostgreSQL you name
-     (any host, port, user, password)
-  3) This machine, in Docker: a new PostgreSQL and the server in containers
-  4) A server someone else runs: you need its URL and token
+### Run the server
 
-Choose 1-4 [1]:
-
-The server needs a port on this machine. 24871 is free right now; anything
-already using the port you pick (a dev server on 4000, say) would stop this
-server from starting.
-
-Port [24871]:
-```
-
-- **1 and 2.** The first time on a machine, `init` downloads the server
-  executable for its own version (one file with Erlang and Elixir inside),
-  checks it against the release's checksums, and runs it once to create the
-  database (`deciduous` for choice 1) and apply migrations. If PostgreSQL
-  refuses (no such role, wrong password, no CREATEDB), you see its reason and
-  the menu again. Then it installs the server under
-  `~/.config/deciduous/server/` as a user service that starts at login: a
-  LaunchAgent on macOS, a systemd user unit on Linux. It listens on
-  127.0.0.1 only. Every later project finds the running server in about a
-  second. For choice 2 the password is asked separately and not shown.
-- **3.** Downloads the Docker bundle for its own version, checks it, and
-  starts PostgreSQL 17 and the server with Docker (a few minutes). This is
-  what 1.0.10 and earlier always did, and existing Docker installs stay as
-  they are.
-- **4.** Asks for the URL and the token (typed without being shown), and checks
-  them against the server before storing anything.
-
-Either way it stores the token in `~/.config/deciduous/credentials` (mode
-0600), writes `[remote]` to `.deciduous/config.toml`, and registers the server
-with Claude Code. `deciduous update` asks the same question in a project that
-has no server, and upgrades this machine's server executable when it is older
-than the CLI. `deciduous remote setup` asks it on its own. In a script there
-is no terminal to ask, so give the answer instead:
+On a VM with Docker, from the release that matches your CLI:
 
 ```bash
-deciduous remote setup --local                  # 1: PostgreSQL on localhost:5432 as $USER
-deciduous remote setup --database-url postgres://USER:PASSWORD@HOST:5432/deciduous   # 2
-deciduous remote setup --docker-postgres        # 3
-deciduous remote setup --docker                 # the server in Docker, PostgreSQL from 1 or 2
-deciduous remote setup --url <url>              # 4
+curl -fLO https://github.com/notactuallytreyanastasio/deciduous/releases/download/v1.1.0/deciduous-mcp-docker.tar.gz
+curl -fLO https://github.com/notactuallytreyanastasio/deciduous/releases/download/v1.1.0/checksums.txt
+grep deciduous-mcp-docker.tar.gz checksums.txt | sha256sum -c -
+tar -xzf deciduous-mcp-docker.tar.gz && cd deciduous-mcp-docker
+./scripts/setup.sh
 ```
 
-`DATABASE_URL` in your environment is never used unless you pass it with
-`--database-url`. Commit the project files (by path, not `git add -A`) so
-every clone gets them. `DECIDUOUS_NO_SERVER=1` skips the server step, for
-tests and CI.
+`setup.sh` builds the server image on the machine (no prebuilt image is
+published, so the first run takes a while), starts PostgreSQL 17 and the
+server on `127.0.0.1`, and waits for `/ready`. The token is in `.env`. Put
+an HTTPS proxy in front that passes WebSocket upgrades (Caddy does by default),
+and hand out the URL and token. One token opens every workspace on
+the server; there are no per-user accounts.
 
-**3. Restart Claude Code.** When it connects, the server sends the logging
-instructions. There is no hook to install. Agents write through the MCP
-tools. `deciduous add` from the CLI writes to the local database and queues
-the change in `.deciduous/remote-log.jsonl`, which is sent to the server
-before the command exits (or, if the server is down, on the next write or
-`deciduous remote push`).
+[Run a server](https://deciduous.dev/tutorial/run-a-server.html) covers the
+proxy and a managed PostgreSQL with verified TLS. The native executable ships
+too, but no system unit is documented for a VM, and the user unit 1.1.0
+writes on Linux does not start (below); use the Docker bundle on a VM. [Backups, upgrades, tokens](https://deciduous.dev/tutorial/operating.html)
+covers what to back up, a tested restore, token rotation, and removing a
+document that should never have been attached (`doc detach` does not).
+`deciduous_mcp/DEPLOY.md` has every setting.
 
-If anything is missing (no PostgreSQL, a server that does not answer, no token),
-`init` and `update` stop with exit 1 and say how to fix it. Upgrading later is
-`brew upgrade deciduous` or the same `cargo install` line, then
-`deciduous update` in each project (`deciduous update --all ~/code` for many).
+### No team server
 
-**4. See several agents work together** (macOS, in iTerm2 or Ghostty):
+`deciduous remote setup --local` runs the same server on your own machine as
+a launchd or systemd user service, against PostgreSQL on localhost:5432
+(`--database-url` for another, `--docker-postgres` to have Docker run one).
+On Linux, 1.1.0's systemd unit does not start (systemd rejects its quoted
+`WorkingDirectory=`); use `--docker-postgres` or run the server by hand until
+the fix in [#330](https://github.com/notactuallytreyanastasio/deciduous/pull/330)
+is released.
+`DECIDUOUS_NO_SERVER=1 deciduous init` skips the server altogether and
+shares the graph through a git-tracked `.deciduous/graph.json` and
+`deciduous sync`. Both are described in
+[Without a shared server](https://deciduous.dev/tutorial/local.html).
+
+### See several agents work together
+
+macOS, in iTerm2 or Ghostty:
 
 ```bash
 deciduous demo-swarm --preview   # the walkthrough, in this terminal; nothing is started
@@ -250,12 +231,8 @@ deciduous demo-swarm --dry-run   # builds the arena and the window, starts no ag
 deciduous demo-swarm             # one Opus lead and four Sonnet workers on one graph
 ```
 
-`demo-swarm` is hidden from `--help`. After `deciduous update`, Claude Code
-also has it as `/demo-swarm`.
-
-Written for the agent doing the setup rather than for you:
-[deciduous.dev/agents/](https://deciduous.dev/agents/index.md) and
-[deciduous.dev/llms.txt](https://deciduous.dev/llms.txt).
+`demo-swarm` is hidden from `--help`. `deciduous init` and `update` also
+install it for Claude Code as `/demo-swarm`.
 
 ---
 
@@ -295,36 +272,6 @@ git clone https://github.com/notactuallytreyanastasio/deciduous.git
 cd deciduous && cargo build --release     # target/release/deciduous; toolchain pinned by rust-toolchain.toml
 ```
 
-### Self-host the shared graph server
-
-The server needs a PostgreSQL. On a developer machine you do not install it by
-hand: `deciduous init` (or `deciduous remote setup`) downloads the release's
-`deciduous-mcp-*` executable, one file with Erlang/OTP and Elixir inside, and
-runs it as a user service against the PostgreSQL on localhost:5432. The server
-creates its database if it is missing and migrates at every start, so a
-machine with PostgreSQL needs nothing else.
-
-For a server a team shares, run the same executable on the host, against the
-PostgreSQL there or any other by URL. The [deployment
-guide](deciduous_mcp/DEPLOY.md) walks through the settings file, the service
-unit, TLS to the database, a reverse proxy, backups and upgrades.
-
-Without a PostgreSQL to point at, Docker can run one. Download and extract
-`deciduous-mcp-docker.tar.gz` from the same release, then:
-
-```bash
-cd deciduous-mcp-docker
-./scripts/setup.sh
-```
-
-Setup creates private credentials, starts PostgreSQL 17 with persistent
-storage, applies migrations, and waits until the server can query the
-database. It picks a free port in 20000-32767 unless `DECIDUOUS_PORT` says
-otherwise (4000 is the port inside the container only), and prints the
-resulting MCP endpoint; the port and bearer token are in `.env`. Running setup
-again keeps the same credentials, port and database. `deciduous remote setup
---docker-postgres` does all of this for you.
-
 ---
 
 ## Where the graph lives
@@ -332,13 +279,13 @@ again keeps the same credentials, port and database. `deciduous remote setup
 | File | Role |
 |------|------|
 | `.deciduous/config.toml` | `[remote]` names the server URL and workspace; `[branch]` controls branch tagging |
-| `.deciduous/deciduous.db` | SQLite, ignored by git. With a `[remote]`, this machine's cache of the server's graph; without one, the graph itself |
+| `.deciduous/deciduous.db` | SQLite, ignored by git through the `.gitignore` `init` writes (`remote init` alone writes none). With a `[remote]`, this machine's cache of the server's graph; without one, the graph itself |
 | `.deciduous/remote-log.jsonl` | CLI writes waiting for the server, one op each; `deciduous remote push` replays them, each applied at most once |
-| `.deciduous/graph.json` | The git-tracked graph for a project with no server: `deciduous sync` reconciles it with the database both ways, `init` registers a merge driver that merges it record by record. A project with a `[remote]` has no graph.json to commit, and `sync` is not its step |
+| `.deciduous/graph.json` | The git-tracked graph for a project with no server: `deciduous sync` reconciles it with the database both ways, and `init` registers a merge driver that merges it record by record. `init` 1.1.0 creates it in a `[remote]` project too, and the CLI keeps rewriting it there; with a server, do not commit it (remove the `!.deciduous/graph.json` line `init` adds to `.gitignore`), and `sync` is not your step |
 | `.deciduous/documents/` | Attached files, content-hash named |
 | `~/.config/deciduous/credentials` | The server token, mode 0600, never in a repository |
 
-The server holds one workspace per repository; a git worktree uses its main checkout's. `deciduous remote status` lists what differs between this copy and the server, field by field, and exits 1 if anything does; `deciduous remote pull` sends what is waiting and refreshes the cache.
+The server holds one workspace per repository; a git worktree whose checkout has no `[remote]` of its own uses its main checkout's. `deciduous remote status` lists what differs between this copy and the server, field by field, and exits 1 if anything does; `deciduous remote pull` sends what is waiting and refreshes the cache.
 
 ---
 
@@ -404,7 +351,7 @@ $ deciduous archaeology pivot 4 "Redis adds a network hop on every request; p99 
 | `observation` | "p99 rose 8 ms" |
 | `revisit` | "Reconsidering: Redis sliding window" |
 
-Statuses: `pending`, `active`, `completed`, `rejected`, `superseded`, `abandoned` (`deciduous status <id> <status>`). `active` is current truth; `superseded` and `abandoned` are history that stays queryable.
+Statuses: `pending`, `active`, `completed`, `rejected`, `superseded`, `abandoned` (`deciduous status <id> <status>`). New nodes are `pending`; `active` marks current truth only when someone sets it. `superseded` and `abandoned` are history that stays queryable.
 
 Edge types: `leads_to` (the default), `requires`, `chosen`, `rejected`, `blocks`, `enables`, `took_from` (this node borrowed from that one, usually across branches).
 
@@ -415,7 +362,7 @@ deciduous doc attach 1 docs/architecture.png -d "System architecture"
 deciduous doc attach 1 screenshot.png --ai-describe    # description from the claude CLI
 deciduous doc list 1
 deciduous doc open 3
-deciduous doc detach 3          # soft-delete
+deciduous doc detach 3          # soft-delete; the server keeps serving it (see operating.html)
 deciduous doc gc --dry-run      # orphaned files that gc would remove
 ```
 
@@ -427,7 +374,7 @@ Files go in `.deciduous/documents/` under their content hash, so the same file a
 deciduous pulse            # active state, gaps, recent nodes
 deciduous nodes -b <branch>
 deciduous show <id>
-deciduous commands         # what the CLI did recently
+deciduous commands         # what the CLI did recently (1.1.0 prints "No commands logged."; fixed after 1.1.0)
 ```
 
 Or ask the graph in plain English from the web viewer's Q&A panel, or through the shared server's `ask_graph` tool.
@@ -438,7 +385,7 @@ Or ask the graph in plain English from the web viewer's Q&A panel, or through th
 
 There are two.
 
-**The shared server** (Elixir, PostgreSQL, over HTTP) is what `deciduous init` sets up and registers with Claude Code. Its 21 tools are where the multi-agent features live: `capture_conversation_turn`, `add_node` (with `parent_id`), `add_edge`, `update_node`, `delete_node`, `delete_edge`, `log_decision`, `log_observation` (with `took_from`), `close_thread`, `show_node`, `query_nodes`, `get_graph`, `get_ancestors`, `get_descendants`, `find_orphans`, `ask_graph`, `consolidation_report`, `check_activity`, `list_workspaces`, `post_message`, `read_messages`. It sends the logging instructions in the `initialize` result, so every client gets them with no project configuration. Reads accept `workspace: "*"` for the view across every project; writes refuse it. [docs/remote-graph.md](docs/remote-graph.md) and [deciduous.dev/remote.html](https://deciduous.dev/remote.html).
+**The shared server** (Elixir, PostgreSQL, over HTTPS) is the one your team runs. `deciduous remote setup` registers it with Claude Code at user scope, unless a `deciduous` server is already registered there. Its 21 tools are where the multi-agent features live: `capture_conversation_turn`, `add_node` (with `parent_id`), `add_edge`, `update_node`, `delete_node`, `delete_edge`, `log_decision`, `log_observation` (with `took_from`), `close_thread`, `show_node`, `query_nodes`, `get_graph`, `get_ancestors`, `get_descendants`, `find_orphans`, `ask_graph`, `consolidation_report`, `check_activity`, `list_workspaces`, `post_message`, `read_messages`. It sends the logging instructions in the `initialize` result, so every client gets them with no project configuration. Reads accept `workspace: "*"` for the view across every project; writes refuse it. [deciduous.dev/tutorial/run-a-server.html](https://deciduous.dev/tutorial/run-a-server.html) and [the tool reference](https://deciduous.dev/tutorial/mcp.html).
 
 **The local server** (`deciduous mcp`, stdio) exposes this project's database with 34 tools, for a client that has no shared server, or for Claude Desktop:
 
@@ -447,7 +394,7 @@ claude mcp add deciduous -- deciduous mcp              # Claude Code, this proje
 claude mcp add deciduous --scope user -- deciduous mcp  # every project
 ```
 
-Claude Code reads MCP servers from `claude mcp add` or a project `.mcp.json`, not from `.claude/settings.local.json`. For Claude Desktop, in `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Claude Code reads MCP servers from `claude mcp add` or a project `.mcp.json`, not from `.claude/settings.local.json`. For Claude Desktop, in `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/.config/Claude/claude_desktop_config.json` (Linux):
 
 ```json
 {
@@ -473,7 +420,7 @@ Use the absolute path to the binary (`which deciduous`); Claude Desktop does not
 | Export, sync | `export_dot`, `generate_writeup`, `sync`, `sync_status` |
 | Message board | `post_message`, `read_messages` |
 
-Writes made through `deciduous mcp` in a project with a `[remote]` are queued for the server like CLI writes. [deciduous.dev/mcp.html](https://deciduous.dev/mcp.html) has the tool reference.
+Writes made through `deciduous mcp` in a project with a `[remote]` are queued for the server like CLI writes. [deciduous.dev/tutorial/mcp.html](https://deciduous.dev/tutorial/mcp.html) has the tool reference.
 
 ---
 
@@ -516,13 +463,13 @@ The viewer has six views (DAG, Chains, Timeline, Graph, Roadmap, Story), branch 
 
 ---
 
-## Skills: pulse, narratives, archaeology, decision-graph
+## Pulse, narratives, archaeology, decision-graph
 
-`init` installs three skills and a command for working on history:
+`init` installs one slash command and three instruction files for working on history. Only `/decision-graph` is a command. The other three are written as flat files, `.claude/skills/pulse.md`, `narratives.md` and `archaeology.md`, with no frontmatter; Claude Code loads skills from `.claude/skills/<name>/SKILL.md`, so there is no `/pulse`, `/narratives` or `/archaeology` (the generated `CLAUDE.md` lists them anyway). Point an agent at a file by path: "read `.claude/skills/archaeology.md` and follow it".
 
-- **/pulse** maps the current design as decisions: the agent reads the code, names the design questions it answers, and logs them as goals and options. `deciduous pulse` is the CLI view of the graph's active state.
-- **/narratives** writes `.deciduous/narratives.md`: how a subsystem evolved, where it pivoted, what it connects to. `deciduous narratives init` seeds it from the active goals; `narratives pivots` lists every revisit with its chain.
-- **/archaeology** turns narratives into graph structure: observation → revisit → new decision, old decision superseded. `deciduous archaeology pivot` is the one-command form shown above; `archaeology supersede --cascade` and `archaeology timeline` go with it.
+- **pulse.md** maps the current design as decisions: the agent reads the code, names the design questions it answers, and logs them as goals and options. `deciduous pulse` is the CLI view of the graph's state.
+- **narratives.md** writes `.deciduous/narratives.md`: how a subsystem evolved, where it pivoted, what it connects to. `deciduous narratives init` seeds it with one section per goal that is not superseded or abandoned; `narratives pivots` lists every revisit with its chain.
+- **archaeology.md** turns narratives into graph structure: observation → revisit → new decision, old decision superseded. `deciduous archaeology pivot` is the one-command form shown above; `archaeology supersede --cascade` and `archaeology timeline` go with it.
 - **/decision-graph** builds a graph for a repository that was not using deciduous from the start, from commit history, code structure and (with `gh`) PR descriptions and review threads.
 
 ---
@@ -591,7 +538,7 @@ transcript import means a session that logged nothing is still in the graph.
 
 ## Commands Reference
 
-Every command and flag below is in `deciduous --help` for 1.1.0.
+Every command below is in `deciduous --help` for 1.1.0. Three things work in 1.1.0 but its `--help` leaves them out: the `revisit` node type and the `superseded` and `abandoned` statuses (main's `--help` lists them).
 
 ```bash
 # Set up
@@ -620,7 +567,7 @@ deciduous edges
 deciduous show <id> [--json]              # prints evidence for transcript-derived nodes
 deciduous graph                           # full graph as JSON
 deciduous pulse [-b <branch>] [-r <n>] [--summary] [--json]
-deciduous commands [-l <n>]               # recent command log
+deciduous commands [-l <n>]               # recent command log; 1.1.0 logs nothing and prints "No commands logged." (fixed on main)
 
 # From a Claude Code transcript (docs/transcripts.md)
 deciduous transcript list [--dir <dir>] [--json]
@@ -670,7 +617,7 @@ deciduous remote adopt --url <url> [<root>] [-n]
 deciduous remote watch [--types a,b] [--branch <b>]... [--edges] [--json] [--url | --claude-code]
 
 # Local graph file and viewer
-deciduous sync [--check]                  # reconcile .deciduous/graph.json with the database; --check exits 1 if pending
+deciduous sync [--check]                  # reconcile .deciduous/graph.json with the database; --check reports, and exits 0 even with changes pending
 deciduous backup [-o <path>]
 deciduous migrate                         # add change_id columns to a pre-sync database
 deciduous serve [-p <port>]
@@ -699,7 +646,7 @@ deciduous roadmap init|refresh|sync|list|link|unlink|conflicts|status|check   # 
 - Recover context after compaction or a session boundary (`/recover`, `query_nodes`, `ask_graph`)
 - Build on previous reasoning instead of starting fresh
 - Coordinate with the other agents on the same repository through the board, and borrow with `took_from`
-- Use `/pulse`, `/narratives`, `/archaeology` and `/decision-graph` to map and correct history
+- Use `/decision-graph` and the pulse, narratives and archaeology instruction files to map and correct history
 
 **Your team:**
 - One graph per repository on a shared server, written from every clone, worktree and agent
@@ -714,4 +661,4 @@ It almost has the word "decision" in it, and they're trees.
 
 ---
 
-**[Tutorial](https://deciduous.dev/tutorial/)** · **[Live Demo](https://deciduous.dev/demo/)** · **[GitHub](https://github.com/notactuallytreyanastasio/deciduous)**
+**[Docs](https://deciduous.dev/tutorial/)** · **[GitHub](https://github.com/notactuallytreyanastasio/deciduous)**

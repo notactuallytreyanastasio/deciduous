@@ -40,10 +40,12 @@
 
 pub mod api;
 pub mod archaeology;
+pub mod audit;
 pub mod board;
 pub mod changelog;
 pub mod config;
 pub mod db;
+pub mod decisions;
 pub mod demo_swarm;
 pub mod events;
 pub mod export;
@@ -64,6 +66,7 @@ pub mod serve;
 pub mod server;
 pub mod transcript;
 pub mod watch;
+pub mod why;
 
 pub use config::Config;
 pub use db::{

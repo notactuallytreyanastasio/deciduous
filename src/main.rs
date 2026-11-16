@@ -50,6 +50,12 @@ enum Command {
         /// Disable automatic version checking (enabled by default)
         #[arg(long)]
         no_auto_update: bool,
+
+        /// No graph server: keep the graph in .deciduous/graph.json, committed
+        /// with the code. Nothing to install or run; `deciduous remote setup`
+        /// connects a server later
+        #[arg(long)]
+        no_server: bool,
     },
 
     /// Update AI assistant integration files to latest version
@@ -203,13 +209,25 @@ enum Command {
         #[arg(short, long)]
         branch: Option<String>,
 
-        /// Filter by node type (goal, decision, action, etc.)
-        #[arg(short = 't', long)]
+        /// Filter by node type (goal, decision, option, action, outcome, observation, revisit)
+        #[arg(short = 't', long, alias = "type")]
         node_type: Option<String>,
 
         /// Filter by theme name
         #[arg(long)]
         theme: Option<String>,
+
+        /// Filter by status (pending, active, completed, rejected, superseded, abandoned)
+        #[arg(short, long, conflicts_with = "open")]
+        status: Option<String>,
+
+        /// Only what is still open: pending or active
+        #[arg(long)]
+        open: bool,
+
+        /// Output a JSON array, one object per node, with metadata as an object
+        #[arg(long)]
+        json: bool,
     },
 
     /// List all edges
@@ -277,7 +295,8 @@ enum Command {
 
     /// Create a database backup
     Backup {
-        /// Output path (default: deciduous_backup_<timestamp>.db)
+        /// Output path (default: .deciduous/backups/deciduous_backup_<timestamp>.db,
+        /// a directory git ignores)
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -377,11 +396,23 @@ enum Command {
         action: EventsAction,
     },
 
-    /// Audit and maintain graph data quality
+    /// Audit the graph: with no action, report what in it contradicts itself
     Audit {
         /// Associate commits with nodes by matching titles to commit messages
         #[arg(long)]
         associate_commits: bool,
+
+        /// Mark every outcome and observation still pending or active as completed
+        #[arg(long)]
+        close_records: bool,
+
+        /// Mark every open action that carries a commit as completed
+        #[arg(long)]
+        close_committed: bool,
+
+        /// Print the report as JSON
+        #[arg(long)]
+        json: bool,
 
         /// Minimum keyword match score (0-100, default 50)
         #[arg(long, default_value = "50")]
@@ -413,6 +444,45 @@ enum Command {
         /// Show only the summary section
         #[arg(long)]
         summary: bool,
+
+        /// Open goals to list, most recently touched first
+        #[arg(long, default_value = "10")]
+        goals: usize,
+
+        /// Open descendants to list under each goal
+        #[arg(long, default_value = "8")]
+        children: usize,
+
+        /// List every open goal, descendant, orphan and gap
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// The decisions behind a file: the commits that touched it, the nodes
+    /// that carry them, and the decisions and goal above those
+    Why {
+        /// A file, a line of it (`src/db.rs:120`) or a range
+        /// (`src/db.rs:120-180`, as the lines stand in HEAD)
+        target: String,
+
+        /// Goals to show, most recently touched first
+        #[arg(long, default_value = "5")]
+        goals: usize,
+
+        /// Show every goal and every node under it
+        #[arg(long)]
+        all: bool,
+
+        /// Print the report as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Decisions a model proposed from session transcripts, waiting for a
+    /// yes or a no (see `transcript decisions`). With no action, lists them
+    Proposals {
+        #[command(subcommand)]
+        action: Option<ProposalsAction>,
     },
 
     /// Manage evolution narratives (.deciduous/narratives.md)
@@ -624,6 +694,10 @@ enum RemoteAction {
         /// Run this machine's server in Docker instead of as a background service
         #[arg(long, conflicts_with = "url")]
         docker: bool,
+
+        /// No server: keep the graph in .deciduous/graph.json, committed with the code
+        #[arg(long, conflicts_with_all = ["url", "local", "port", "database_url", "docker_postgres", "docker"])]
+        no_server: bool,
     },
 
     /// Store the API token outside every repository (mode 0600)
@@ -716,6 +790,14 @@ enum RemoteAction {
         /// Show what would change without writing
         #[arg(short = 'n', long)]
         dry_run: bool,
+    },
+
+    /// Named tokens: one per person or agent, so the server can say who
+    /// wrote and one holder's access can be taken away. Needs the server's
+    /// own token (DECIDUOUS_MCP_TOKEN on the server)
+    Token {
+        #[command(subcommand)]
+        action: TokenAction,
     },
 
     /// Stream this project's writes live, one line per event, as they happen
@@ -965,8 +1047,15 @@ enum TranscriptAction {
     /// Importing the same transcript again changes nothing.
     Import {
         /// Transcript files or session ids
-        #[arg(required = true)]
+        #[arg(required_unless_present = "hook")]
         transcripts: Vec<String>,
+
+        /// Run as a Claude Code hook: read the hook's JSON from stdin and
+        /// import the transcript it names (`transcript_path`). Prints nothing
+        /// on stdout and always exits 0, so a session ends the same way
+        /// whatever the import does
+        #[arg(long, conflicts_with_all = ["transcripts", "dry_run", "json"])]
+        hook: bool,
 
         /// Show what would be created without writing anything
         #[arg(long)]
@@ -975,6 +1064,33 @@ enum TranscriptAction {
         /// Do not hash the files the actions touched
         #[arg(long)]
         no_hash: bool,
+
+        /// Print the report as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Read a session for the decisions made in it: a model reads the
+    /// transcript and proposes each choice between approaches, with a quote
+    /// from the turn it was made in. A proposal whose quote is not in the
+    /// transcript is dropped. What is left waits in
+    /// .deciduous/proposals.json for `deciduous proposals accept`
+    Decisions {
+        /// Transcript files or session ids
+        #[arg(required = true)]
+        transcripts: Vec<String>,
+
+        /// Write the proposals into the graph without waiting for review
+        #[arg(long)]
+        accept: bool,
+
+        /// Read a session again that was already read
+        #[arg(long)]
+        again: bool,
+
+        /// Model for the `claude -p` call (default: the account's)
+        #[arg(long)]
+        model: Option<String>,
 
         /// Print the report as JSON
         #[arg(long)]
@@ -991,6 +1107,61 @@ enum TranscriptAction {
         /// Print as JSON
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TokenAction {
+    /// Issue a token for a name. It is printed once and never again
+    Create {
+        /// Who it is for: letters, digits, '.', '_', '@', '+', '-'
+        name: String,
+    },
+
+    /// Every token issued: when, last used, revoked or not
+    List {
+        /// Print as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Stop a token working. Its name is not issued again
+    Revoke { name: String },
+}
+
+#[derive(Subcommand, Debug)]
+enum ProposalsAction {
+    /// The proposals waiting for review
+    List {
+        /// Also show the ones already accepted or rejected
+        #[arg(long)]
+        all: bool,
+
+        /// Print as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Write proposals into the graph: goal -> options -> decision -> the
+    /// actions that followed it
+    Accept {
+        /// Proposal numbers, as `proposals` prints them
+        numbers: Vec<usize>,
+
+        /// Every proposal still waiting
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Turn proposals down. They stay in the file, so the same words are
+    /// not proposed again
+    Reject {
+        /// Proposal numbers, as `proposals` prints them
+        numbers: Vec<usize>,
+
+        /// Every proposal still waiting
+        #[arg(long)]
+        all: bool,
     },
 }
 
@@ -1552,6 +1723,7 @@ fn records_itself(command: &Command) -> bool {
             | Command::Dot { .. }
             | Command::Writeup { .. }
             | Command::Pulse { .. }
+            | Command::Why { .. }
             | Command::Completion { .. }
             | Command::DemoSwarm { .. }
             | Command::Mcp { .. }
@@ -1592,6 +1764,7 @@ fn main() {
         windsurf,
         both,
         no_auto_update,
+        no_server,
     } = args.command
     {
         // Determine which assistants to set up
@@ -1612,7 +1785,14 @@ fn main() {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         if let Err(e) =
             deciduous::init::init_project(setup_claude, setup_opencode, windsurf, no_auto_update)
-                .and_then(|_| deciduous::server::ensure(&cwd, deciduous::server::Caller::Init))
+                .and_then(|_| {
+                    if no_server {
+                        println!("\n{}", "Shared graph server".cyan().bold());
+                        deciduous::server::choose_no_server(&cwd)
+                    } else {
+                        deciduous::server::ensure(&cwd, deciduous::server::Caller::Init)
+                    }
+                })
         {
             eprintln!("{} {}", "Error:".red(), e);
             exit(1);
@@ -1630,6 +1810,7 @@ fn main() {
                 database_url,
                 docker_postgres,
                 docker,
+                no_server,
             },
     } = &args.command
     {
@@ -1649,6 +1830,7 @@ fn main() {
         // Any flag about this machine's server means this machine: nothing
         // else has a port, a database or a container to choose.
         let choice = match url {
+            _ if *no_server => SetupChoice::NoServer,
             Some(u) => SetupChoice::Url(u.clone()),
             None if *local || req != LocalRequest::default() => SetupChoice::Local(req),
             None => SetupChoice::Ask,
@@ -1845,12 +2027,12 @@ fn main() {
 
     // Handle completion separately - doesn't need database
     if let Command::Completion { shell } = args.command {
-        clap_complete::generate(
-            shell,
-            &mut Args::command(),
-            "deciduous",
-            &mut std::io::stdout(),
-        );
+        // Into a buffer first: clap_complete panics when its writer fails,
+        // and `deciduous completion zsh | head -1` closes the pipe early.
+        let mut script = Vec::new();
+        clap_complete::generate(shell, &mut Args::command(), "deciduous", &mut script);
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(&script);
         return;
     }
 
@@ -1867,6 +2049,20 @@ fn main() {
     } = args.command
     {
         std::process::exit(run_api_daemon(port, data_dir, token, bind));
+    }
+
+    // Everything from here on reads or writes a project's graph. Without
+    // one, opening the database would make an empty one right here and the
+    // command would report success against it.
+    if !Database::project_exists() {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        eprintln!(
+            "{} no deciduous project here: neither {} nor any directory above it has a .deciduous.\n       \
+             `deciduous init` starts one in this directory.",
+            "Error:".red(),
+            cwd.display()
+        );
+        exit(1);
     }
 
     // `sync --check` answers "what would sync do" and changes nothing. With
@@ -2200,6 +2396,15 @@ fn main() {
 
         Command::Prompt { id, prompt } => {
             let id = resolve_node_or_exit(&db, &id);
+            // Before anything is said about the prompt's length.
+            if !matches!(db.get_node(id), Ok(Some(_))) {
+                eprintln!(
+                    "{} Node {} does not exist. Run 'deciduous nodes' to see existing nodes.",
+                    "Error:".red(),
+                    id
+                );
+                exit(1);
+            }
             // Read prompt from stdin if not provided as argument
             let effective_prompt = match prompt {
                 Some(p) => p,
@@ -2249,7 +2454,33 @@ fn main() {
             branch,
             node_type,
             theme,
+            status,
+            open,
+            json,
         } => {
+            // A filter value nothing can match is a typo, not an empty result.
+            if let Some(t) = &node_type {
+                if !deciduous::db::IMPORTABLE_NODE_TYPES.contains(&t.as_str()) {
+                    eprintln!(
+                        "{} unknown node type '{}'; expected one of: {}",
+                        "Error:".red(),
+                        t,
+                        deciduous::db::NODE_TYPES.join(", ")
+                    );
+                    exit(1);
+                }
+            }
+            if let Some(s) = &status {
+                if !deciduous::db::IMPORTABLE_STATUSES.contains(&s.as_str()) {
+                    eprintln!(
+                        "{} unknown status '{}'; expected one of: {}",
+                        "Error:".red(),
+                        s,
+                        deciduous::db::NODE_STATUSES.join(", ")
+                    );
+                    exit(1);
+                }
+            }
             // Pre-compute theme node IDs if filtering by theme
             let theme_node_ids: Option<std::collections::HashSet<i32>> = theme.as_ref().map(|t| {
                 db.get_nodes_by_theme(t)
@@ -2289,12 +2520,37 @@ fn main() {
                                 Some(ids) => ids.contains(&n.id),
                                 None => true,
                             };
-                            branch_match && type_match && theme_match
+                            let status_match = match &status {
+                                Some(s) => n.status == *s,
+                                None => {
+                                    !open
+                                        || deciduous::db::OPEN_STATUSES.contains(&n.status.as_str())
+                                }
+                            };
+                            branch_match && type_match && theme_match && status_match
                         })
                         .collect();
 
+                    if json {
+                        let rows: Vec<serde_json::Value> =
+                            filtered.iter().map(node_json_row).collect();
+                        match serde_json::to_string_pretty(&rows) {
+                            Ok(j) => println!("{}", j),
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                        return;
+                    }
+
                     if filtered.is_empty() {
-                        if branch.is_some() || node_type.is_some() {
+                        if branch.is_some()
+                            || node_type.is_some()
+                            || theme.is_some()
+                            || status.is_some()
+                            || open
+                        {
                             println!("No nodes found matching filters.");
                         } else {
                             println!(
@@ -2890,6 +3146,62 @@ fn main() {
                             eprintln!("\nNothing was written; the project is unchanged.");
                             exit(1);
                         }
+                    }
+                }
+
+                RemoteAction::Token { action } => {
+                    let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
+                    let done = match action {
+                        TokenAction::Create { name } => remote.token_create(&name).map(|token| {
+                            println!("{token}");
+                            eprintln!(
+                                "\nThat is {name}'s token, shown this once. They store it with:\n    deciduous remote login {}",
+                                remote.url
+                            );
+                        }),
+                        TokenAction::List { json } => remote.token_list().map(|tokens| {
+                            if json {
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&tokens).unwrap_or_default()
+                                );
+                            } else if tokens.is_empty() {
+                                println!("No named tokens. Everyone is using the server's own.");
+                            } else {
+                                let day = |v: &serde_json::Value| {
+                                    v.as_str()
+                                        .map(|s| s.chars().take(10).collect::<String>())
+                                        .unwrap_or_else(|| "never".to_string())
+                                };
+                                println!("{:<32} {:<12} {:<12} STATE", "NAME", "CREATED", "LAST USED");
+                                for t in &tokens {
+                                    println!(
+                                        "{:<32} {:<12} {:<12} {}",
+                                        t["name"].as_str().unwrap_or("?"),
+                                        day(&t["created_at"]),
+                                        day(&t["last_used_at"]),
+                                        if t["revoked_at"].is_null() {
+                                            "live".to_string()
+                                        } else {
+                                            format!("revoked {}", day(&t["revoked_at"]))
+                                        }
+                                    );
+                                }
+                            }
+                        }),
+                        TokenAction::Revoke { name } => remote
+                            .token_revoke(&name)
+                            .map(|()| println!("{name}'s token no longer works.")),
+                    };
+                    if let Err(e) = done {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        exit(1);
                     }
                 }
 
@@ -4212,9 +4524,22 @@ fn main() {
                 exit(1);
             }
 
+            // Beside the database, in a directory that ignores itself: the
+            // default used to be the working directory, where every backup
+            // showed up in `git status` waiting to be committed by accident.
             let backup_path = output.unwrap_or_else(|| {
                 let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-                PathBuf::from(format!("deciduous_backup_{}.db", timestamp))
+                let dir = db_path
+                    .parent()
+                    .map(|p| p.join("backups"))
+                    .unwrap_or_else(|| PathBuf::from("."));
+                if std::fs::create_dir_all(&dir).is_ok() {
+                    let ignore = dir.join(".gitignore");
+                    if !ignore.exists() {
+                        let _ = std::fs::write(&ignore, "*\n");
+                    }
+                }
+                dir.join(format!("deciduous_backup_{}.db", timestamp))
             });
 
             // Not a file copy: in WAL mode the newest writes sit in
@@ -4400,6 +4725,13 @@ fn main() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
                     let filtered_graph = cli_export_subgraph(&db, graph, nodes, roots);
+                    if filtered_graph.nodes.is_empty() {
+                        eprintln!(
+                            "{} no nodes match, so there is nothing to write up. `deciduous nodes` lists the ids.",
+                            "Error:".red()
+                        );
+                        exit(1);
+                    }
 
                     // Auto-detect GitHub repo from git remote
                     let github_repo = ProcessCommand::new("git")
@@ -5164,13 +5496,13 @@ fn main() {
             min_score,
             dry_run,
             yes,
+            close_records,
+            close_committed,
+            json,
         } => {
             if !associate_commits {
-                eprintln!(
-                    "{} No audit action specified. Use --associate-commits",
-                    "Error:".red()
-                );
-                exit(1);
+                run_audit(&db, close_records, close_committed, json, dry_run, yes);
+                return;
             }
 
             // Get all nodes
@@ -5351,11 +5683,50 @@ fn main() {
             );
         }
 
+        Command::Proposals { action } => {
+            if let Err(e) = run_proposals(&db, action) {
+                eprintln!("{} {}", "Error:".red(), e);
+                exit(1);
+            }
+        }
+
+        Command::Why {
+            target,
+            goals,
+            all,
+            json,
+        } => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let root = db
+                .project_root()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| cwd.clone());
+            let (path, lines) = deciduous::why::parse_target(&target);
+            let path = deciduous::why::project_relative(&root, &cwd, &path);
+            match deciduous::why::report(&db, &root, &path, lines) {
+                Ok(report) if json => println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).unwrap_or_default()
+                ),
+                Ok(report) => {
+                    let (goals, hits) = if all { (0, 0) } else { (goals, 8) };
+                    print!("{}", deciduous::why::render(&report, goals, hits));
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    exit(1);
+                }
+            }
+        }
+
         Command::Pulse {
             branch,
             recent,
             json,
             summary,
+            goals,
+            children,
+            all,
         } => match deciduous::pulse::generate_pulse(&db, branch.as_deref(), recent) {
             Ok(report) => {
                 if json {
@@ -5367,7 +5738,16 @@ fn main() {
                         }
                     }
                 } else {
-                    deciduous::pulse::print_pulse(&report, summary);
+                    let limits = if all {
+                        deciduous::pulse::PulseLimits::unlimited()
+                    } else {
+                        deciduous::pulse::PulseLimits {
+                            goals,
+                            children,
+                            ..Default::default()
+                        }
+                    };
+                    deciduous::pulse::print_pulse(&report, summary, limits);
                 }
             }
             Err(e) => {
@@ -5425,11 +5805,47 @@ fn main() {
                 dry_run,
                 no_hash,
                 json,
+                hook,
             } => {
                 let opts = deciduous::transcript::ImportOptions {
                     dry_run,
                     hash_files: !no_hash,
                 };
+                if hook {
+                    // The session ending is a model call deciduous itself
+                    // made (`transcript decisions`, `doc --ai-describe`, the
+                    // viewer's Ask panel): it has nothing to import.
+                    if std::env::var_os(deciduous::decisions::GUARD_ENV).is_some() {
+                        return;
+                    }
+                    // `[transcript] auto_import = false` turns the import
+                    // off wherever the hook entry came from: a settings.json
+                    // somebody else committed still carries it.
+                    if db
+                        .project_root()
+                        .is_some_and(|root| !deciduous::init::transcript_hook_wanted(root))
+                    {
+                        return;
+                    }
+                    use std::io::Read;
+                    let mut input = String::new();
+                    let _ = std::io::stdin().read_to_string(&mut input);
+                    let path = serde_json::from_str::<serde_json::Value>(&input)
+                        .ok()
+                        .and_then(|v| v.get("transcript_path")?.as_str().map(PathBuf::from));
+                    match path {
+                        None => eprintln!(
+                            "deciduous: the hook input names no transcript_path; nothing imported"
+                        ),
+                        Some(path) => match deciduous::transcript::import(&db, &path, &opts) {
+                            Ok(_) => read_for_decisions_in_background(&db, &path),
+                            // A session that never got a prompt has nothing to import.
+                            Err(deciduous::transcript::TranscriptError::Empty(_)) => {}
+                            Err(e) => eprintln!("deciduous: transcript not imported: {e}"),
+                        },
+                    }
+                    return;
+                }
                 let mut failed = false;
                 let mut reports = Vec::new();
                 for arg in &transcripts {
@@ -5445,6 +5861,46 @@ fn main() {
                         Ok(report) => {
                             if !json {
                                 print_transcript_report(&report);
+                            }
+                            reports.push(report);
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            failed = true;
+                        }
+                    }
+                }
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&reports).unwrap_or_default()
+                    );
+                }
+                if failed {
+                    exit(1);
+                }
+            }
+            TranscriptAction::Decisions {
+                transcripts,
+                accept,
+                again,
+                model,
+                json,
+            } => {
+                let opts = deciduous::decisions::DeriveOptions {
+                    accept,
+                    again,
+                    model,
+                };
+                let mut failed = false;
+                let mut reports = Vec::new();
+                for arg in &transcripts {
+                    let report = deciduous::transcript::locate(&db, arg)
+                        .and_then(|path| deciduous::decisions::derive(&db, &path, &opts));
+                    match report {
+                        Ok(report) => {
+                            if !json {
+                                print_decisions_report(&db, &report);
                             }
                             reports.push(report);
                         }
@@ -5498,6 +5954,10 @@ fn main() {
                             for l in &listed {
                                 let mark = if l.imported {
                                     "imported".green()
+                                } else if !l.work {
+                                    // No prompt changed anything: an
+                                    // import would add nothing.
+                                    "no work".dimmed()
                                 } else {
                                     "new".yellow()
                                 };
@@ -6605,6 +7065,8 @@ fn generate_ai_description(filename: &str, file_path: &std::path::Path) -> Optio
 
     let output = std::process::Command::new("claude")
         .args(["-p", &content_context])
+        // Not a session to import when it ends.
+        .env(deciduous::decisions::GUARD_ENV, "1")
         .output()
         .ok()?;
 
@@ -6648,6 +7110,364 @@ struct CommitMatch {
 }
 
 /// Get git commits for audit (since Nov 2024)
+/// One node as `nodes --json` prints it: the row's fields, with `metadata`
+/// as an object. `graph` keeps `metadata_json` as the string the database
+/// holds; a consumer of this command should not have to parse twice.
+fn node_json_row(n: &deciduous::db::DecisionNode) -> serde_json::Value {
+    let metadata = n
+        .metadata_json
+        .as_deref()
+        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+        .filter(|v| v.is_object())
+        .unwrap_or_else(|| serde_json::json!({}));
+    serde_json::json!({
+        "id": n.id,
+        "change_id": n.change_id,
+        "node_type": n.node_type,
+        "title": n.title,
+        "description": n.description,
+        "status": n.status,
+        "created_at": n.created_at,
+        "updated_at": n.updated_at,
+        "metadata": metadata,
+    })
+}
+
+/// `deciduous audit` without `--associate-commits`: the report, or one of
+/// the two fixes that need no judgement.
+/// After a session's import, when the project asks for it
+/// (`[transcript] derive_decisions`): read the session for decisions in a
+/// process of its own. The hook that called us has a timeout and a model
+/// call does not fit in it.
+fn read_for_decisions_in_background(db: &Database, transcript: &std::path::Path) {
+    let Some(opts) = db.project_root().and_then(deciduous::decisions::configured) else {
+        return;
+    };
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let mut cmd = ProcessCommand::new(exe);
+    cmd.args(["transcript", "decisions"]).arg(transcript);
+    if opts.accept {
+        cmd.arg("--accept");
+    }
+    if let Some(model) = &opts.model {
+        cmd.args(["--model", model]);
+    }
+    let _ = cmd
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
+fn print_decisions_report(db: &Database, report: &deciduous::decisions::DeriveReport) {
+    let session: String = report.session_id.chars().take(8).collect();
+    if report.skipped {
+        println!(
+            "session {session}: already read ({} turns); --again reads it again",
+            report.turns
+        );
+        return;
+    }
+    println!(
+        "session {session}: {} turns read in {} model call(s); {} proposed, {} already proposed, {} dropped",
+        report.turns,
+        report.model_calls,
+        report.proposed.len(),
+        report.already_proposed,
+        report.dropped.len()
+    );
+    if let Ok(store) = deciduous::decisions::Store::load(&deciduous::decisions::Store::path(db)) {
+        for n in &report.proposed {
+            if let Some(p) = store.proposals.get(n - 1) {
+                print!("\n{}", deciduous::decisions::render(*n, p));
+            }
+        }
+    }
+    for d in &report.dropped {
+        println!("\n{} {}\n    {}", "dropped".yellow(), d.title, d.reason);
+    }
+    if !report.accepted.is_empty() {
+        let ids: Vec<String> = report.accepted.iter().map(|i| i.to_string()).collect();
+        println!("\nIn the graph as decision {}", ids.join(", "));
+    } else if !report.proposed.is_empty() {
+        println!("\n`deciduous proposals accept <n>` writes one into the graph; `reject <n>` turns it down.");
+    }
+}
+
+fn run_proposals(db: &Database, action: Option<ProposalsAction>) -> Result<(), String> {
+    use deciduous::decisions::{State, Store};
+    let path = Store::path(db);
+    let mut store = Store::load(&path)?;
+    let waiting = |store: &Store| -> Vec<usize> {
+        store
+            .proposals
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.state == State::Proposed)
+            .map(|(i, _)| i + 1)
+            .collect()
+    };
+    let pick = |store: &Store, numbers: Vec<usize>, all: bool| -> Result<Vec<usize>, String> {
+        if all {
+            return Ok(waiting(store));
+        }
+        if numbers.is_empty() {
+            return Err("name the proposals by number, or pass --all".into());
+        }
+        for n in &numbers {
+            if *n == 0 || *n > store.proposals.len() {
+                return Err(format!(
+                    "there is no proposal {n}; `deciduous proposals --all` lists the {} there are",
+                    store.proposals.len()
+                ));
+            }
+        }
+        Ok(numbers)
+    };
+    match action.unwrap_or(ProposalsAction::List {
+        all: false,
+        json: false,
+    }) {
+        ProposalsAction::List { all, json } => {
+            let shown: Vec<usize> = if all {
+                (1..=store.proposals.len()).collect()
+            } else {
+                waiting(&store)
+            };
+            if json {
+                let rows: Vec<serde_json::Value> = shown
+                    .iter()
+                    .map(|n| {
+                        let mut v = serde_json::to_value(&store.proposals[n - 1])
+                            .unwrap_or(serde_json::Value::Null);
+                        v["number"] = serde_json::json!(n);
+                        v
+                    })
+                    .collect();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&rows).unwrap_or_default()
+                );
+                return Ok(());
+            }
+            if shown.is_empty() {
+                println!(
+                    "No proposals waiting. `deciduous transcript decisions <session>` reads a session for them."
+                );
+                return Ok(());
+            }
+            for n in shown {
+                println!(
+                    "{}",
+                    deciduous::decisions::render(n, &store.proposals[n - 1])
+                );
+            }
+        }
+        ProposalsAction::Accept { numbers, all } => {
+            for n in pick(&store, numbers, all)? {
+                let id = deciduous::decisions::accept(db, &mut store.proposals[n - 1])
+                    .map_err(|e| e.to_string())?;
+                println!("#{n} is decision {id}: {}", store.proposals[n - 1].title);
+            }
+            store.save(&path)?;
+        }
+        ProposalsAction::Reject { numbers, all } => {
+            for n in pick(&store, numbers, all)? {
+                let p = &mut store.proposals[n - 1];
+                if p.state == State::Accepted {
+                    return Err(format!(
+                        "proposal {n} is already in the graph; `deciduous delete` removes its nodes"
+                    ));
+                }
+                p.state = State::Rejected;
+                println!("#{n} rejected: {}", p.title);
+            }
+            store.save(&path)?;
+        }
+    }
+    Ok(())
+}
+
+fn run_audit(
+    db: &Database,
+    close_records: bool,
+    close_committed: bool,
+    json: bool,
+    dry_run: bool,
+    yes: bool,
+) {
+    let report = match deciduous::audit::audit_db(db) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{} {}", "Error:".red(), e);
+            exit(1);
+        }
+    };
+
+    if close_records || close_committed {
+        let mut to_close: Vec<deciduous::audit::Found> = Vec::new();
+        if close_records {
+            to_close.extend(report.open_records.iter().cloned());
+        }
+        if close_committed {
+            to_close.extend(report.open_with_commit.iter().cloned());
+        }
+        if to_close.is_empty() {
+            println!("Nothing to close.");
+            return;
+        }
+        let mut by_type: std::collections::BTreeMap<&str, usize> = Default::default();
+        for f in &to_close {
+            *by_type.entry(f.node_type.as_str()).or_insert(0) += 1;
+        }
+        let what = by_type
+            .iter()
+            .map(|(t, c)| format!("{c} {t}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if dry_run {
+            for f in &to_close {
+                println!(
+                    "  #{:<5} {:<12} {} -> completed  {}",
+                    f.id,
+                    f.node_type,
+                    f.status,
+                    truncate(&f.title, 60)
+                );
+            }
+            println!(
+                "{} would close {}; nothing changed",
+                "Dry run:".cyan(),
+                what
+            );
+            return;
+        }
+        if !yes {
+            use std::io::{IsTerminal, Write};
+            if !std::io::stdin().is_terminal() {
+                eprintln!(
+                    "{} this would set {} to completed; pass --yes to do it, or --dry-run to list them",
+                    "Error:".red(),
+                    what
+                );
+                exit(1);
+            }
+            print!("Set {} to completed? [y/N]: ", what);
+            std::io::stdout().flush().ok();
+            let mut input = String::new();
+            if std::io::stdin().read_line(&mut input).is_err() || input.trim().to_lowercase() != "y"
+            {
+                println!("{}", "Aborted".yellow());
+                return;
+            }
+        }
+        let (closed, failed) = deciduous::audit::close(db, &to_close);
+        for (id, e) in &failed {
+            eprintln!("{} node {}: {}", "Failed:".red(), id, e);
+        }
+        println!(
+            "{} {} set to completed, {} failed",
+            "Done:".green(),
+            closed.len(),
+            failed.len()
+        );
+        if !failed.is_empty() {
+            exit(1);
+        }
+        return;
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&report) {
+            Ok(j) => println!("{}", j),
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                exit(1);
+            }
+        }
+        return;
+    }
+
+    println!(
+        "{} {} nodes, {} edges",
+        "Audit:".bold(),
+        report.total_nodes,
+        report.total_edges
+    );
+    let section = |title: &str, found: &[deciduous::audit::Found], fix: &str| {
+        if found.is_empty() {
+            return;
+        }
+        println!();
+        println!("{} ({})", title.bold(), found.len());
+        for f in found.iter().take(8) {
+            println!(
+                "  #{:<5} {:<12} {:<10} {}",
+                f.id,
+                f.node_type,
+                f.status,
+                truncate(&f.title, 70)
+            );
+        }
+        if found.len() > 8 {
+            println!("  {}", format!("{} more: --json", found.len() - 8).dimmed());
+        }
+        println!("  {}", fix.dimmed());
+    };
+    section(
+        "Status no command accepts",
+        &report.unknown_status,
+        "fix: deciduous status <id> <status>",
+    );
+    section(
+        "Outcomes and observations still open",
+        &report.open_records,
+        "they record what already happened. fix: deciduous audit --close-records",
+    );
+    section(
+        "Open actions that carry a commit",
+        &report.open_with_commit,
+        "the code exists. fix: deciduous audit --close-committed",
+    );
+    section(
+        "Open goals with an outcome and nothing open beneath them",
+        &report.goals_with_nothing_open,
+        "done or dropped? deciduous status <id> completed | abandoned",
+    );
+    section(
+        "Nodes with no edge",
+        &report.orphans,
+        "fix: deciduous link <parent> <id> -r \"why\"",
+    );
+    if report.untyped_choices > 0 {
+        println!();
+        println!(
+            "{} ({})",
+            "Option -> decision edges typed leads_to".bold(),
+            report.untyped_choices
+        );
+        println!(
+            "  {}",
+            "leads_to does not say which option was taken: link -t chosen | rejected".dimmed()
+        );
+    }
+    if !report.edge_types.is_empty() {
+        println!();
+        let parts: Vec<String> = report
+            .edge_types
+            .iter()
+            .map(|(t, c)| format!("{t}({c})"))
+            .collect();
+        println!("Edge types: {}", parts.join(" "));
+    }
+    if report.findings() == 0 {
+        println!();
+        println!("{}", "Nothing found.".green());
+    }
+}
+
 fn get_git_commits_for_audit() -> Vec<AuditCommit> {
     let output = ProcessCommand::new("git")
         .args(["log", "--format=%H|%s", "--since=2024-11-01"])
@@ -6986,6 +7806,12 @@ fn print_transcript_report(r: &deciduous::transcript::ImportReport) {
     if r.already_present > 0 {
         notes.push(format!("{} already present", r.already_present));
     }
+    if r.attached_to_logged_goals > 0 {
+        notes.push(format!(
+            "{} prompts attached to the goal logged for them",
+            r.attached_to_logged_goals
+        ));
+    }
     if r.files_hashed > 0 {
         notes.push(format!("{} files hashed", r.files_hashed));
     }
@@ -6999,6 +7825,24 @@ fn print_transcript_report(r: &deciduous::transcript::ImportReport) {
         notes.push(format!(
             "{} deciduous MCP writes skipped (already in the graph)",
             r.skipped.deciduous_writes
+        ));
+    }
+    if r.skipped.idle_prompts > 0 {
+        notes.push(format!(
+            "{} prompts changed nothing and are not goals",
+            r.skipped.idle_prompts
+        ));
+    }
+    if r.skipped.go_aheads > 0 {
+        notes.push(format!(
+            "{} go-aheads joined to the prompt before them",
+            r.skipped.go_aheads
+        ));
+    }
+    if r.skipped.logged_by_agent > 0 {
+        notes.push(format!(
+            "{} actions and outcomes the agent logged itself not derived again",
+            r.skipped.logged_by_agent
         ));
     }
     if r.unreadable_lines > 0 {

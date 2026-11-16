@@ -47,20 +47,31 @@ defmodule DeciduousMcp.Activity do
   no branch given). Always `:ok`; a failure to record raises, inside the
   write's own transaction when there is one.
   """
-  def record(workspace_id, branch, session_id, client_name, client_version) do
+  def record(workspace_id, branch, session_id, client_name, client_version, actor \\ nil) do
     now = DateTime.utc_now()
 
+    # `actor` is the name of the token the write came in on, nil for the
+    # server's own token, which everyone who has it shares.
     Repo.query!(
       """
       INSERT INTO write_activity
-        (workspace_id, branch, session_id, client_name, client_version, first_seen_at, last_seen_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $6)
+        (workspace_id, branch, session_id, client_name, client_version, first_seen_at, last_seen_at, actor)
+      VALUES ($1, $2, $3, $4, $5, $6, $6, $7)
       ON CONFLICT (workspace_id, branch, session_id) DO UPDATE
         SET client_name = EXCLUDED.client_name,
             client_version = EXCLUDED.client_version,
-            last_seen_at = EXCLUDED.last_seen_at
+            last_seen_at = EXCLUDED.last_seen_at,
+            actor = EXCLUDED.actor
       """,
-      [Ecto.UUID.dump!(workspace_id), branch || "", session_id, client_name, client_version, now]
+      [
+        Ecto.UUID.dump!(workspace_id),
+        branch || "",
+        session_id,
+        client_name,
+        client_version,
+        now,
+        actor
+      ]
     )
 
     :ok
@@ -76,7 +87,7 @@ defmodule DeciduousMcp.Activity do
     %{rows: rows, columns: cols} =
       Repo.query!(
         """
-        SELECT branch, session_id, client_name, client_version, first_seen_at, last_seen_at
+        SELECT branch, session_id, client_name, client_version, first_seen_at, last_seen_at, actor
           FROM write_activity
          WHERE workspace_id = $1 AND last_seen_at >= $2
          ORDER BY last_seen_at DESC

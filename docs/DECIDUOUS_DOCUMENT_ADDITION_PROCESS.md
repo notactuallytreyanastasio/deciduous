@@ -1,238 +1,122 @@
-# Document Attachments: The Full Process
+<!-- Generated from content/evidence.md by scripts/docs/build.mjs. Edit the source. -->
 
-A decision often rests on something that is not text in the repository: the
-screenshot of the bug, the diagram drawn before the approach was chosen, the
-PDF spec, the cost breakdown that forced the pivot. `deciduous doc` attaches
-such files to nodes so a later session can see what the decision was made
-from, not only that it was made. This page is the commands, verified against
-1.1.0, and the habits that make attachments worth having.
+# Attach the evidence, or derive the graph from it
 
----
+A node is only as good as what backs it. Deciduous has two ways to put evidence next to a claim: attach a file to a node with `deciduous doc attach`, which in a project with a `[remote]` uploads the bytes to the server; and `deciduous transcript import`, which reads a Claude Code session's transcript and writes the goals, actions and outcomes it can prove, each marked with what it rests on.
 
-## The commands
+## Say what ran
 
-Every subcommand and flag below is in `deciduous doc --help`.
+Before either, the cheapest evidence is a precise outcome: the command, the count, the commit, and what was not checked.
 
-```bash
-deciduous doc attach <node> <file>                  # node: local id, change_id prefix, or server id
-deciduous doc attach <node> <file> -d "What this is"
-deciduous doc attach <node> <file> --ai-describe     # the claude CLI writes the description
-
-deciduous doc list                                   # every attached document
-deciduous doc list <node>                            # one node's
-deciduous doc list --include-detached [--json]       # detached ones too
-deciduous doc show <doc_id> [--json]
-
-deciduous doc describe <doc_id> "Better description"
-deciduous doc describe <doc_id> --ai
-deciduous doc describe <doc_id> < description.txt    # text on stdin when omitted
-
-deciduous doc open <doc_id>                          # default application
-deciduous doc detach <doc_id>                        # soft delete, recoverable
-deciduous doc gc --dry-run                           # files no active record references
-deciduous doc gc
+```javascript
+close_thread({
+  workspace: "my-app", branch: "agent-tests",
+  parent_node_id: "<action id>",
+  title: "Request validation passes 8 integration cases",
+  description: "npm test -- tests/items.test.ts: 8 passed, 0 failed. Browser behaviour not checked.",
+  success: true
+})
 ```
 
-From a scratch project:
+"All tests pass" after running one file is the claim the next agent will wrongly rely on. A `files` list and a `commit` on a node are references, not copies: the reader needs the repository to follow them.
 
-```
-$ deciduous doc attach 1 spec.md -d "Rate limit spec from kickoff"
-Attached document 1 to node 1 (spec.md)
-  Description: Rate limit spec from kickoff
+## Documents from the CLI reach the server
 
-$ deciduous doc show 1
-Document Details
-  ID:          1
-  Node:        1
-  Filename:    spec.md
-  MIME type:   text/markdown
-  Size:        5B
-  Hash:        3b92cc255009c1a8541990fd00bcde181bc803a80b234f086647210c078bb7e4
-  Storage:     .deciduous/documents/spec.md.3b92cc25
-  Attached:    2026-10-24T12:47:21.048730-04:00
-  Description: Rate limit spec from kickoff (manual)
+The server's MCP tools have no upload: 21 tools, none of them attaches a file. Attaching is a CLI command, and agents run it like anyone else.
 
-$ deciduous doc detach 1
-Detached document 1
-
-$ deciduous doc gc --dry-run
-1 orphaned files:
-  .deciduous/documents/spec.md.3b92cc25
-(dry run - no files deleted)
+```console
+$ deciduous doc attach 5ee7c7c7 test-output.txt -d "cargo test retry output"
+Attached document 1 to node 6 (test-output.txt)
+  Description: cargo test retry output
+$ deciduous remote status | tail -2
+In sync: no writes waiting, and every node, edge and document matches field by field.
+Themes and tags are not sent to the server, so they are not compared.
 ```
 
-## Storage
+The node can be named by local id, `change_id` prefix, or server UUID (`deciduous doc attach de6ccf4c-877b-... file`). The bytes are uploaded to the server, which checks them against their SHA-256, and the attachment is recorded on the node. An agent then sees it in `show_node`:
 
-| | |
-|---|---|
-| Location | `.deciduous/documents/`, next to the database; not in git (`.deciduous/*` is ignored) |
-| File name | `<original filename>.<first 8 hex of the SHA-256>`: `spec.md.3b92cc25`, not a bare hash |
-| Deduplication | the same bytes attached to two nodes are one file on disk and two records |
-| Record | `node_documents` in the local database: original filename, MIME type, size, full hash, description and whether it was `manual` or `ai`, who attached it and when, `detached_at` |
-| Detach | sets `detached_at`; the record stays and `list --include-detached` shows it; the file stays until `gc` |
-| `gc` | deletes files no active record references; `--dry-run` lists them first |
-| Limits | the local MCP server's `attach_document` reads regular files inside the project up to 25 MiB |
-
-## Sharing
-
-Documents are not in `.deciduous/graph.json`, so they do not travel through
-git with the rest of the graph; a teammate who pulls sees the node and not the
-file. With a `[remote]`, `deciduous remote push --seed` sends documents the
-server lacks, bytes included, and the server stores them once per SHA-256
-across workspaces. Attaching does not send; seeding does. For a git-model
-project, a file that must be shared belongs in the repository and in the
-node's `-f` list instead.
-
-## When to attach
-
-| Situation | Attach? | Why |
-|---|---|---|
-| The user shares a screenshot of a bug | yes | the visual state is not recoverable any other way |
-| The user drops in a PDF spec | yes | it drove the goal |
-| The user pastes an error message | no | put it in the node's description |
-| You generate an architecture diagram | yes | evidence of the design at that moment |
-| The user references a Figma file | yes, if exported | a URL is not a copy |
-| A code file already in the repository | no | `-f "src/auth.rs"` on the node |
-| Meeting notes behind a decision | yes | context that lives nowhere in the code |
-
-The rule: attach it if a later session would need to see it to understand why
-a decision was made, and it is not already in the repository.
-
-## How the agent uses it
-
-The `CLAUDE.md` section `init` writes tells the agent when to offer:
-
-```
-| User shares an image or screenshot        | Ask: "Want me to attach this to the current goal/action node?" |
-| User references an external document      | Ask: "Should I attach a copy to the decision graph?"           |
-| Architecture diagram is discussed         | Suggest attaching it to the relevant goal node                 |
-| Files not in the project are dropped in   | Attach to the most relevant active node                        |
+```json
+"documents": [{ "id": "38c69819-818d-4a4f-906c-1e8c6101b889", "filename": "test-output.txt", "mime_type": "text/plain" }]
 ```
 
-and not to ask on every message. In practice:
+and anyone with the token can download it from `<url>/documents/<id>`, where `<url>` is `url` under `[remote]` in `.deciduous/config.toml`, including any path prefix the server's proxy uses, such as `/deciduous-mcp`:
 
-1. A screenshot arrives: ask once, attach on yes, move on.
-2. A spec arrives with the request: attach it to the goal without asking.
-3. "The architecture doc" is mentioned: `deciduous doc list` first; it may be there.
-4. At `/recover`: `deciduous doc list` and name the documents on active nodes.
-5. At `/work`: after the goal node, check whether reference material came with it.
-6. In `/narratives`: attached diagrams and specs are evidence for a narrative.
+```console
+$ curl -s -i -H "Authorization: Bearer <token>" https://deciduous.example.com/documents/38c69819-818d-4a4f-906c-1e8c6101b889
+HTTP/1.1 200 OK
+cache-control: no-store, private, max-age=0
+content-type: text/plain
 
-## Walkthrough: a notification service
-
-Day 1, the user drops in a requirements PDF:
-
-> Build a notification service. Users can subscribe to topics and receive notifications via email, SMS, or push. Here's the product spec.
-
-```bash
-deciduous add goal "Build notification service" -c 90 --prompt-stdin << 'EOF'
-Build a notification service. Users can subscribe to topics and receive
-notifications via email, SMS, or push. Here's the product spec.
-EOF
-# Created node 1
-deciduous doc attach 1 ~/Downloads/notification-service-spec.pdf -d "Product requirements spec from kickoff"
-
-deciduous add option "Fan-out on write (eager delivery)" -c 80
-deciduous link 1 2 -r "possible approach"
-deciduous add option "Fan-out on read (pull-based)" -c 80
-deciduous link 1 3 -r "possible approach"
-deciduous add option "Hybrid: write for push/SMS, read for email digests" -c 85
-deciduous link 1 4 -r "possible approach"
+test retry ... ok
+4 passed; 0 failed
 ```
 
-The user sketches the delivery pipeline and drops the image in:
+Without the token: 401. An unknown id: 404. Behind a Caddy that has only a `handle_path` block ([Run a server](content/run-a-server.md#3-put-https-in-front-of-it)), leaving out the path prefix gets an empty `200`, not an error. One file can be at most 64 MiB; the server refuses a larger upload with 413. `get_graph` lists the workspace's documents with size, description and node.
 
-```bash
-deciduous add observation "User proposed delivery pipeline architecture" -c 85
-deciduous link 1 5 -r "architecture context"
-deciduous doc attach 5 ~/Downloads/delivery-pipeline-sketch.png --ai-describe
+Older pages said `doc attach` was local only and that configuring a remote did not upload. That stopped being true; in 1.1.0 the upload happens before the command exits, like every other CLI write.
+
+What does not work in 1.1.0:
+
+- **Documents do not come down.** `deciduous remote pull` in another clone fetched every node and edge and no documents: `deciduous doc list` there said `No documents found.`, and `remote status` in that clone still said "every node, edge and document matches", which was not so. Read other people's attachments with `show_node` and `GET /documents/<id>`.
+- **A detached document is still served.** `deciduous doc detach 3` reached the server: the document disappeared from `get_graph`. But `show_node` on its node still listed it, and `GET /documents/<id>` still returned its bytes with 200. If you attached a secret, detaching it does not take it off the server. Whoever runs the server has to delete it from the database: [Remove a document that should never have been attached](content/operating.md#remove-a-document-that-should-never-have-been-attached).
+
+The token grants access to every workspace on the server, documents included ([Architecture](content/architecture.md)). Do not attach `.env` files, credential stores, connection strings, or output you have not read.
+
+`deciduous doc describe` reaches the server, like `attach` and `detach`: after `doc describe 1 "second description"`, `get_graph` showed the new description. `doc list`, `doc show`, `doc open` and `doc gc` operate on this checkout's copy in `.deciduous/documents/`.
+
+## Deriving the graph from a transcript
+
+Claude Code writes every prompt, edit, command and result of a session to a JSONL file under `~/.claude/projects/<project>/`. `deciduous transcript import` derives nodes from it: a goal per prompt with the prompt verbatim, actions from edit runs and commits, outcomes from test and build runs with their exit status, and an outcome from the assistant's closing report. Each node carries `metadata.evidence.kind`: `proven` (a tool call and its result) or `inferred` (the assistant said so).
+
+What it cannot derive is an option or a decision. Whether one approach was chosen over another is a judgement about prose, so those still have to be logged as they happen.
+
+Start with the list and a dry run. `transcript list` reads the directory for the current project:
+
+```console
+$ deciduous transcript list
+/Users/me/.claude/projects/-Users-me-code-my-app
+new      6494dc2d    2 prompts  2026-11-08  <session title>
+new      305de803    1 prompts  2026-11-05  <session title>
+
+$ deciduous transcript import --dry-run 6494dc2d
+Would import <session title> (6494dc2d, 2 prompts)
+  goals 2 · actions 11 · outcomes 4 proven, 1 inferred · observations 0 · edges 17
+  10 files hashed · 3 subagent runs skipped (their transcripts are separate files) · 15 deciduous MCP writes skipped (already in the graph)
 ```
 
-`--ai-describe` runs the `claude` CLI over the file and stores its description
-marked `ai`, so the diagram is findable from `doc list` without opening it.
-Without the CLI installed the attach still succeeds and the description is
-empty; add one with `describe`.
+It takes a session id (looked up in this project's directory) or a path to a `.jsonl`. The import leaves out every deciduous MCP call the session made, reads such as `query_nodes` included, and every shell command that runs `deciduous`, on the assumption that they already wrote to the graph. It does not check. Imported into a different workspace or server than the session wrote to, or after a write that failed, those records are simply missing; the count still says "already in the graph". Subagents' transcripts are separate files and are not followed. Actions record a hash of each file they touched; `--no-hash` skips that.
 
-Day 2, the choice:
+In a directory Claude Code has never run in, 1.1.0's `transcript list` fails with the raw `No such file or directory (os error 2)` for the directory it expected (the next release says Claude Code has not run there). Pass `--dir` to `list`; `import` has no `--dir`, so give it the `.jsonl` path.
 
-```bash
-deciduous add decision "Hybrid fan-out over eager and pull-based" -c 90
-deciduous link 4 6 -t chosen
-deciduous link 2 6 -t rejected -r "too expensive at scale for email"
-deciduous link 3 6 -t rejected -r "latency too high for push and SMS"
-deciduous add action "Implementing message broker with topic subscriptions" -c 85 -f "src/broker.rs,src/subscription.rs"
-deciduous link 6 7 -r "implementation"
+A real import, into a workspace on the server:
+
+```console
+$ deciduous transcript import ~/.claude/projects/<project>/305de803-....jsonl
+Imported <session title> (305de803, 1 prompts)
+  goals 1 · actions 0 · outcomes 0 proven, 1 inferred · observations 0 · edges 1
+  1 deciduous MCP writes skipped (already in the graph)
+  root goal #1: deciduous show 1
+$ deciduous remote status | tail -2
+In sync: no writes waiting, and every node, edge and document matches field by field.
 ```
 
-No document: the decision is in the graph itself.
+The nodes went to the server like any CLI write. On the server, the goal's metadata:
 
-Day 3, a bug with a screenshot of the Firebase console:
-
-```bash
-deciduous add goal "Fix iOS push notification delivery failure" -c 90 --prompt-stdin << 'EOF'
-Push notifications aren't reaching iOS devices. Here's what I'm seeing
-in the Firebase console.
-EOF
-# Created node 8
-deciduous doc attach 8 ~/Desktop/firebase-console-error.png -d "Firebase console: 0% delivery on iOS, 98% on Android"
-deciduous add observation "APNs certificate expired 3 days ago" -c 95
-deciduous link 8 9 -r "root cause"
-deciduous add action "Renewing APNs certificate and updating FCM config" -c 90 -f "config/firebase.json"
-deciduous link 8 10 -r "fix"
+```json
+{ "branch": "main",
+  "evidence": { "kind": "proven", "source": "transcript", "session": "305de803-...", "uuids": ["fd7edbe1-..."] },
+  "session": { "id": "305de803-...", "transcript": "/Users/me/.claude/projects/.../305de803-....jsonl", "turns": 1 } }
 ```
 
-When the certificate expires again, the screenshot is the pattern to
-recognise.
+and the outcome's `evidence.kind` was `inferred`, from the assistant's report at the end of the turn. The nodes keep the transcript's timestamps (`created_at` 2026-11-05 for a session from that day), while `branch` is the current checkout's.
 
-Day 5, a cost report forces a pivot:
+Importing the same transcript again changes nothing:
 
-```bash
-deciduous add observation "SES costs $400/mo in dev" -c 95 -d "SES is 60% of the dev AWS bill"
-deciduous doc attach 11 ~/Downloads/aws-cost-breakdown.csv -d "AWS billing CSV, SES line items"
-deciduous archaeology pivot 6 "SES costs $400/mo in dev; unsustainable" "Postfix relay for email delivery" -c 85 -r "cost"
+```text
+  goals 0 · actions 0 · outcomes 0 proven, 0 inferred · observations 0 · edges 0
+  2 already present · 1 deciduous MCP writes skipped (already in the graph)
 ```
 
-`archaeology pivot` writes the observation, the revisit and the new decision,
-links them, and marks decision 6 superseded. The CSV on observation 11 is the
-evidence; without it a later session sees "switched from SES to Postfix" and
-not the number.
+Read what you are about to share. A goal holds the prompt verbatim and an inferred outcome holds the assistant's report in full; both can contain paths, hostnames and anything pasted into the session, and on a shared server every token holder can read them. Run `--dry-run` first, and import into a workspace whose readers should see that session.
 
-Day 7, a new session runs `/recover`, which runs `deciduous doc list` among
-other things and gets four rows: the spec on goal 1, the sketch on
-observation 5, the console screenshot on goal 8, the billing CSV on
-observation 11, each with its description. The requirements, the
-architecture, the bug's symptom and the pivot's evidence are one command away,
-and nobody has to ask "what were the requirements?"
-
-## In the viewer
-
-`deciduous serve` shows a node's documents in its detail panel: filename,
-size, MIME type and description, with `(AI)` after descriptions the CLI
-wrote. It lists them and stops there: the page has no link to the file, even
-though the server answers `GET /api/documents/file/<id>`. To see the file,
-`deciduous doc open <id>`.
-
-## Anti-patterns
-
-- **Attaching repository files.** Use `-f` on the node. Documents are for what
-  version control does not hold.
-- **Attaching every screenshot.** A debugging screenshot that will not matter
-  in a week is noise. Attach what explains a decision.
-- **No description.** `IMG_4392.png` with no description is useless in three
-  months. `--ai-describe` beats nothing.
-- **Documents instead of structure.** A PDF does not replace a goal, its
-  options and the decision. The graph carries reasoning; documents carry
-  evidence.
-
-## Quick reference card
-
-```bash
-deciduous doc attach <node> <file> -d "what this is"     # or --ai-describe
-deciduous doc list [node] [--include-detached] [--json]
-deciduous doc show <id> [--json]
-deciduous doc describe <id> "text" | --ai
-deciduous doc open <id>
-deciduous doc detach <id>
-deciduous doc gc --dry-run && deciduous doc gc
-deciduous remote push --seed                            # send documents to the server ([remote] projects)
-```
+The viewer does not yet show `metadata.evidence`; `deciduous show <id>` prints it (`Evidence: inferred transcript, session 305de803`), and `show_node` returns it in `metadata`.

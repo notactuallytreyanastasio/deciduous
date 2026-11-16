@@ -40,6 +40,16 @@
       "to_change_id": "1fbbe75a-c5eb-41aa-9e10-c6779ef4e98b",
       "weight": 1.0
     },
+    "0129d3c786d7f597166e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.153864-05:00",
+      "edge_id": "0129d3c786d7f597166e",
+      "edge_type": "chosen",
+      "from_change_id": "6f18a692-6cac-4fd8-9807-054e89d15f9c",
+      "rationale": "the import is the backstop",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
+      "weight": 1.0
+    },
     "01663d3958b7a492fa00": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-18T18:37:07.961958-05:00",
@@ -650,6 +660,16 @@
       "to_change_id": "4e7c17aa-ba8e-45c1-86c8-6e3e44e99774",
       "weight": 1.0
     },
+    "0cc5fc43df29d37905bb": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:41.973254-05:00",
+      "edge_id": "0cc5fc43df29d37905bb",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "possible approach",
+      "to_change_id": "5eca14be-39eb-4918-9f64-81934b098929",
+      "weight": 1.0
+    },
     "0cf483323497da836ae7": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-10T13:54:37.424685-05:00",
@@ -658,6 +678,15 @@
       "from_change_id": "6c97e4fe-cc7e-4a71-b687-8c528ceb22bc",
       "rationale": "Implemented this approach",
       "to_change_id": "728ef146-fea7-48c0-b4c0-20f102ad6fb1",
+      "weight": 1.0
+    },
+    "0d33fe14525d42e1d585": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.071900-05:00",
+      "edge_id": "0d33fe14525d42e1d585",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "to_change_id": "0cb29321-7056-4161-8f4d-89eb41497e5f",
       "weight": 1.0
     },
     "0db8e52b1726a92eceb9": {
@@ -1080,6 +1109,16 @@
       "to_change_id": "6f0bce41-9fe9-4c2c-98d3-a6eee41c9c81",
       "weight": 1.0
     },
+    "16b05dac599389e57cdc": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:15.431818-05:00",
+      "edge_id": "16b05dac599389e57cdc",
+      "edge_type": "leads_to",
+      "from_change_id": "0f86e1bc-322d-463c-8732-25cef1ea4542",
+      "rationale": "implementation",
+      "to_change_id": "7519f9bb-88fd-4d32-81f0-6f32bb3ef354",
+      "weight": 1.0
+    },
     "16fdcf8d0c028a36c718": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T02:26:55.865547-05:00",
@@ -1108,6 +1147,15 @@
       "from_change_id": "821f4733-ba48-47cb-a924-db4b1a2ad26c",
       "rationale": "Implementation phase 5",
       "to_change_id": "fdbb2313-92a4-481f-9c0e-7212d76a3ef9",
+      "weight": 1.0
+    },
+    "17775b409d0779d728a8": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.949149-05:00",
+      "edge_id": "17775b409d0779d728a8",
+      "edge_type": "leads_to",
+      "from_change_id": "0dd409b6-4693-41ed-840e-0907cd8d7455",
+      "to_change_id": "b6489176-aa93-4154-9480-47d9e907ae1e",
       "weight": 1.0
     },
     "17990a2b505c372f4cc3": {
@@ -1370,6 +1418,16 @@
       "to_change_id": "40a5e3ae-4c6f-49d9-aba4-91d69ea3a545",
       "weight": 1.0
     },
+    "1ab204d22eed5ac50145": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.748067-05:00",
+      "edge_id": "1ab204d22eed5ac50145",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "4d909db3-d02c-4ae5-8b7c-3babb900b28a",
+      "weight": 1.0
+    },
     "1ac3ef707044e3d491a9": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-12T22:44:18.843729-05:00",
@@ -1438,6 +1496,16 @@
       "from_change_id": "462aa105-767a-4943-a2c8-01119eff6713",
       "rationale": "Implemented",
       "to_change_id": "8a5f1a56-acf0-451b-8634-9485437d209b",
+      "weight": 1.0
+    },
+    "1c05f2a2fa30d37a2268": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:14.937105-05:00",
+      "edge_id": "1c05f2a2fa30d37a2268",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "possible approach",
+      "to_change_id": "f4684921-7e1d-44f5-b12f-a02a148367e1",
       "weight": 1.0
     },
     "1c1d911a738475d05aaf": {
@@ -1528,6 +1596,16 @@
       "from_change_id": "8073c66c-f192-49bb-af44-77b843e6b8ba",
       "rationale": "implementation",
       "to_change_id": "18619e93-ba37-4f83-bd0a-932116c31519",
+      "weight": 1.0
+    },
+    "1e281eebda56bd6b9d9e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.384540-05:00",
+      "edge_id": "1e281eebda56bd6b9d9e",
+      "edge_type": "leads_to",
+      "from_change_id": "97d398bc-1323-461c-b8c4-7d56559dfb6d",
+      "rationale": "result",
+      "to_change_id": "5d92fee6-7c14-4458-9244-48f82a3d84e7",
       "weight": 1.0
     },
     "1e2b0f412a37e94db8b0": {
@@ -1849,6 +1927,26 @@
       "from_change_id": "1f400bb9-20da-4076-8160-547f20fb3756",
       "rationale": "chosen_deliberately",
       "to_change_id": "b82ca7e1-ab80-4ef3-9da9-abb755277ab3",
+      "weight": 1.0
+    },
+    "245d0b6c172c6cd8ce17": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:10.083489-05:00",
+      "edge_id": "245d0b6c172c6cd8ce17",
+      "edge_type": "rejected",
+      "from_change_id": "7dfe8ced-a705-4c2a-b8a5-6e2dfb04687a",
+      "rationale": "the user: get rid of it",
+      "to_change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
+      "weight": 1.0
+    },
+    "24929bcc4c7b5f452cd8": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:10.027163-05:00",
+      "edge_id": "24929bcc4c7b5f452cd8",
+      "edge_type": "rejected",
+      "from_change_id": "6d67c528-68d4-452a-96c5-3cdb4bdff131",
+      "rationale": "no measured benefit, a process spawn on every first edit",
+      "to_change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
       "weight": 1.0
     },
     "250a8a6799faf912363d": {
@@ -2452,6 +2550,16 @@
       "to_change_id": "f025b7fe-b7b5-41a2-b8eb-6a8d57e69376",
       "weight": 1.0
     },
+    "31cde28376111c71ca38": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:05:47.976750-05:00",
+      "edge_id": "31cde28376111c71ca38",
+      "edge_type": "leads_to",
+      "from_change_id": "3b30b4df-4c8e-413b-83be-aa2bcea68061",
+      "rationale": "result",
+      "to_change_id": "993c7e32-6c73-46dc-ba8f-fee60a68c10b",
+      "weight": 1.0
+    },
     "31d1879b977ed65c28ab": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-15T22:29:09.732435-05:00",
@@ -2582,6 +2690,26 @@
       "to_change_id": "17c0e3fb-f0b1-484e-bfd7-b9a3f4de1800",
       "weight": 1.0
     },
+    "3436304c7fcaa37a039b": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.454082-05:00",
+      "edge_id": "3436304c7fcaa37a039b",
+      "edge_type": "rejected",
+      "from_change_id": "50445105-19ee-48a0-9006-cec8adfbb0e6",
+      "rationale": "20 open goals from three sessions, most of them not goals; prompts in git nobody chose to log",
+      "to_change_id": "20b55fff-7944-4865-865c-d56752a9a216",
+      "weight": 1.0
+    },
+    "344e44a4ee5666dd1632": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:27:52.210598-05:00",
+      "edge_id": "344e44a4ee5666dd1632",
+      "edge_type": "leads_to",
+      "from_change_id": "a8231efa-5e4f-4873-8f7c-1cfcf849fc45",
+      "rationale": "result",
+      "to_change_id": "9e40b8d6-087e-4cb6-acd9-2a7ae32d1ced",
+      "weight": 1.0
+    },
     "3494ae3468e9e3297e4c": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:38:46.573644-05:00",
@@ -2660,6 +2788,16 @@
       "from_change_id": "a3fa3194-7bb9-4aa0-887b-0de099baa3e2",
       "rationale": "UI polish iteration",
       "to_change_id": "90004c23-aaf9-4eba-984b-3c63cc36bd84",
+      "weight": 1.0
+    },
+    "3632bea406eaa89b4a8e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.039495-05:00",
+      "edge_id": "3632bea406eaa89b4a8e",
+      "edge_type": "chosen",
+      "from_change_id": "4d909db3-d02c-4ae5-8b7c-3babb900b28a",
+      "rationale": "the transcript proves who logged it",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
       "weight": 1.0
     },
     "366bf7d8c99fb7a0f709": {
@@ -2882,6 +3020,16 @@
       "to_change_id": "770ac544-1692-48bc-9350-3bb47e2cba47",
       "weight": 1.0
     },
+    "3a2511ac887b00728136": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.014090-05:00",
+      "edge_id": "3a2511ac887b00728136",
+      "edge_type": "leads_to",
+      "from_change_id": "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697",
+      "rationale": "possible approach",
+      "to_change_id": "f0968517-7dfe-4fcf-ab48-2651c87d660b",
+      "weight": 1.0
+    },
     "3a284e17c5f0fa63b5a3": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-17T00:13:02.540754-05:00",
@@ -2910,6 +3058,16 @@
       "from_change_id": "3ca2d920-5e04-48d0-a8de-6a465652b437",
       "rationale": "UI views",
       "to_change_id": "e349f61b-346c-48ec-ad93-b4d1212da18f",
+      "weight": 1.0
+    },
+    "3a5c35d613c077a5dbf4": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:01:27.801370-05:00",
+      "edge_id": "3a5c35d613c077a5dbf4",
+      "edge_type": "leads_to",
+      "from_change_id": "7519f9bb-88fd-4d32-81f0-6f32bb3ef354",
+      "rationale": "result",
+      "to_change_id": "d07f16b2-d7b6-4d48-b527-acfd48e411f0",
       "weight": 1.0
     },
     "3a6c8d969424026755a7": {
@@ -2990,6 +3148,16 @@
       "from_change_id": "ab5a10aa-9656-441b-babe-a2ade405e79f",
       "rationale": "Documentation work complete",
       "to_change_id": "e638127a-03b9-4fc3-ab22-a3d1e1075c65",
+      "weight": 1.0
+    },
+    "3cd22bf7ad76449e03fd": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:09.854849-05:00",
+      "edge_id": "3cd22bf7ad76449e03fd",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "possible approach",
+      "to_change_id": "6d67c528-68d4-452a-96c5-3cdb4bdff131",
       "weight": 1.0
     },
     "3ce46aca194cb98bc6a6": {
@@ -3362,6 +3530,16 @@
       "to_change_id": "fac0a6f8-6034-4cc2-8a7b-e13822cf45b2",
       "weight": 1.0
     },
+    "42b71b308b50963fab2e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:18:28.220552-05:00",
+      "edge_id": "42b71b308b50963fab2e",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "third chapter: the shipped instructions named arguments the local tool refused",
+      "to_change_id": "e5e96ea2-93cf-4bca-817b-4e105f834b60",
+      "weight": 1.0
+    },
     "4312996ca893e6fce699": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-10T03:56:28.620774-05:00",
@@ -3410,6 +3588,16 @@
       "from_change_id": "17b0b0da-ff84-4306-b0a9-7a8c2e13f5fc",
       "rationale": "Merged to main",
       "to_change_id": "63d17d46-48a9-463f-8f4b-76f1ccd48789",
+      "weight": 1.0
+    },
+    "4411ff1dd3b3432a44c9": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.511809-05:00",
+      "edge_id": "4411ff1dd3b3432a44c9",
+      "edge_type": "rejected",
+      "from_change_id": "d5ada9cf-0cbf-4a61-a5e4-e42b94ef6227",
+      "rationale": "the backstop for an agent that logged nothing would leave orphan actions or no record",
+      "to_change_id": "20b55fff-7944-4865-865c-d56752a9a216",
       "weight": 1.0
     },
     "4485045998d66edd8570": {
@@ -3670,6 +3858,16 @@
       "from_change_id": "e5b5e9ca-8d47-4c4c-b43c-c79bb4698180",
       "rationale": "Enables chain traversal for grouping",
       "to_change_id": "904c3d95-4840-4112-a4f6-524ccff1f81a",
+      "weight": 1.0
+    },
+    "486069a792d57de8e5a2": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T16:54:16.320368-05:00",
+      "edge_id": "486069a792d57de8e5a2",
+      "edge_type": "chosen",
+      "from_change_id": "ac5139e0-7575-401a-b4c8-faec848e5735",
+      "rationale": "one default, no format change",
+      "to_change_id": "672de910-7714-45e0-a981-9145f7c61d3e",
       "weight": 1.0
     },
     "4883824badaea4c399ac": {
@@ -4052,6 +4250,16 @@
       "to_change_id": "089ba452-abb1-470b-b120-fe8246b17124",
       "weight": 1.0
     },
+    "4f7373c42b0301af288a": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:39:02.487604-05:00",
+      "edge_id": "4f7373c42b0301af288a",
+      "edge_type": "leads_to",
+      "from_change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
+      "rationale": "implementation",
+      "to_change_id": "02a723d4-d31f-4e55-b959-d76c5b26eed0",
+      "weight": 1.0
+    },
     "4f8b61fd0531f6f34b2f": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:30:56.082515-05:00",
@@ -4190,6 +4398,16 @@
       "from_change_id": "b1b3d525-ee90-4ad2-89ea-73800207905b",
       "rationale": "built and embedded",
       "to_change_id": "bc256db2-b893-48e2-b1f8-c034ec6d7a75",
+      "weight": 1.0
+    },
+    "51a8c5757a42fa6c8f28": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:17:32.737343-05:00",
+      "edge_id": "51a8c5757a42fa6c8f28",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "second half: harder scenarios first, then the run",
+      "to_change_id": "a8231efa-5e4f-4873-8f7c-1cfcf849fc45",
       "weight": 1.0
     },
     "5251c61593fc1e5395a0": {
@@ -4332,6 +4550,16 @@
       "to_change_id": "a959d83d-1baa-4b74-90e4-f57e3090b065",
       "weight": 1.0
     },
+    "54e268220310e0219b43": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:14.998292-05:00",
+      "edge_id": "54e268220310e0219b43",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "possible approach",
+      "to_change_id": "f3bab02d-6846-4b0d-8327-4edbad7a2023",
+      "weight": 1.0
+    },
     "54ee1274c48cfc528492": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-11T00:50:16.373834-05:00",
@@ -4410,6 +4638,15 @@
       "from_change_id": "6e2c2aab-76e4-4777-a8f3-84cf8d7fe4c5",
       "rationale": "user asked to get it live on deciduous.dev",
       "to_change_id": "e32b0b0b-fbcc-4964-9e04-994cd5f57f74",
+      "weight": 1.0
+    },
+    "5652b05206fa1d3d02e8": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.775606-05:00",
+      "edge_id": "5652b05206fa1d3d02e8",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "to_change_id": "89936090-e56f-46ff-982c-9bb6efa84d08",
       "weight": 1.0
     },
     "5656116d68e198d31415": {
@@ -4522,6 +4759,16 @@
       "to_change_id": "1a57484d-eb1a-4b55-9c02-049ebe960b02",
       "weight": 1.0
     },
+    "584294136d4397a89459": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:50:20.624185-05:00",
+      "edge_id": "584294136d4397a89459",
+      "edge_type": "leads_to",
+      "from_change_id": "85a8b5c0-bb98-49fe-97a4-4205f44c870c",
+      "rationale": "result",
+      "to_change_id": "b98a5632-90a1-4c94-b5b3-35444f1876a8",
+      "weight": 1.0
+    },
     "586bbc73607bf381f87c": {
       "author": "Bobby Grayson",
       "created_at": "2026-03-04T01:37:55.356953-05:00",
@@ -4580,6 +4827,16 @@
       "from_change_id": "5265c35d-65ed-40db-9bbf-3ecd6dcc0609",
       "rationale": "Implemented",
       "to_change_id": "63b3327e-1c81-4f6c-a9e2-bf4b77f6d5fe",
+      "weight": 1.0
+    },
+    "593b7ce8a31de2d7333c": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:47:29.372863-05:00",
+      "edge_id": "593b7ce8a31de2d7333c",
+      "edge_type": "leads_to",
+      "from_change_id": "c58c8900-2573-4011-857e-051441123435",
+      "rationale": "result",
+      "to_change_id": "deb99514-423c-4a35-9a6a-bed25389de94",
       "weight": 1.0
     },
     "5950ba5ccf37f60fb662": {
@@ -4812,6 +5069,16 @@
       "to_change_id": "b64e279c-76d5-4e68-9725-750c122824b8",
       "weight": 1.0
     },
+    "5c5ac83b0c0b284c3a9b": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T18:06:58.381630-05:00",
+      "edge_id": "5c5ac83b0c0b284c3a9b",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "automatic logging, the second item of the pass",
+      "to_change_id": "5e53c70e-b440-4b59-a050-370cc3264f1c",
+      "weight": 1.0
+    },
     "5c7650e69e6dfd40e482": {
       "author": "Bobby Grayson",
       "created_at": "2026-03-18T01:18:02.505130-04:00",
@@ -4842,6 +5109,16 @@
       "to_change_id": "a78700fc-d955-47ca-aca1-1a76f5b3b07d",
       "weight": 1.0
     },
+    "5de63ff5da20290af843": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.267906-05:00",
+      "edge_id": "5de63ff5da20290af843",
+      "edge_type": "rejected",
+      "from_change_id": "d990986f-e43a-4a38-89f2-b6f80aaf4319",
+      "rationale": "short prompts can be goals",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
+      "weight": 1.0
+    },
     "5e1bc507a5a4f6029081": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:44:31.936436-05:00",
@@ -4860,6 +5137,16 @@
       "from_change_id": "c7b92439-d2dc-4739-8d15-4b58a8073ddc",
       "rationale": "TraceView UI",
       "to_change_id": "edffe0ec-1189-4173-934d-111d8725d709",
+      "weight": 1.0
+    },
+    "5ebcad5b8f5aada05ad4": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.396382-05:00",
+      "edge_id": "5ebcad5b8f5aada05ad4",
+      "edge_type": "leads_to",
+      "from_change_id": "7554673f-b2f0-4015-a187-fd51e2200c0d",
+      "rationale": "possible approach",
+      "to_change_id": "ef37a8dd-4120-4f86-880e-35aa7f50fdd1",
       "weight": 1.0
     },
     "5ed1b84049336a0921e9": {
@@ -5282,6 +5569,15 @@
       "to_change_id": "a039e333-b4de-41d2-bed8-c8b144056171",
       "weight": 1.0
     },
+    "66448ac8d35fbd119b86": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.717075-05:00",
+      "edge_id": "66448ac8d35fbd119b86",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "to_change_id": "d2aa994e-f27d-4883-aa85-c61823ac9924",
+      "weight": 1.0
+    },
     "66459c71d4f6917258e5": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-11T18:25:52.231339-05:00",
@@ -5330,6 +5626,26 @@
       "from_change_id": "bfc37ff9-dfc6-4ab3-9f78-b7eb409ee7bf",
       "rationale": "fix for discovered issue",
       "to_change_id": "6812cca9-5644-4ffe-9590-06e114266c6b",
+      "weight": 1.0
+    },
+    "67a154d36f6deb68f740": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:46.645044-05:00",
+      "edge_id": "67a154d36f6deb68f740",
+      "edge_type": "chosen",
+      "from_change_id": "5eca14be-39eb-4918-9f64-81934b098929",
+      "rationale": "362 nodes carry commits; decisions are reached by climbing",
+      "to_change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
+      "weight": 1.0
+    },
+    "67a37607769768f9e9b6": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.096359-05:00",
+      "edge_id": "67a37607769768f9e9b6",
+      "edge_type": "rejected",
+      "from_change_id": "2d2566c5-d2a2-4cf8-ac08-a15b93ab3d96",
+      "rationale": "depends on import order",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
       "weight": 1.0
     },
     "67a454b92e295a574136": {
@@ -5442,6 +5758,16 @@
       "to_change_id": "a533199a-ad1b-4d02-aca0-178017630e82",
       "weight": 1.0
     },
+    "69296bb069e058565d1a": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T16:54:16.436163-05:00",
+      "edge_id": "69296bb069e058565d1a",
+      "edge_type": "leads_to",
+      "from_change_id": "672de910-7714-45e0-a981-9145f7c61d3e",
+      "rationale": "implementation",
+      "to_change_id": "3b30b4df-4c8e-413b-83be-aa2bcea68061",
+      "weight": 1.0
+    },
     "69313624954d24082269": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-13T03:08:46.776221-05:00",
@@ -5492,6 +5818,16 @@
       "to_change_id": "dc48220a-2672-4c56-8f7c-f229ff1f7d80",
       "weight": 1.0
     },
+    "6a0e29a451a2e5a40e9a": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:46:25.374120-05:00",
+      "edge_id": "6a0e29a451a2e5a40e9a",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "first half of the request",
+      "to_change_id": "85a8b5c0-bb98-49fe-97a4-4205f44c870c",
+      "weight": 1.0
+    },
     "6a4fcb5f6d9be5f4211c": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-11T00:28:46.299920-05:00",
@@ -5540,6 +5876,16 @@
       "from_change_id": "af9a0903-9d86-44ae-8bb9-9cc278ab1bff",
       "rationale": "possible_approach",
       "to_change_id": "94d1dc63-d620-4cf9-9ff7-61b0d4841870",
+      "weight": 1.0
+    },
+    "6abcab47c0b1516b63fc": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:07:39.533485-05:00",
+      "edge_id": "6abcab47c0b1516b63fc",
+      "edge_type": "leads_to",
+      "from_change_id": "93c3cdf0-0428-43e4-b51f-f4dbe7eb1f75",
+      "rationale": "result",
+      "to_change_id": "bdaaa528-9be9-43cf-8d79-1480faaa608f",
       "weight": 1.0
     },
     "6b0b532ea5aef80b23f5": {
@@ -5620,6 +5966,16 @@
       "from_change_id": "f65428a5-b039-40ef-bf08-eb059a50bbed",
       "rationale": "leads_to",
       "to_change_id": "1f0e68d9-b6e9-4bb0-9927-9b572733c37a",
+      "weight": 1.0
+    },
+    "6d2535568bc0acdcc6d4": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.190877-05:00",
+      "edge_id": "6d2535568bc0acdcc6d4",
+      "edge_type": "rejected",
+      "from_change_id": "0cb29321-7056-4161-8f4d-89eb41497e5f",
+      "rationale": "a quote proves the words were said, not that they were read right",
+      "to_change_id": "96c7d29a-16b3-423e-814b-1a7f259f4960",
       "weight": 1.0
     },
     "6d5daf9c0543284fc661": {
@@ -6091,6 +6447,16 @@
       "to_change_id": "6149107d-9724-4500-9393-648e75949978",
       "weight": 1.0
     },
+    "767f8e3ba6304fb49b3d": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T16:52:59.582785-05:00",
+      "edge_id": "767f8e3ba6304fb49b3d",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "findings of the pass",
+      "to_change_id": "2f09eb16-fa2b-4718-b9a5-b5dd33eee16a",
+      "weight": 1.0
+    },
     "76a278ff3906be5a9642": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-05T20:28:49.655077-05:00",
@@ -6319,6 +6685,16 @@
       "to_change_id": "2fbd9119-aa28-4c0b-8b8c-6dd26dde2ae8",
       "weight": 1.0
     },
+    "7af3d75254e9a1caefac": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.325432-05:00",
+      "edge_id": "7af3d75254e9a1caefac",
+      "edge_type": "leads_to",
+      "from_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
+      "rationale": "implementation",
+      "to_change_id": "97d398bc-1323-461c-b8c4-7d56559dfb6d",
+      "weight": 1.0
+    },
     "7b24dc4c502ca17804a4": {
       "author": "Bobby Grayson",
       "created_at": "2026-09-02T18:32:49.415677-04:00",
@@ -6427,6 +6803,16 @@
       "from_change_id": "6f5e23ac-c4e5-4797-9335-15b4c0c0b66d",
       "rationale": "Chosen approach",
       "to_change_id": "690348fb-c6ee-4c63-84a7-1462aced3993",
+      "weight": 1.0
+    },
+    "7c2d7cb56013ee932954": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.833302-05:00",
+      "edge_id": "7c2d7cb56013ee932954",
+      "edge_type": "rejected",
+      "from_change_id": "d2aa994e-f27d-4883-aa85-c61823ac9924",
+      "rationale": "identity has to exist before a history can name anyone, and writes reach the database by five paths",
+      "to_change_id": "0dd409b6-4693-41ed-840e-0907cd8d7455",
       "weight": 1.0
     },
     "7c4e46d8aa6179fb64f5": {
@@ -6607,6 +6993,16 @@
       "from_change_id": "f557fa61-bedf-4341-8286-85f9416f8b22",
       "rationale": "Phase 1 issue",
       "to_change_id": "c03182f5-d8e8-44f5-b6e4-867a56140726",
+      "weight": 1.0
+    },
+    "7fcbaca5d9265a885838": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.211031-05:00",
+      "edge_id": "7fcbaca5d9265a885838",
+      "edge_type": "chosen",
+      "from_change_id": "ed90f2b3-dc96-4bdf-9603-cf7add96500b",
+      "rationale": "precise",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
       "weight": 1.0
     },
     "7fce1dadd4d625c7b964": {
@@ -6848,6 +7244,16 @@
       "to_change_id": "1db1b0a9-1f5d-4805-bbd9-08d8871eb8a9",
       "weight": 1.0
     },
+    "83ba2ba00b9ced32f9db": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:41.858704-05:00",
+      "edge_id": "83ba2ba00b9ced32f9db",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "what the real graph holds",
+      "to_change_id": "8b2c61f1-e714-408b-a961-fabe8d8b4ddb",
+      "weight": 1.0
+    },
     "83df696ede50de6e5a3d": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-19T15:24:06.480534-05:00",
@@ -6995,6 +7401,16 @@
       "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
       "rationale": "Goal drove split-view design",
       "to_change_id": "39b0e2c5-1c92-4d8a-83e0-d873f565b269",
+      "weight": 1.0
+    },
+    "8636a67ec35e554ea826": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:46.587359-05:00",
+      "edge_id": "8636a67ec35e554ea826",
+      "edge_type": "rejected",
+      "from_change_id": "5db990a7-7b8a-4b50-bffa-058f10a8594e",
+      "rationale": "one of 127 decisions names a file",
+      "to_change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
       "weight": 1.0
     },
     "8648b110a1e164b73613": {
@@ -7225,6 +7641,16 @@
       "from_change_id": "c4304d93-a9b5-4ebb-8cd9-dba5e6164660",
       "rationale": "Test verifies emoji and special chars don't cause panic",
       "to_change_id": "f0f3be6d-9077-4496-bb9b-d5bea02b8f7a",
+      "weight": 1.0
+    },
+    "8a5724efc321ac9e4f19": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.569048-05:00",
+      "edge_id": "8a5724efc321ac9e4f19",
+      "edge_type": "chosen",
+      "from_change_id": "ef37a8dd-4120-4f86-880e-35aa7f50fdd1",
+      "rationale": "keeps the backstop, clears the open list",
+      "to_change_id": "20b55fff-7944-4865-865c-d56752a9a216",
       "weight": 1.0
     },
     "8a680fce8c7166eee418": {
@@ -7557,6 +7983,16 @@
       "to_change_id": "8551fca5-755a-415e-a27a-38c50a3ada9c",
       "weight": 1.0
     },
+    "900320ce0c5448911f1d": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:15.059956-05:00",
+      "edge_id": "900320ce0c5448911f1d",
+      "edge_type": "rejected",
+      "from_change_id": "f4684921-7e1d-44f5-b12f-a02a148367e1",
+      "rationale": "any record beats none; the question is whether the graph beats a markdown file",
+      "to_change_id": "0f86e1bc-322d-463c-8732-25cef1ea4542",
+      "weight": 1.0
+    },
     "904ad75ebe357a2b98a9": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:23:03.942476-05:00",
@@ -7787,6 +8223,16 @@
       "to_change_id": "1426ad46-371d-471d-9a29-fc5c46ba9be8",
       "weight": 1.0
     },
+    "95b4a9f0143fc378b3e9": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.248574-05:00",
+      "edge_id": "95b4a9f0143fc378b3e9",
+      "edge_type": "chosen",
+      "from_change_id": "f0968517-7dfe-4fcf-ab48-2651c87d660b",
+      "rationale": "what was pitched; --accept is there for the impatient",
+      "to_change_id": "96c7d29a-16b3-423e-814b-1a7f259f4960",
+      "weight": 1.0
+    },
     "95f4ee0f11aee54c7224": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-13T03:08:38.131771-05:00",
@@ -7897,6 +8343,16 @@
       "to_change_id": "97588e66-ff74-4464-b9ab-1dc6e25b69f5",
       "weight": 1.0
     },
+    "972847b85d5115779e92": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.982813-05:00",
+      "edge_id": "972847b85d5115779e92",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "d990986f-e43a-4a38-89f2-b6f80aaf4319",
+      "weight": 1.0
+    },
     "9747b55ccd63c9a49868": {
       "author": "Bobby Grayson",
       "created_at": "2026-09-02T17:33:30.813134-04:00",
@@ -8005,6 +8461,16 @@
       "from_change_id": "c06c4d4f-ad06-4212-bba9-7309f4f630f6",
       "rationale": "PR opened",
       "to_change_id": "f3feb439-e333-4208-a341-8653b352213f",
+      "weight": 1.0
+    },
+    "98bb4fcb3cdad3792e8a": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.339201-05:00",
+      "edge_id": "98bb4fcb3cdad3792e8a",
+      "edge_type": "leads_to",
+      "from_change_id": "7554673f-b2f0-4015-a187-fd51e2200c0d",
+      "rationale": "possible approach",
+      "to_change_id": "d5ada9cf-0cbf-4a61-a5e4-e42b94ef6227",
       "weight": 1.0
     },
     "9931a550a804c6f284f1": {
@@ -8837,6 +9303,16 @@
       "to_change_id": "6b7b04bd-ef6e-4be7-9031-a712d8f6a40c",
       "weight": 1.0
     },
+    "a786500c69629abb97d1": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:10.196501-05:00",
+      "edge_id": "a786500c69629abb97d1",
+      "edge_type": "leads_to",
+      "from_change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
+      "rationale": "implementation",
+      "to_change_id": "85a8b5c0-bb98-49fe-97a4-4205f44c870c",
+      "weight": 1.0
+    },
     "a7925bc4f5d6f652aafa": {
       "author": "Bobby Grayson",
       "created_at": "2026-03-04T01:37:55.617098-05:00",
@@ -8905,6 +9381,16 @@
       "from_change_id": "ff54b327-6672-4c08-89c7-96b73bd6f4bc",
       "rationale": "Issue #185 implementation",
       "to_change_id": "95e875d0-b486-4a9c-b12a-b4ca763ff338",
+      "weight": 1.0
+    },
+    "a964e8fb51d9987a5cbe": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T18:06:58.617445-05:00",
+      "edge_id": "a964e8fb51d9987a5cbe",
+      "edge_type": "leads_to",
+      "from_change_id": "80f31a6f-6cde-49a9-b9cc-6d7e160d7dce",
+      "rationale": "result",
+      "to_change_id": "d9a6a8c8-fcc7-4c02-a918-5f65a34d946f",
       "weight": 1.0
     },
     "a96ee05236b6d9173088": {
@@ -9167,6 +9653,16 @@
       "to_change_id": "51eb3d8f-9690-4e94-a08c-c1590883a6e1",
       "weight": 1.0
     },
+    "b0b8ec5498d7096e53e9": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:09.913471-05:00",
+      "edge_id": "b0b8ec5498d7096e53e9",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "possible approach",
+      "to_change_id": "7dfe8ced-a705-4c2a-b8a5-6e2dfb04687a",
+      "weight": 1.0
+    },
     "b1285b184932157efb68": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-15T02:15:12.982922-05:00",
@@ -9347,6 +9843,16 @@
       "to_change_id": "5627402c-39f9-4b02-a78f-016b40f144cb",
       "weight": 1.0
     },
+    "b461cc6b1487e831226e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T16:54:28.381644-05:00",
+      "edge_id": "b461cc6b1487e831226e",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "possible approach",
+      "to_change_id": "ac5139e0-7575-401a-b4c8-faec848e5735",
+      "weight": 1.0
+    },
     "b47591cf18d09f02fe25": {
       "author": "Bobby Grayson",
       "created_at": "2026-02-04T22:24:39.609965-05:00",
@@ -9355,6 +9861,16 @@
       "from_change_id": "8c848515-a0ce-41ee-9d8d-e76591fc5204",
       "rationale": "Key design decision for viz rethink",
       "to_change_id": "39f1f463-2a97-4665-8c13-e49f1d327254",
+      "weight": 1.0
+    },
+    "b47a64492eb1fef50f96": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.305604-05:00",
+      "edge_id": "b47a64492eb1fef50f96",
+      "edge_type": "leads_to",
+      "from_change_id": "96c7d29a-16b3-423e-814b-1a7f259f4960",
+      "rationale": "implementation",
+      "to_change_id": "93c3cdf0-0428-43e4-b51f-f4dbe7eb1f75",
       "weight": 1.0
     },
     "b4f460b8e45942278a58": {
@@ -9707,6 +10223,16 @@
       "to_change_id": "ef27a69c-aed8-46e3-aa09-d79ad5f40335",
       "weight": 1.0
     },
+    "bb9e091922d63bac9598": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.926226-05:00",
+      "edge_id": "bb9e091922d63bac9598",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "ed90f2b3-dc96-4bdf-9603-cf7add96500b",
+      "weight": 1.0
+    },
     "bbc354a10eaad5015e6f": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T03:41:55.530054-05:00",
@@ -10007,6 +10533,16 @@
       "to_change_id": "e7a6cfee-fe03-4b15-8dc6-6cee4752a991",
       "weight": 1.0
     },
+    "c11c491ed5908e0344c1": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:18:28.337890-05:00",
+      "edge_id": "c11c491ed5908e0344c1",
+      "edge_type": "leads_to",
+      "from_change_id": "e5e96ea2-93cf-4bca-817b-4e105f834b60",
+      "rationale": "result",
+      "to_change_id": "22efa02e-24c4-4f21-852a-b61b66e55649",
+      "weight": 1.0
+    },
     "c11ca977de7bcc309ba1": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:29:21.294433-05:00",
@@ -10035,6 +10571,16 @@
       "from_change_id": "de547fee-b3a9-4c7a-ab3e-63503d4ac94c",
       "rationale": "Commit e0670c0 pushed to main",
       "to_change_id": "165a54f5-e60d-432b-8fb9-e7882453b0ef",
+      "weight": 1.0
+    },
+    "c17253d3a486e647e617": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:01:27.922413-05:00",
+      "edge_id": "c17253d3a486e647e617",
+      "edge_type": "leads_to",
+      "from_change_id": "d07f16b2-d7b6-4d48-b527-acfd48e411f0",
+      "rationale": "what the result leaves open",
+      "to_change_id": "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697",
       "weight": 1.0
     },
     "c1a07a43d04f6ce2fff4": {
@@ -10207,6 +10753,16 @@
       "to_change_id": "87ea8175-a4a0-4593-85be-ea3b9cf77644",
       "weight": 1.0
     },
+    "c4357784e2446b799fdc": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.811038-05:00",
+      "edge_id": "c4357784e2446b799fdc",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "2d2566c5-d2a2-4cf8-ac08-a15b93ab3d96",
+      "weight": 1.0
+    },
     "c548aa91f9833d1a58fb": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-13T03:02:24.527240-05:00",
@@ -10327,6 +10883,16 @@
       "to_change_id": "696b8859-d56f-4ad8-9314-cdea3f60b8f8",
       "weight": 1.0
     },
+    "c7bfee82a954c19579f7": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T18:06:58.498352-05:00",
+      "edge_id": "c7bfee82a954c19579f7",
+      "edge_type": "leads_to",
+      "from_change_id": "5e53c70e-b440-4b59-a050-370cc3264f1c",
+      "rationale": "implementation",
+      "to_change_id": "80f31a6f-6cde-49a9-b9cc-6d7e160d7dce",
+      "weight": 1.0
+    },
     "c88ac8c6690759a71d99": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-05T19:21:04.570955-05:00",
@@ -10375,6 +10941,16 @@
       "from_change_id": "89c57e32-42c4-417d-bdf9-178758891c7f",
       "rationale": "Goal requires choosing storage model",
       "to_change_id": "eed900d7-f520-4ce8-9650-4b9325797cc4",
+      "weight": 1.0
+    },
+    "c9b5fef1650f0f391b49": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:16:50.111157-05:00",
+      "edge_id": "c9b5fef1650f0f391b49",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "item 5",
+      "to_change_id": "54b336eb-c546-4000-b4f7-18769d65a866",
       "weight": 1.0
     },
     "ca1abd6cca7d4d2cdccd": {
@@ -10577,6 +11153,16 @@
       "to_change_id": "96555df9-5176-4647-992b-5be31148b27c",
       "weight": 1.0
     },
+    "cd30f091e8e8d5c5bf6c": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:10.140075-05:00",
+      "edge_id": "cd30f091e8e8d5c5bf6c",
+      "edge_type": "chosen",
+      "from_change_id": "b5416da7-09a1-4706-9681-d89a1abc962e",
+      "rationale": "the user: get rid of it and remove it from tests",
+      "to_change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
+      "weight": 1.0
+    },
     "cd318ec148967fb023d5": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-15T18:45:33.797939-05:00",
@@ -10767,6 +11353,16 @@
       "to_change_id": "ec76505d-6d11-47ac-a06f-6ca54761670e",
       "weight": 1.0
     },
+    "d2ac0206112bc08f47d3": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:47:15.119910-05:00",
+      "edge_id": "d2ac0206112bc08f47d3",
+      "edge_type": "chosen",
+      "from_change_id": "f3bab02d-6846-4b0d-8327-4edbad7a2023",
+      "rationale": "ADR files are what a team would use instead",
+      "to_change_id": "0f86e1bc-322d-463c-8732-25cef1ea4542",
+      "weight": 1.0
+    },
     "d2b676195f7462745a62": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:43:17.349042-05:00",
@@ -10866,6 +11462,16 @@
       "to_change_id": "16b8d892-0c1f-417e-9ead-3ed257a65613",
       "weight": 1.0
     },
+    "d5710b8c2d9ba3c628a9": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:15.957003-05:00",
+      "edge_id": "d5710b8c2d9ba3c628a9",
+      "edge_type": "leads_to",
+      "from_change_id": "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697",
+      "rationale": "possible approach",
+      "to_change_id": "0cb29321-7056-4161-8f4d-89eb41497e5f",
+      "weight": 1.0
+    },
     "d5a243b40aed78ee5d1f": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-15T12:09:14.761436-05:00",
@@ -10894,6 +11500,16 @@
       "from_change_id": "89c57e32-42c4-417d-bdf9-178758891c7f",
       "rationale": "Implementation",
       "to_change_id": "85446554-618d-4d59-b8b0-3b6b036ee8fb",
+      "weight": 1.0
+    },
+    "d615c1774b316aba541f": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.281355-05:00",
+      "edge_id": "d615c1774b316aba541f",
+      "edge_type": "leads_to",
+      "from_change_id": "7554673f-b2f0-4015-a187-fd51e2200c0d",
+      "rationale": "possible approach",
+      "to_change_id": "50445105-19ee-48a0-9006-cec8adfbb0e6",
       "weight": 1.0
     },
     "d66038c6606b89f6fa17": {
@@ -11656,6 +12272,16 @@
       "to_change_id": "dd3a88d4-b67f-4298-aeb3-c4583ad96a94",
       "weight": 1.0
     },
+    "e3a770dc9f1f01b77ffa": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.869171-05:00",
+      "edge_id": "e3a770dc9f1f01b77ffa",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "6f18a692-6cac-4fd8-9807-054e89d15f9c",
+      "weight": 1.0
+    },
     "e3b7057740a045cb7a7c": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-18T18:34:39.729296-05:00",
@@ -11846,6 +12472,16 @@
       "to_change_id": "085c9b02-c2a9-48ec-9e10-179df2579d92",
       "weight": 1.0
     },
+    "e6320259f6d6c582070e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:39:02.661794-05:00",
+      "edge_id": "e6320259f6d6c582070e",
+      "edge_type": "leads_to",
+      "from_change_id": "02a723d4-d31f-4e55-b959-d76c5b26eed0",
+      "rationale": "result",
+      "to_change_id": "dec51edc-1bdd-4f11-81d1-4f0f1c205509",
+      "weight": 1.0
+    },
     "e6586cd997c8f94493d4": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-05T20:18:19.408356-05:00",
@@ -11923,6 +12559,16 @@
       "from_change_id": "6812cca9-5644-4ffe-9590-06e114266c6b",
       "rationale": "verified working",
       "to_change_id": "b81345f7-58e5-4d5a-b06d-117a84388ac5",
+      "weight": 1.0
+    },
+    "e797742288573ee58406": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:41.916972-05:00",
+      "edge_id": "e797742288573ee58406",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "possible approach",
+      "to_change_id": "5db990a7-7b8a-4b50-bffa-058f10a8594e",
       "weight": 1.0
     },
     "e7a8b7ffe7014a4876ad": {
@@ -12165,6 +12811,16 @@
       "to_change_id": "97a2abc8-cf25-4996-a45b-238937c8d476",
       "weight": 1.0
     },
+    "ebb6f2ba40c794b487ff": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:13:03.041839-05:00",
+      "edge_id": "ebb6f2ba40c794b487ff",
+      "edge_type": "leads_to",
+      "from_change_id": "faef8265-019f-4cf3-944f-55741d0f4098",
+      "rationale": "result",
+      "to_change_id": "ac78bc84-0c1a-478a-9ee6-1f202f9ea3b4",
+      "weight": 1.0
+    },
     "ebba0f3180b2024c96a1": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-11T00:29:23.432579-05:00",
@@ -12193,6 +12849,16 @@
       "from_change_id": "654b0629-7882-42f4-a928-a9e8f4fdff5a",
       "rationale": "Implementation complete",
       "to_change_id": "1fa73c05-672c-4905-a96d-69746fb5f729",
+      "weight": 1.0
+    },
+    "ec7e3106d87600654103": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T21:48:09.969798-05:00",
+      "edge_id": "ec7e3106d87600654103",
+      "edge_type": "leads_to",
+      "from_change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "rationale": "possible approach",
+      "to_change_id": "b5416da7-09a1-4706-9681-d89a1abc962e",
       "weight": 1.0
     },
     "ec82d31831e368d6cc2a": {
@@ -12245,6 +12911,16 @@
       "to_change_id": "e2afa454-0932-49fc-b3fe-f1a1e0686e3c",
       "weight": 1.0
     },
+    "ed16c00c19475de758d7": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T16:54:28.441105-05:00",
+      "edge_id": "ed16c00c19475de758d7",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "possible approach",
+      "to_change_id": "9dc5a9f7-a707-4283-848c-cc1f9b77a23c",
+      "weight": 1.0
+    },
     "ed32e38d6806548620c2": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-06T23:53:11.206188-05:00",
@@ -12263,6 +12939,15 @@
       "from_change_id": "ac1fbb01-0dd8-4188-ad67-7bf94ca09518",
       "rationale": "Goal requires build strategy decision",
       "to_change_id": "ac3df99d-f2b6-417d-869e-ef7db898f87b",
+      "weight": 1.0
+    },
+    "ed430acc989146e57221": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:04:16.131960-05:00",
+      "edge_id": "ed430acc989146e57221",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "to_change_id": "f0968517-7dfe-4fcf-ab48-2651c87d660b",
       "weight": 1.0
     },
     "edd06d0e4b6dfe9ca9c7": {
@@ -12455,6 +13140,16 @@
       "to_change_id": "7b72ec57-3192-48ab-9582-4acb703f3bf1",
       "weight": 1.0
     },
+    "f2243cd9b08d3b90ff67": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:31.891335-05:00",
+      "edge_id": "f2243cd9b08d3b90ff67",
+      "edge_type": "chosen",
+      "from_change_id": "89936090-e56f-46ff-982c-9bb6efa84d08",
+      "rationale": "Activity.record is already called by every MCP write and every CLI batch",
+      "to_change_id": "0dd409b6-4693-41ed-840e-0907cd8d7455",
+      "weight": 1.0
+    },
     "f25ecd139b42c9c5dcec": {
       "author": "Bobby Grayson",
       "created_at": "2026-09-02T18:11:49.966875-04:00",
@@ -12533,6 +13228,16 @@
       "from_change_id": "8709501f-9d2c-43c5-8edb-b21a27666685",
       "rationale": "Implementation step",
       "to_change_id": "1f94f41f-631f-4e79-baec-6d1bccf2463d",
+      "weight": 1.0
+    },
+    "f3958456215a8b58c2f5": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.626982-05:00",
+      "edge_id": "f3958456215a8b58c2f5",
+      "edge_type": "leads_to",
+      "from_change_id": "20b55fff-7944-4865-865c-d56752a9a216",
+      "rationale": "implementation",
+      "to_change_id": "c58c8900-2573-4011-857e-051441123435",
       "weight": 1.0
     },
     "f3977b63ed449146c554": {
@@ -12805,6 +13510,16 @@
       "to_change_id": "67c7536a-5431-4291-83d1-253a6e91a477",
       "weight": 1.0
     },
+    "f886d4b19bb6233d89bd": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:16:50.230169-05:00",
+      "edge_id": "f886d4b19bb6233d89bd",
+      "edge_type": "leads_to",
+      "from_change_id": "54b336eb-c546-4000-b4f7-18769d65a866",
+      "rationale": "result",
+      "to_change_id": "10eb71c9-24c8-452b-9731-1ce9327216ae",
+      "weight": 1.0
+    },
     "f8d34d495f510c4a4bb5": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-09T17:57:28.378747-05:00",
@@ -12883,6 +13598,16 @@
       "from_change_id": "235a5864-0f89-411a-915c-38be358d5510",
       "rationale": "Chosen solution",
       "to_change_id": "c5bd80fa-f989-41b2-8707-3e5facce59f9",
+      "weight": 1.0
+    },
+    "f9d672414d66b92617ba": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T16:54:16.378402-05:00",
+      "edge_id": "f9d672414d66b92617ba",
+      "edge_type": "rejected",
+      "from_change_id": "9dc5a9f7-a707-4283-848c-cc1f9b77a23c",
+      "rationale": "nullable status touches every record format",
+      "to_change_id": "672de910-7714-45e0-a981-9145f7c61d3e",
       "weight": 1.0
     },
     "f9f765b4358d0a425358": {
@@ -13055,6 +13780,16 @@
       "to_change_id": "9717da4b-5690-4106-852a-3792a1fbdc3f",
       "weight": 1.0
     },
+    "fb685009461ee5564bd6": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T17:13:02.923487-05:00",
+      "edge_id": "fb685009461ee5564bd6",
+      "edge_type": "leads_to",
+      "from_change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "rationale": "second chapter: the first ten minutes",
+      "to_change_id": "faef8265-019f-4cf3-944f-55741d0f4098",
+      "weight": 1.0
+    },
     "fb768ca2c510fbe87b20": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-18T21:08:32.144507-05:00",
@@ -13103,6 +13838,15 @@
       "from_change_id": "18dd00f5-803a-4977-bc14-40d986d16aa6",
       "rationale": "Ancestry breadcrumb implemented",
       "to_change_id": "2619b9ad-4f3d-459b-a03b-29527440ba30",
+      "weight": 1.0
+    },
+    "fc9e0294d6e51cce56b3": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T20:24:32.007766-05:00",
+      "edge_id": "fc9e0294d6e51cce56b3",
+      "edge_type": "leads_to",
+      "from_change_id": "b6489176-aa93-4154-9480-47d9e907ae1e",
+      "to_change_id": "7a12da4a-b820-4dea-a92b-7ce290f029f1",
       "weight": 1.0
     },
     "fcb35b78c6e423e583ad": {
@@ -13527,6 +14271,19 @@
       "status": "pending",
       "title": "Roadmap view unified across TUI/Web: Active/Completed toggle, o opens issues, c toggles checkbox, API endpoint for updates",
       "updated_at": "2025-12-14T11:27:00.884013-05:00"
+    },
+    "02a723d4-d31f-4e55-b959-d76c5b26eed0": {
+      "author": "Bobby Grayson",
+      "change_id": "02a723d4-d31f-4e55-b959-d76c5b26eed0",
+      "created_at": "2026-11-14T19:31:46.922779-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "deciduous why <file>[:lines]: src/why.rs, CLI command, pre-edit hook",
+      "updated_at": "2026-11-14T19:39:02.543568-05:00"
     },
     "02b2da48-f6c1-429b-a48c-f1353e2c1745": {
       "author": "Bobby Grayson",
@@ -14405,6 +15162,19 @@
       "title": "Simple thread pool with shared queue",
       "updated_at": "2026-01-12T22:39:37.735097-05:00"
     },
+    "0cb29321-7056-4161-8f4d-89eb41497e5f": {
+      "author": "Bobby Grayson",
+      "change_id": "0cb29321-7056-4161-8f4d-89eb41497e5f",
+      "created_at": "2026-11-14T20:04:15.713946-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 45
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Write model-derived decisions straight into the graph as inferred nodes",
+      "updated_at": "2026-11-14T20:04:16.362626-05:00"
+    },
     "0ceb74e4-2a70-443e-9e65-b506bc007890": {
       "author": "Bobby Grayson",
       "change_id": "0ceb74e4-2a70-443e-9e65-b506bc007890",
@@ -14458,6 +15228,19 @@
       "status": "pending",
       "title": "Add deciduous update command to sync tooling files to latest",
       "updated_at": "2025-12-10T16:26:41.496415-05:00"
+    },
+    "0dd409b6-4693-41ed-840e-0907cd8d7455": {
+      "author": "Bobby Grayson",
+      "change_id": "0dd409b6-4693-41ed-840e-0907cd8d7455",
+      "created_at": "2026-11-14T20:24:31.536302-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 80
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Named tokens and an actor on write activity first; the audit history waits",
+      "updated_at": "2026-11-14T20:24:32.178758-05:00"
     },
     "0de8ad57-90d9-4c83-bd59-d7b36cd8d1f5": {
       "author": "Bobby Grayson",
@@ -14583,6 +15366,19 @@
       "title": "Fix NULL change_id migration bug",
       "updated_at": "2025-12-11T00:29:13.455360-05:00"
     },
+    "0f86e1bc-322d-463c-8732-25cef1ea4542": {
+      "author": "Bobby Grayson",
+      "change_id": "0f86e1bc-322d-463c-8732-25cef1ea4542",
+      "created_at": "2026-11-14T19:47:09.868883-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Four arms with ADR files as the competitor: that a record beats no record is not news",
+      "updated_at": "2026-11-14T19:47:15.306416-05:00"
+    },
     "0f9d957a-ff9a-479d-83ff-b275d409991d": {
       "author": "Bobby Grayson",
       "change_id": "0f9d957a-ff9a-479d-83ff-b275d409991d",
@@ -14690,6 +15486,19 @@
       "status": "pending",
       "title": "Add edges, graph, show, commands Elixir commands",
       "updated_at": "2026-03-04T01:37:48.325631-05:00"
+    },
+    "10eb71c9-24c8-452b-9731-1ce9327216ae": {
+      "author": "Bobby Grayson",
+      "change_id": "10eb71c9-24c8-452b-9731-1ce9327216ae",
+      "created_at": "2026-11-14T20:16:50.170821-05:00",
+      "metadata": {
+        "branch": "93-the-viewer-shows-open-work",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "Driven in headless Chrome against deciduous serve: status column, one selected row, why panel, live reload of a CLI write, open-only filter all hold; 738 tests pass",
+      "updated_at": "2026-11-14T20:16:50.170821-05:00"
     },
     "11055d65-bd75-4187-a444-cc1704dfa640": {
       "author": "Bobby Grayson",
@@ -16065,6 +16874,19 @@
       "title": "Implement tree_component.ex for LiveView",
       "updated_at": "2026-03-05T07:52:29.065581Z"
     },
+    "20b55fff-7944-4865-865c-d56752a9a216": {
+      "author": "Bobby Grayson",
+      "change_id": "20b55fff-7944-4865-865c-d56752a9a216",
+      "created_at": "2026-11-14T22:43:46.221662-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "A derived goal only when the turn changed something, and closed: not every prompt, and not none",
+      "updated_at": "2026-11-14T22:43:46.861182-05:00"
+    },
     "20f26515-2242-49ab-be19-ffea9cdf558f": {
       "author": "Bobby Grayson",
       "change_id": "20f26515-2242-49ab-be19-ffea9cdf558f",
@@ -16277,6 +17099,19 @@
       "status": "pending",
       "title": "Git Guard module completed and merged",
       "updated_at": "2026-01-05T19:20:42.231782-05:00"
+    },
+    "22efa02e-24c4-4f21-852a-b61b66e55649": {
+      "author": "Bobby Grayson",
+      "change_id": "22efa02e-24c4-4f21-852a-b61b66e55649",
+      "created_at": "2026-11-14T17:18:28.280100-05:00",
+      "metadata": {
+        "branch": "88-local-mcp-takes-the-servers-arguments",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "708 Rust tests pass, 3 new handler tests",
+      "updated_at": "2026-11-14T17:18:28.450412-05:00"
     },
     "235a5864-0f89-411a-915c-38be358d5510": {
       "author": "Bobby Grayson",
@@ -17230,6 +18065,20 @@
       "title": "Commit created: feat(web): add search functionality to DAG viewer",
       "updated_at": "2025-12-15T12:16:42.410647-05:00"
     },
+    "2d2566c5-d2a2-4cf8-ac08-a15b93ab3d96": {
+      "author": "Bobby Grayson",
+      "change_id": "2d2566c5-d2a2-4cf8-ac08-a15b93ab3d96",
+      "created_at": "2026-11-15T20:28:56.566858-05:00",
+      "description": "Order-dependent: whichever session imports first keeps the goal, right or wrong.",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 50
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Record the claiming session on the goal and refuse a second claim",
+      "updated_at": "2026-11-15T20:29:15.791281-05:00"
+    },
     "2d3a535f-3200-4bd2-80c0-16573a51b0e9": {
       "author": "Bobby Grayson",
       "change_id": "2d3a535f-3200-4bd2-80c0-16573a51b0e9",
@@ -17323,6 +18172,20 @@
       "status": "pending",
       "title": "Restructure CalloutLines to use a fixed panel with scroll, minimap moves to bottom-left corner as collapsible",
       "updated_at": "2025-12-17T17:42:21.377578-05:00"
+    },
+    "2f09eb16-fa2b-4718-b9a5-b5dd33eee16a": {
+      "author": "Bobby Grayson",
+      "change_id": "2f09eb16-fa2b-4718-b9a5-b5dd33eee16a",
+      "created_at": "2026-11-14T16:52:59.521657-05:00",
+      "description": "nodes has no --status or --json; pulse prints 1,991 lines on this repo; 1,462 of 1,477 nodes are pending; 1,299 of 1,325 edges are leads_to; audit only has --associate-commits. Other findings from four reviewers: init exits 1 without a terminal and has no --no-server flag; local CLAUDE.md template names server-only MCP arguments; src/viewer.html is stale against web/src; CI names test files and skips 11 of 21; server access is one shared bearer token.",
+      "metadata": {
+        "branch": "85-docs-editorial-pass",
+        "confidence": 85
+      },
+      "node_type": "observation",
+      "status": "completed",
+      "title": "Whole-product pass (1.1.0): the August field notes (#208) still reproduce; the graph cannot answer 'what is open'",
+      "updated_at": "2026-11-14T17:06:01.488312-05:00"
     },
     "2f16ee84-76d7-4891-8144-aee4e97f9ab6": {
       "author": "Bobby Grayson",
@@ -18296,6 +19159,19 @@
       "title": "Add document-oriented node attachments system",
       "updated_at": "2026-01-06T12:25:54.993561-05:00"
     },
+    "3b30b4df-4c8e-413b-83be-aa2bcea68061": {
+      "author": "Bobby Grayson",
+      "change_id": "3b30b4df-4c8e-413b-83be-aa2bcea68061",
+      "created_at": "2026-11-14T16:54:11.981034-05:00",
+      "metadata": {
+        "branch": "86-the-graph-can-say-what-is-open",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "nodes --status/--open/--json, pulse limited to open work, audit reports and closes stale records, per-type default status on CLI and server",
+      "updated_at": "2026-11-14T17:05:48.034914-05:00"
+    },
     "3b6916b8-c286-463d-9e37-f57ba4360e1b": {
       "author": "Bobby Grayson",
       "change_id": "3b6916b8-c286-463d-9e37-f57ba4360e1b",
@@ -19115,6 +19991,20 @@
       "title": "A shared CSS class between the sidebar mode badge and the SVG reasoning pills broke selection scrolling and search; scoping selectors to g.pill fixed both",
       "updated_at": "2026-09-02T18:48:00.656995-04:00"
     },
+    "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc": {
+      "author": "Bobby Grayson",
+      "change_id": "43dc2c7a-ea1d-4a83-a3b8-d4c87dd470dc",
+      "created_at": "2026-11-14T16:49:57.163124-05:00",
+      "metadata": {
+        "branch": "85-docs-editorial-pass",
+        "confidence": 80,
+        "prompt": "do a pass over deciduous as a whole what can we offer to make jt even better"
+      },
+      "node_type": "goal",
+      "status": "active",
+      "title": "Whole-product pass: what to offer next to make deciduous better",
+      "updated_at": "2026-11-14T17:19:10.706600-05:00"
+    },
     "4483f6aa-f992-4c02-81ad-fe1a2728676f": {
       "author": "Bobby Grayson",
       "change_id": "4483f6aa-f992-4c02-81ad-fe1a2728676f",
@@ -19837,6 +20727,19 @@
       "title": "Skills have cleaner names and DAG shows chronological order",
       "updated_at": "2026-01-06T12:26:07.632410-05:00"
     },
+    "4d909db3-d02c-4ae5-8b7c-3babb900b28a": {
+      "author": "Bobby Grayson",
+      "change_id": "4d909db3-d02c-4ae5-8b7c-3babb900b28a",
+      "created_at": "2026-11-15T20:28:56.481112-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Claim a logged goal only when the session's own transcript shows the logging, by printed id then by words",
+      "updated_at": "2026-11-15T20:29:15.441692-05:00"
+    },
     "4da8eb10-b429-4934-834e-3947e0ddb432": {
       "author": "Bobby Grayson",
       "change_id": "4da8eb10-b429-4934-834e-3947e0ddb432",
@@ -20130,6 +21033,19 @@
       "title": "Unused imports warnings in test",
       "updated_at": "2025-12-12T17:29:34.789996-05:00"
     },
+    "501ca0d7-115d-44ea-9d96-645fb9f3610d": {
+      "author": "Bobby Grayson",
+      "change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
+      "created_at": "2026-11-15T20:28:56.904465-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Read what the agent logged from the transcript, over matching on words and time or marking claims on the goal; go-aheads by word list, over a length limit",
+      "updated_at": "2026-11-15T20:29:15.613505-05:00"
+    },
     "503b74af-6db2-4b42-b646-237330675a2f": {
       "author": "Bobby Grayson",
       "change_id": "503b74af-6db2-4b42-b646-237330675a2f",
@@ -20142,6 +21058,19 @@
       "status": "pending",
       "title": "Breadth-first traversal causes high memory usage - gitignore matchers accumulate for wide directories (#1550: user searching all Rust crates saw ~1GB memory usage)",
       "updated_at": "2020-04-17T00:00:00-04:00"
+    },
+    "50445105-19ee-48a0-9006-cec8adfbb0e6": {
+      "author": "Bobby Grayson",
+      "change_id": "50445105-19ee-48a0-9006-cec8adfbb0e6",
+      "created_at": "2026-11-14T22:43:46.035664-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 20
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Every prompt is a goal, as now",
+      "updated_at": "2026-11-14T22:43:46.689402-05:00"
     },
     "50fdb762-de8d-4077-933a-b963660d6315": {
       "author": "Bobby Grayson",
@@ -20429,6 +21358,23 @@
       "status": "pending",
       "title": "Search all files (grep default)",
       "updated_at": "2026-01-12T22:40:21.992421-05:00"
+    },
+    "54b336eb-c546-4000-b4f7-18769d65a866": {
+      "author": "Bobby Grayson",
+      "change_id": "54b336eb-c546-4000-b4f7-18769d65a866",
+      "created_at": "2026-11-14T20:16:50.050539-05:00",
+      "metadata": {
+        "branch": "93-the-viewer-shows-open-work",
+        "confidence": 85,
+        "files": [
+          "web/src/App.tsx",
+          "src/serve.rs"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Viewer: status chips and an open-only filter, live reload, evidence, a why panel per file",
+      "updated_at": "2026-11-14T20:16:50.287258-05:00"
     },
     "5525e4d3-9b25-4e07-8946-4aec48417038": {
       "author": "Bobby Grayson",
@@ -20882,6 +21828,32 @@
       "title": "Implementing git-guard Phase 1: Core Rust module",
       "updated_at": "2025-12-18T21:21:16.069262-05:00"
     },
+    "5d92fee6-7c14-4458-9244-48f82a3d84e7": {
+      "author": "Bobby Grayson",
+      "change_id": "5d92fee6-7c14-4458-9244-48f82a3d84e7",
+      "created_at": "2026-11-15T20:28:57.077896-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "This session: 4 prompts attach to logged goals, 3 go-aheads joined, 70 doubles not derived; 745 tests pass, clippy clean",
+      "updated_at": "2026-11-15T20:28:57.077896-05:00"
+    },
+    "5db990a7-7b8a-4b50-bffa-058f10a8594e": {
+      "author": "Bobby Grayson",
+      "change_id": "5db990a7-7b8a-4b50-bffa-058f10a8594e",
+      "created_at": "2026-11-14T19:29:32.677635-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 40
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "why: match nodes by metadata.files only",
+      "updated_at": "2026-11-14T19:31:46.700364-05:00"
+    },
     "5dc0252a-406f-4fe8-b2eb-38b6746ee777": {
       "author": "Bobby Grayson",
       "change_id": "5dc0252a-406f-4fe8-b2eb-38b6746ee777",
@@ -20963,6 +21935,20 @@
       "title": "Creating integration tests for CLI workflow",
       "updated_at": "2025-12-12T09:22:08.066753-05:00"
     },
+    "5e53c70e-b440-4b59-a050-370cc3264f1c": {
+      "author": "Bobby Grayson",
+      "change_id": "5e53c70e-b440-4b59-a050-370cc3264f1c",
+      "created_at": "2026-11-14T18:06:58.321629-05:00",
+      "description": "User: 'ok do it' to 'should init install a session-end hook that imports the transcript automatically?'",
+      "metadata": {
+        "branch": "89-a-session-imports-itself",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Install a SessionEnd hook that imports the transcript, with a config opt-out",
+      "updated_at": "2026-11-14T18:06:58.674025-05:00"
+    },
     "5e7fd9c5-6cc7-4145-8408-07db5f59d81a": {
       "author": "Bobby Grayson",
       "change_id": "5e7fd9c5-6cc7-4145-8408-07db5f59d81a",
@@ -20976,6 +21962,19 @@
       "status": "pending",
       "title": "Committed Phase 1: removed diff.rs + git_guard/, added 24 regression tests",
       "updated_at": "2026-03-18T07:39:15.384890-04:00"
+    },
+    "5eca14be-39eb-4918-9f64-81934b098929": {
+      "author": "Bobby Grayson",
+      "change_id": "5eca14be-39eb-4918-9f64-81934b098929",
+      "created_at": "2026-11-14T19:29:32.736827-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "why: follow the commits that touched the file to their nodes, then climb to the decision and goal; files and file_hashes as a second source",
+      "updated_at": "2026-11-14T19:31:46.754941-05:00"
     },
     "5f03f1d8-1c44-4280-9957-9ef8b2648480": {
       "author": "Bobby Grayson",
@@ -21764,6 +22763,19 @@
       "title": "Change default narrative mode from significant to goals",
       "updated_at": "2026-03-17T19:52:31.387938-04:00"
     },
+    "672de910-7714-45e0-a981-9145f7c61d3e": {
+      "author": "Bobby Grayson",
+      "change_id": "672de910-7714-45e0-a981-9145f7c61d3e",
+      "created_at": "2026-11-14T16:54:11.921612-05:00",
+      "metadata": {
+        "branch": "86-the-graph-can-say-what-is-open",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Born completed, over a nullable status: one default changes, no record format does",
+      "updated_at": "2026-11-14T16:54:16.602738-05:00"
+    },
     "674f33e1-2310-4e91-b85f-35660e953425": {
       "author": "Bobby Grayson",
       "change_id": "674f33e1-2310-4e91-b85f-35660e953425",
@@ -22211,6 +23223,19 @@
       "title": "Adding 30-second auto-refresh to useGraphData hook for local server",
       "updated_at": "2025-12-10T14:39:11.766789-05:00"
     },
+    "6d67c528-68d4-452a-96c5-3cdb4bdff131": {
+      "author": "Bobby Grayson",
+      "change_id": "6d67c528-68d4-452a-96c5-3cdb4bdff131",
+      "created_at": "2026-11-14T21:48:02.439417-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 40
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Keep the pre-edit hook on by default",
+      "updated_at": "2026-11-14T21:48:10.252902-05:00"
+    },
     "6d891f4e-4c76-4204-b63a-6ceb8a8e44b8": {
       "author": "Bobby Grayson",
       "change_id": "6d891f4e-4c76-4204-b63a-6ceb8a8e44b8",
@@ -22335,6 +23360,19 @@
       "status": "pending",
       "title": "Windsurf rules have 4 trigger modes: manual, always, model, glob",
       "updated_at": "2025-12-10T13:54:30.802422-05:00"
+    },
+    "6f18a692-6cac-4fd8-9807-054e89d15f9c": {
+      "author": "Bobby Grayson",
+      "change_id": "6f18a692-6cac-4fd8-9807-054e89d15f9c",
+      "created_at": "2026-11-15T20:28:56.650928-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 75
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Per kind, per turn: derive no action where the agent logged one, no outcome where it logged one",
+      "updated_at": "2026-11-15T20:29:15.498882-05:00"
     },
     "6f28cdcf-cb94-45df-9f84-f6f262e5d070": {
       "author": "Bobby Grayson",
@@ -22729,6 +23767,19 @@
       "title": "Approach B detects cliff via decorrelation",
       "updated_at": "2025-12-05T17:11:18.722242-05:00"
     },
+    "7519f9bb-88fd-4d32-81f0-6f32bb3ef354": {
+      "author": "Bobby Grayson",
+      "change_id": "7519f9bb-88fd-4d32-81f0-6f32bb3ef354",
+      "created_at": "2026-11-14T19:47:15.368652-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "bench/: four scenarios, four arms, a runner that scores real Claude Code sessions",
+      "updated_at": "2026-11-14T20:01:27.679621-05:00"
+    },
     "751e50fd-3857-422b-8d98-c02c9ddbf709": {
       "author": "Bobby Grayson",
       "change_id": "751e50fd-3857-422b-8d98-c02c9ddbf709",
@@ -22768,6 +23819,20 @@
       "status": "pending",
       "title": "Add 6 unit tests for chain recency functions",
       "updated_at": "2025-12-12T09:22:08.070340-05:00"
+    },
+    "7554673f-b2f0-4015-a187-fd51e2200c0d": {
+      "author": "Bobby Grayson",
+      "change_id": "7554673f-b2f0-4015-a187-fd51e2200c0d",
+      "created_at": "2026-11-14T22:38:12.631445-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 90,
+        "prompt": "sure"
+      },
+      "node_type": "goal",
+      "status": "completed",
+      "title": "Import: a prompt becomes a goal only when its turn changed something, and closed; auto_import=false really stops it; deciduous's own claude -p calls are skipped",
+      "updated_at": "2026-11-14T22:47:20.589995-05:00"
     },
     "75bad24b-db71-40ab-9c3a-c9dd831e88f7": {
       "author": "Bobby Grayson",
@@ -23007,6 +24072,19 @@
       "status": "pending",
       "title": "Implemented silent binary skip on NUL detection",
       "updated_at": "2026-01-12T22:40:32.534139-05:00"
+    },
+    "7a12da4a-b820-4dea-a92b-7ce290f029f1": {
+      "author": "Bobby Grayson",
+      "change_id": "7a12da4a-b820-4dea-a92b-7ce290f029f1",
+      "created_at": "2026-11-14T20:24:31.658382-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "Against a server run from source: ada's token wrote and was named in write_activity, could not issue tokens (403), and got 401 after revoke; 459 server and 738 Rust tests pass; hex.audit clean",
+      "updated_at": "2026-11-14T20:24:31.658382-05:00"
     },
     "7a3c4e5d-5e92-439e-8478-b47e00472c12": {
       "author": "Bobby Grayson",
@@ -23348,6 +24426,19 @@
       "title": "Implemented github.commit_repo config and web viewer integration",
       "updated_at": "2025-12-15T22:30:11.670987-05:00"
     },
+    "7dfe8ced-a705-4c2a-b8a5-6e2dfb04687a": {
+      "author": "Bobby Grayson",
+      "change_id": "7dfe8ced-a705-4c2a-b8a5-6e2dfb04687a",
+      "created_at": "2026-11-14T21:48:02.500799-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 50
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Leave it in, off by default",
+      "updated_at": "2026-11-14T21:48:10.308713-05:00"
+    },
     "7e219094-267c-4bb2-bed6-c630f9e1753e": {
       "author": "Bobby Grayson",
       "change_id": "7e219094-267c-4bb2-bed6-c630f9e1753e",
@@ -23646,6 +24737,19 @@
       "title": "Runtime detection of localhost vs GitHub Pages determines data source - /api/graph for local, ./graph-data.json for static",
       "updated_at": "2025-12-09T22:10:15.295988-05:00"
     },
+    "80f31a6f-6cde-49a9-b9cc-6d7e160d7dce": {
+      "author": "Bobby Grayson",
+      "change_id": "80f31a6f-6cde-49a9-b9cc-6d7e160d7dce",
+      "created_at": "2026-11-14T18:06:58.441006-05:00",
+      "metadata": {
+        "branch": "89-a-session-imports-itself",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "transcript import --hook; init/update install it on SessionEnd; imports attach to the goal logged for the same prompt; derived actions born completed",
+      "updated_at": "2026-11-14T18:06:58.730474-05:00"
+    },
     "812b8459-60e8-41a5-98bf-d25db2ea2549": {
       "author": "Bobby Grayson",
       "change_id": "812b8459-60e8-41a5-98bf-d25db2ea2549",
@@ -23742,6 +24846,20 @@
       "status": "pending",
       "title": "Linked 35 nodes to commits, increased coverage from 31 to 66 nodes",
       "updated_at": "2025-12-12T09:29:14.708323-05:00"
+    },
+    "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697": {
+      "author": "Bobby Grayson",
+      "change_id": "81ba99f4-dcbe-4ecc-8b3e-969cbcd38697",
+      "created_at": "2026-11-14T20:01:27.862735-05:00",
+      "description": "ADR files matched the graph on outcome and beat it on cost. The untested premise is that somebody wrote the ADR. Deriving decisions from transcripts is the part of the product that bears on that.",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 80
+      },
+      "node_type": "observation",
+      "status": "completed",
+      "title": "The benchmark hands every arm its record ready-made; what separates the graph from ADR files is whether the record gets written at all, which it does not test",
+      "updated_at": "2026-11-14T20:01:27.862735-05:00"
     },
     "81ccbce5-24ff-4087-a465-22ed698c7149": {
       "author": "Bobby Grayson",
@@ -24085,6 +25203,27 @@
       "title": "Investigate ts-rs suitability",
       "updated_at": "2025-12-12T17:23:48.646924-05:00"
     },
+    "85a8b5c0-bb98-49fe-97a4-4205f44c870c": {
+      "author": "Bobby Grayson",
+      "change_id": "85a8b5c0-bb98-49fe-97a4-4205f44c870c",
+      "created_at": "2026-11-14T21:46:25.312001-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 90,
+        "files": [
+          "src/init/mod.rs",
+          "src/init/templates.rs",
+          "src/main.rs",
+          "src/why.rs",
+          "tests/why.rs",
+          "bench/run.py"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Remove the pre-edit hook: MANAGED_HOOKS entry, settings template, why --hook, brief/first_ask, [why] hook, the bench hook arm, their tests",
+      "updated_at": "2026-11-14T21:50:20.680684-05:00"
+    },
     "85b32a7d-7077-41c6-abff-c234db4c200a": {
       "author": "Bobby Grayson",
       "change_id": "85b32a7d-7077-41c6-abff-c234db4c200a",
@@ -24361,6 +25500,19 @@
       "title": "Ruby: class-based with plain data, hash-based test cases, zero dependencies",
       "updated_at": "2026-03-18T11:51:36.465827-04:00"
     },
+    "89936090-e56f-46ff-982c-9bb6efa84d08": {
+      "author": "Bobby Grayson",
+      "change_id": "89936090-e56f-46ff-982c-9bb6efa84d08",
+      "created_at": "2026-11-14T20:24:31.475403-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 80
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Named tokens, with the name recorded on write_activity where every write path already reports",
+      "updated_at": "2026-11-14T20:24:32.121782-05:00"
+    },
     "89bd62fb-2da1-4393-816d-f873dbf181d0": {
       "author": "Bobby Grayson",
       "change_id": "89bd62fb-2da1-4393-816d-f873dbf181d0",
@@ -24402,6 +25554,19 @@
       "status": "pending",
       "title": "Add node metadata system (Key-Value approach)",
       "updated_at": "2025-12-18T21:02:49.777500-05:00"
+    },
+    "8a1bf545-9df5-45cb-b943-9956ccd05ed0": {
+      "author": "Bobby Grayson",
+      "change_id": "8a1bf545-9df5-45cb-b943-9956ccd05ed0",
+      "created_at": "2026-11-14T21:48:02.618703-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 90
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Remove the pre-edit hook rather than keep it off by default: the benchmark showed nothing for it",
+      "updated_at": "2026-11-14T21:48:10.419909-05:00"
     },
     "8a22cbd4-7710-4337-8833-9704205fd95d": {
       "author": "Bobby Grayson",
@@ -24468,6 +25633,19 @@
       "status": "pending",
       "title": "Standard keys (pr_body, issue_body, notes) provide consistent naming across projects",
       "updated_at": "2025-12-18T21:03:58.342556-05:00"
+    },
+    "8b2c61f1-e714-408b-a961-fabe8d8b4ddb": {
+      "author": "Bobby Grayson",
+      "change_id": "8b2c61f1-e714-408b-a961-fabe8d8b4ddb",
+      "created_at": "2026-11-14T19:29:32.616825-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 95
+      },
+      "node_type": "observation",
+      "status": "completed",
+      "title": "Only 166 of 1,491 nodes name files (1 of 127 decisions); 362 carry a commit. Options hang from decisions (decision->option 129 edges) more often than the documented option->decision (39)",
+      "updated_at": "2026-11-14T19:29:32.616825-05:00"
     },
     "8b9ed44a-304a-4455-a206-0e70a93131c0": {
       "author": "Bobby Grayson",
@@ -25151,6 +26329,19 @@
       "title": "Released v0.8.13",
       "updated_at": "2025-12-15T22:51:23.475706-05:00"
     },
+    "93c3cdf0-0428-43e4-b51f-f4dbe7eb1f75": {
+      "author": "Bobby Grayson",
+      "change_id": "93c3cdf0-0428-43e4-b51f-f4dbe7eb1f75",
+      "created_at": "2026-11-14T20:04:15.898399-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "transcript decisions and proposals: src/decisions.rs, a turn digest, CLI, hook switch",
+      "updated_at": "2026-11-14T20:07:39.407380-05:00"
+    },
     "9424b1b4-4968-4c20-ae7c-02af13bf4c1a": {
       "author": "Bobby Grayson",
       "change_id": "9424b1b4-4968-4c20-ae7c-02af13bf4c1a",
@@ -25429,6 +26620,19 @@
       "title": "Independent PRs off main per domain",
       "updated_at": "2026-07-09T23:19:40.924218-04:00"
     },
+    "96c7d29a-16b3-423e-814b-1a7f259f4960": {
+      "author": "Bobby Grayson",
+      "change_id": "96c7d29a-16b3-423e-814b-1a7f259f4960",
+      "created_at": "2026-11-14T20:04:15.837255-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Proposals with a checked quote, not direct writes: the pre-edit hook would repeat a misread decision to every agent",
+      "updated_at": "2026-11-14T20:04:16.476509-05:00"
+    },
     "96dbdbf6-3ed5-4013-acce-05513059a637": {
       "author": "Bobby Grayson",
       "change_id": "96dbdbf6-3ed5-4013-acce-05513059a637",
@@ -25597,6 +26801,24 @@
       "title": "Updated landing page with story page blurb",
       "updated_at": "2025-12-15T09:50:41.407507-05:00"
     },
+    "97d398bc-1323-461c-b8c4-7d56559dfb6d": {
+      "author": "Bobby Grayson",
+      "change_id": "97d398bc-1323-461c-b8c4-7d56559dfb6d",
+      "created_at": "2026-11-15T20:28:56.993350-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "commit": "28bc16b48f68ef4989e6b786bc6494f05341a39d",
+        "confidence": 90,
+        "files": [
+          "src/transcript.rs",
+          "tests/transcript_import.rs"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Import: logged goals claimed by transcript proof, logged kinds not derived again, go-aheads joined",
+      "updated_at": "2026-11-15T20:29:15.672402-05:00"
+    },
     "97dfddf3-94ea-48db-89c7-cf643fbecc82": {
       "author": "Bobby Grayson",
       "change_id": "97dfddf3-94ea-48db-89c7-cf643fbecc82",
@@ -25693,6 +26915,19 @@
       "status": "pending",
       "title": "Stash OpenCode changes",
       "updated_at": "2025-12-12T17:57:26.569863-05:00"
+    },
+    "993c7e32-6c73-46dc-ba8f-fee60a68c10b": {
+      "author": "Bobby Grayson",
+      "change_id": "993c7e32-6c73-46dc-ba8f-fee60a68c10b",
+      "created_at": "2026-11-14T17:05:47.917514-05:00",
+      "metadata": {
+        "branch": "86-the-graph-can-say-what-is-open",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "pulse on this repo: 1,991 lines to 142; audit names 500 open records, 152 committed open actions, 37 goals with nothing open; 696 Rust and 453 server tests pass",
+      "updated_at": "2026-11-14T17:06:01.430150-05:00"
     },
     "993d3abf-de7c-4a75-b09e-21139a6fc2ff": {
       "author": "Bobby Grayson",
@@ -26050,6 +27285,34 @@
       "status": "pending",
       "title": "Add ViewMode state type for recent/all/single",
       "updated_at": "2025-12-12T02:26:45.817652-05:00"
+    },
+    "9dc5a9f7-a707-4283-848c-cc1f9b77a23c": {
+      "author": "Bobby Grayson",
+      "change_id": "9dc5a9f7-a707-4283-848c-cc1f9b77a23c",
+      "created_at": "2026-11-14T16:54:11.861919-05:00",
+      "description": "Needs a nullable status through graph.json, the oplog and the server schema.",
+      "metadata": {
+        "branch": "86-the-graph-can-say-what-is-open",
+        "confidence": 50
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Exempt outcome and observation from status entirely",
+      "updated_at": "2026-11-14T16:54:16.547527-05:00"
+    },
+    "9e40b8d6-087e-4cb6-acd9-2a7ae32d1ced": {
+      "author": "Bobby Grayson",
+      "change_id": "9e40b8d6-087e-4cb6-acd9-2a7ae32d1ced",
+      "created_at": "2026-11-14T22:27:52.146339-05:00",
+      "metadata": {
+        "branch": "96-harder-scenarios",
+        "commit": "09b19f9c6e3412023a7c6a2bc65a360b606ee126",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "pending",
+      "title": "Blind runs: no record, Sonnet followed 1 of 24 and Fable 6 of 12; ADR files and the graph both 72 of 72 with a record (2 declined); graph costs 1.2-1.5x ADR",
+      "updated_at": "2026-11-14T22:27:52.146339-05:00"
     },
     "9e7aeafb-a2b1-4077-a480-e182da9b27d5": {
       "author": "Bobby Grayson",
@@ -26909,6 +28172,24 @@
       "title": "Creating story.html standalone page with OG tags",
       "updated_at": "2025-12-15T02:11:00.125916-05:00"
     },
+    "a8231efa-5e4f-4873-8f7c-1cfcf849fc45": {
+      "author": "Bobby Grayson",
+      "change_id": "a8231efa-5e4f-4873-8f7c-1cfcf849fc45",
+      "created_at": "2026-11-14T22:17:32.673993-05:00",
+      "metadata": {
+        "branch": "96-harder-scenarios",
+        "confidence": 85,
+        "files": [
+          "bench/scenarios.py",
+          "bench/run.py",
+          "bench/test_checks.py"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "bench: three blind scenarios (retry, delete, limit), 60 unrelated decisions, sessions told nothing can be run",
+      "updated_at": "2026-11-14T22:27:52.267906-05:00"
+    },
     "a8b0f118-5c10-4158-a2ed-e8bd49be1508": {
       "author": "Bobby Grayson",
       "change_id": "a8b0f118-5c10-4158-a2ed-e8bd49be1508",
@@ -27279,6 +28560,47 @@
       "status": "pending",
       "title": "Dual build strategy for React viewer",
       "updated_at": "2025-12-09T22:09:58.262524-05:00"
+    },
+    "ac4f8528-732e-4bc1-b0fd-afa35ea65e94": {
+      "author": "Bobby Grayson",
+      "change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "created_at": "2026-11-15T20:20:36.893768-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 85,
+        "prompt": "1. that sounds off\n2. lets get rid of that?\n3. ok do it?\n4. ok"
+      },
+      "node_type": "goal",
+      "status": "completed",
+      "title": "Import: no cross-claimed goals, no doubled actions/outcomes, a go-ahead continues the goal before it",
+      "updated_at": "2026-11-15T20:29:15.730628-05:00"
+    },
+    "ac5139e0-7575-401a-b4c8-faec848e5735": {
+      "author": "Bobby Grayson",
+      "change_id": "ac5139e0-7575-401a-b4c8-faec848e5735",
+      "created_at": "2026-11-14T16:54:11.801025-05:00",
+      "description": "They record what already happened; #208 asked for exactly this. 499 of this repo's 1,462 pending nodes are these two types.",
+      "metadata": {
+        "branch": "86-the-graph-can-say-what-is-open",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Outcomes and observations are born completed",
+      "updated_at": "2026-11-14T16:54:16.491983-05:00"
+    },
+    "ac78bc84-0c1a-478a-9ee6-1f202f9ea3b4": {
+      "author": "Bobby Grayson",
+      "change_id": "ac78bc84-0c1a-478a-9ee6-1f202f9ea3b4",
+      "created_at": "2026-11-14T17:13:02.983302-05:00",
+      "metadata": {
+        "branch": "87-the-first-ten-minutes",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "705 Rust tests pass, 9 new; crate packages at 920 KB and builds from the package",
+      "updated_at": "2026-11-14T17:13:03.154829-05:00"
     },
     "ac9605e5-f3d0-4573-8165-73896153d9cd": {
       "author": "Bobby Grayson",
@@ -27852,6 +29174,19 @@
       "title": "Add commit hash linking to decision graph nodes - store commit SHAs in metadata_json for full code-decision traceability",
       "updated_at": "2025-12-05T23:32:51.908132-05:00"
     },
+    "b5416da7-09a1-4706-9681-d89a1abc962e": {
+      "author": "Bobby Grayson",
+      "change_id": "b5416da7-09a1-4706-9681-d89a1abc962e",
+      "created_at": "2026-11-14T21:48:02.559719-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Remove the hook and its tests",
+      "updated_at": "2026-11-14T21:48:10.364402-05:00"
+    },
     "b592516d-5646-404e-9e9c-f0686aea8aa7": {
       "author": "Bobby Grayson",
       "change_id": "b592516d-5646-404e-9e9c-f0686aea8aa7",
@@ -27920,6 +29255,19 @@
       "status": "pending",
       "title": "Add Codex CLI support for deciduous initialization",
       "updated_at": "2026-01-05T23:10:22.288547-05:00"
+    },
+    "b6489176-aa93-4154-9480-47d9e907ae1e": {
+      "author": "Bobby Grayson",
+      "change_id": "b6489176-aa93-4154-9480-47d9e907ae1e",
+      "created_at": "2026-11-14T20:24:31.597178-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Server: api_tokens, Auth accepts named tokens, /tokens routes, actor on write_activity; CLI: remote token create/list/revoke",
+      "updated_at": "2026-11-14T20:24:32.236045-05:00"
     },
     "b64d44a1-6fe6-4bd5-8e48-509946133953": {
       "author": "Bobby Grayson",
@@ -28200,6 +29548,20 @@
       "status": "pending",
       "title": "Code organization: consider splitting large files",
       "updated_at": "2025-12-05T17:15:24.716327-05:00"
+    },
+    "b98a5632-90a1-4c94-b5b3-35444f1876a8": {
+      "author": "Bobby Grayson",
+      "change_id": "b98a5632-90a1-4c94-b5b3-35444f1876a8",
+      "created_at": "2026-11-14T21:50:20.561424-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "commit": "a0e84cea93d099eac38374f8fc52b84a965cf376",
+        "confidence": 95
+      },
+      "node_type": "outcome",
+      "status": "pending",
+      "title": "Hook removed: 735 tests pass, clippy clean, release builds; bench has three arms and still rescoring the old files",
+      "updated_at": "2026-11-14T21:50:20.561424-05:00"
     },
     "b9aed3dd-8d40-4fc1-a1bd-150a8bce692d": {
       "author": "Bobby Grayson",
@@ -28515,6 +29877,19 @@
       "status": "pending",
       "title": "Single large text blob column",
       "updated_at": "2025-12-18T21:03:31.044352-05:00"
+    },
+    "bdaaa528-9be9-43cf-8d79-1480faaa608f": {
+      "author": "Bobby Grayson",
+      "change_id": "bdaaa528-9be9-43cf-8d79-1480faaa608f",
+      "created_at": "2026-11-14T20:07:39.472725-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "On this session's own transcript Sonnet proposed three decisions from five turns in six seconds; all three quotes were in the transcript, one was a preference rather than a decision; 737 tests pass",
+      "updated_at": "2026-11-14T20:07:39.472725-05:00"
     },
     "bdd1ab4b-6eba-4e2e-bae3-c0d0c34c3cd1": {
       "author": "Bobby Grayson",
@@ -29082,6 +30457,26 @@
       "status": "pending",
       "title": "Previous attempt removed Burrito as unnecessary complexity - now re-adding it based on user preference for single-binary distribution",
       "updated_at": "2026-03-04T00:54:39.358981-05:00"
+    },
+    "c58c8900-2573-4011-857e-051441123435": {
+      "author": "Bobby Grayson",
+      "change_id": "c58c8900-2573-4011-857e-051441123435",
+      "created_at": "2026-11-14T22:43:37.238511-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 90,
+        "files": [
+          "src/transcript.rs",
+          "src/db.rs",
+          "src/main.rs",
+          "src/serve.rs",
+          "src/init/mod.rs"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Import: no goal for a turn with no edit, commit or check; derived goals born completed; --hook honours auto_import=false; ai-describe and Ask set the guard",
+      "updated_at": "2026-11-14T22:47:20.531227-05:00"
     },
     "c59442dc-2c4a-4385-8fd6-6d76ddc053e2": {
       "author": "Bobby Grayson",
@@ -29927,6 +31322,19 @@
       "title": "Cross-branch links: when one premise depends on another, link them explicitly with rationale",
       "updated_at": "2026-01-10T03:56:15.420848-05:00"
     },
+    "d07f16b2-d7b6-4d48-b527-acfd48e411f0": {
+      "author": "Bobby Grayson",
+      "change_id": "d07f16b2-d7b6-4d48-b527-acfd48e411f0",
+      "created_at": "2026-11-14T20:01:27.741346-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "Benchmark, 96 Sonnet sessions: with any record every landed session followed the decision (ADR 20/20, graph 24/24, hook 22/22), 13/19 without; graph arms cost 1.6-1.9x ADR; the hook changed nothing measurable",
+      "updated_at": "2026-11-14T20:01:27.741346-05:00"
+    },
     "d0899cdd-4b2e-4f4a-9898-0daec0591ed8": {
       "author": "Bobby Grayson",
       "change_id": "d0899cdd-4b2e-4f4a-9898-0daec0591ed8",
@@ -30062,6 +31470,19 @@
       "title": "Adding animated quickstart guide with 5 terminal demos",
       "updated_at": "2025-12-15T10:23:00.863004-05:00"
     },
+    "d2aa994e-f27d-4883-aa85-c61823ac9924": {
+      "author": "Bobby Grayson",
+      "change_id": "d2aa994e-f27d-4883-aa85-c61823ac9924",
+      "created_at": "2026-11-14T20:24:31.413480-05:00",
+      "metadata": {
+        "branch": "94-the-server-knows-who-wrote",
+        "confidence": 50
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Fill the existing audit_log and users tables: a full history of who changed what",
+      "updated_at": "2026-11-14T20:24:32.064612-05:00"
+    },
     "d2e20fe3-bea1-4f07-bc14-959e43e6ac43": {
       "author": "Bobby Grayson",
       "change_id": "d2e20fe3-bea1-4f07-bc14-959e43e6ac43",
@@ -30175,6 +31596,19 @@
       "status": "pending",
       "title": "Implement records.rs: per-record JSON store, tombstones, legacy JSONL import, bidirectional reconcile",
       "updated_at": "2026-09-02T17:49:00.814105-04:00"
+    },
+    "d5ada9cf-0cbf-4a61-a5e4-e42b94ef6227": {
+      "author": "Bobby Grayson",
+      "change_id": "d5ada9cf-0cbf-4a61-a5e4-e42b94ef6227",
+      "created_at": "2026-11-14T22:43:46.097912-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 40
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "The import makes no goals at all",
+      "updated_at": "2026-11-14T22:43:46.747447-05:00"
     },
     "d5b2f736-4a64-49f8-9382-538afef9745e": {
       "author": "Bobby Grayson",
@@ -30465,6 +31899,33 @@
       "status": "pending",
       "title": "Rebase: Allow with interactive confirmation",
       "updated_at": "2025-12-18T18:36:45.591474-05:00"
+    },
+    "d990986f-e43a-4a38-89f2-b6f80aaf4319": {
+      "author": "Bobby Grayson",
+      "change_id": "d990986f-e43a-4a38-89f2-b6f80aaf4319",
+      "created_at": "2026-11-15T20:28:56.820021-05:00",
+      "description": "'add dark mode' is three words and a goal.",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 30
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Join short prompts by a word-count limit",
+      "updated_at": "2026-11-15T20:29:15.848196-05:00"
+    },
+    "d9a6a8c8-fcc7-4c02-a918-5f65a34d946f": {
+      "author": "Bobby Grayson",
+      "change_id": "d9a6a8c8-fcc7-4c02-a918-5f65a34d946f",
+      "created_at": "2026-11-14T18:06:58.559106-05:00",
+      "metadata": {
+        "branch": "89-a-session-imports-itself",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "A real Claude Code 2.1.325 session in a scratch project ended with its goal, action and outcome in the graph; 713 tests pass",
+      "updated_at": "2026-11-14T18:06:58.787160-05:00"
     },
     "d9debce1-9aaf-495d-9d0c-2d17be6f2fd3": {
       "author": "Bobby Grayson",
@@ -30839,6 +32300,33 @@
       "status": "pending",
       "title": "Git Guard: Runtime-enforced git safety rules",
       "updated_at": "2025-12-18T12:48:54.756360-05:00"
+    },
+    "deb99514-423c-4a35-9a6a-bed25389de94": {
+      "author": "Bobby Grayson",
+      "change_id": "deb99514-423c-4a35-9a6a-bed25389de94",
+      "created_at": "2026-11-14T22:47:20.416765-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "commit": "01dce6008ec70b76ea91b98a728bbf0dadc0ab7d",
+        "confidence": 95
+      },
+      "node_type": "outcome",
+      "status": "pending",
+      "title": "12-prompt session now gives 4 closed goals; question-only sessions list as no work; auto_import=false stops the hook; 738 tests pass",
+      "updated_at": "2026-11-14T22:47:20.416765-05:00"
+    },
+    "dec51edc-1bdd-4f11-81d1-4f0f1c205509": {
+      "author": "Bobby Grayson",
+      "change_id": "dec51edc-1bdd-4f11-81d1-4f0f1c205509",
+      "created_at": "2026-11-14T19:39:02.602612-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 95
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "A real Claude Code 2.1.325 session asked to switch a limiter to per-IP made the edit and reported, unprompted, that it reverses decision 2 and why per-IP was rejected; 728 tests pass",
+      "updated_at": "2026-11-14T19:39:02.759467-05:00"
     },
     "dedc3a0e-e61b-4378-be3c-a43de9ce9a95": {
       "author": "Bobby Grayson",
@@ -31440,6 +32928,19 @@
       "title": "PR #14 created for GitHub Pages site",
       "updated_at": "2025-12-12T09:22:08.055089-05:00"
     },
+    "e5e96ea2-93cf-4bca-817b-4e105f834b60": {
+      "author": "Bobby Grayson",
+      "change_id": "e5e96ea2-93cf-4bca-817b-4e105f834b60",
+      "created_at": "2026-11-14T17:18:28.162868-05:00",
+      "metadata": {
+        "branch": "88-local-mcp-takes-the-servers-arguments",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Local MCP add_node takes parent_id, edge_type, rationale and status, checked before anything is written",
+      "updated_at": "2026-11-14T17:18:28.394517-05:00"
+    },
     "e5f13fac-bd1e-4783-8b29-f15766e43be4": {
       "author": "Bobby Grayson",
       "change_id": "e5f13fac-bd1e-4783-8b29-f15766e43be4",
@@ -31847,6 +33348,20 @@
       "title": "Releasing deciduous v0.4.0 with editor-specific init flags",
       "updated_at": "2025-12-12T09:22:08.056864-05:00"
     },
+    "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75": {
+      "author": "Bobby Grayson",
+      "change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "created_at": "2026-11-14T19:28:11.423420-05:00",
+      "metadata": {
+        "branch": "89-a-session-imports-itself",
+        "confidence": 85,
+        "prompt": "1, 4, 2, 5, 7 in that order"
+      },
+      "node_type": "goal",
+      "status": "completed",
+      "title": "Make the graph get read: why, a benchmark, derived decisions, viewer, team-server basics",
+      "updated_at": "2026-11-14T20:24:39.252344-05:00"
+    },
     "ea3876a6-5d51-4201-8f91-e2441854c09e": {
       "author": "Bobby Grayson",
       "change_id": "ea3876a6-5d51-4201-8f91-e2441854c09e",
@@ -32141,6 +33656,19 @@
       "title": "Initial beads-style hierarchical list view",
       "updated_at": "2026-02-04T22:10:16.021342-05:00"
     },
+    "ed90f2b3-dc96-4bdf-9603-cf7add96500b": {
+      "author": "Bobby Grayson",
+      "change_id": "ed90f2b3-dc96-4bdf-9603-cf7add96500b",
+      "created_at": "2026-11-15T20:28:56.735153-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 75
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Join a go-ahead to the prompt before it by a closed word list",
+      "updated_at": "2026-11-15T20:29:15.556837-05:00"
+    },
     "edb61d96-b974-4ac9-acc1-fbd15f87948d": {
       "author": "Bobby Grayson",
       "change_id": "edb61d96-b974-4ac9-acc1-fbd15f87948d",
@@ -32290,6 +33818,19 @@
       "title": "MCP docs rewritten - quickstarts first, real examples from graph, separate API ref",
       "updated_at": "2026-05-06T21:37:16.917028-04:00"
     },
+    "ef37a8dd-4120-4f86-880e-35aa7f50fdd1": {
+      "author": "Bobby Grayson",
+      "change_id": "ef37a8dd-4120-4f86-880e-35aa7f50fdd1",
+      "created_at": "2026-11-14T22:43:46.160298-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "A goal only for a prompt whose turn changed something, born completed",
+      "updated_at": "2026-11-14T22:43:46.804259-05:00"
+    },
     "ef59a316-d390-4b57-a1e0-65095ccd5ca6": {
       "author": "Bobby Grayson",
       "change_id": "ef59a316-d390-4b57-a1e0-65095ccd5ca6",
@@ -32366,6 +33907,19 @@
       "status": "pending",
       "title": "Reconsidering mmap for specific use cases",
       "updated_at": "2026-01-12T22:39:08.939080-05:00"
+    },
+    "f0968517-7dfe-4fcf-ab48-2651c87d660b": {
+      "author": "Bobby Grayson",
+      "change_id": "f0968517-7dfe-4fcf-ab48-2651c87d660b",
+      "created_at": "2026-11-14T20:04:15.776277-05:00",
+      "metadata": {
+        "branch": "92-decisions-are-read-out-of-the-transcript",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Proposals checked by verbatim quote, held in a file until accepted; --accept and a config switch for those who want them written",
+      "updated_at": "2026-11-14T20:04:16.419653-05:00"
     },
     "f09d4948-1f90-4e94-beb1-3ff3e4723011": {
       "author": "Bobby Grayson",
@@ -32623,6 +34177,32 @@
       "title": "Create pre-publish validation script",
       "updated_at": "2025-12-12T00:16:09.180137-05:00"
     },
+    "f3bab02d-6846-4b0d-8327-4edbad7a2023": {
+      "author": "Bobby Grayson",
+      "change_id": "f3bab02d-6846-4b0d-8327-4edbad7a2023",
+      "created_at": "2026-11-14T19:47:09.805518-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Benchmark: four arms (nothing, ADR files, graph, graph with the pre-edit hook) on tasks where the rejected approach is the obvious one",
+      "updated_at": "2026-11-14T19:47:15.245586-05:00"
+    },
+    "f3cfd345-0939-4b99-8210-1ebc0ccb5630": {
+      "author": "Bobby Grayson",
+      "change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
+      "created_at": "2026-11-14T19:31:42.031573-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 90
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "why joins through commits and climbs, not through metadata.files alone",
+      "updated_at": "2026-11-14T19:31:46.809683-05:00"
+    },
     "f3e643b7-e225-43b5-b2fc-2a0d0f8d517d": {
       "author": "Bobby Grayson",
       "change_id": "f3e643b7-e225-43b5-b2fc-2a0d0f8d517d",
@@ -32664,6 +34244,19 @@
       "status": "pending",
       "title": "Fix foo/quota user message filtering",
       "updated_at": "2026-03-06T22:37:03.575624-05:00"
+    },
+    "f4684921-7e1d-44f5-b12f-a02a148367e1": {
+      "author": "Bobby Grayson",
+      "change_id": "f4684921-7e1d-44f5-b12f-a02a148367e1",
+      "created_at": "2026-11-14T19:47:09.741373-05:00",
+      "metadata": {
+        "branch": "91-does-the-graph-change-what-an-agent-does",
+        "confidence": 40
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Benchmark: graph against no record at all",
+      "updated_at": "2026-11-14T19:47:15.181980-05:00"
     },
     "f4b5a75a-6d43-4ab8-b3fa-166c188380df": {
       "author": "Bobby Grayson",
@@ -33015,6 +34608,19 @@
       "title": "Parallel subagents per module, stacked branches",
       "updated_at": "2026-03-02T19:40:56.493449-05:00"
     },
+    "faef8265-019f-4cf3-944f-55741d0f4098": {
+      "author": "Bobby Grayson",
+      "change_id": "faef8265-019f-4cf3-944f-55741d0f4098",
+      "created_at": "2026-11-14T17:13:02.863787-05:00",
+      "metadata": {
+        "branch": "87-the-first-ten-minutes",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "init --no-server remembered in config; commands outside a project fail; DOT label, completion pipe, backup location, theme, writeup and prompt fixes; crate excludes; CI runs every test file",
+      "updated_at": "2026-11-14T17:13:03.098660-05:00"
+    },
     "fb0df161-542d-410f-a926-b246d36ba502": {
       "author": "Bobby Grayson",
       "change_id": "fb0df161-542d-410f-a926-b246d36ba502",
@@ -33324,6 +34930,20 @@
       "status": "pending",
       "title": "product_manager_deciduous graph adapter had drifted from deciduous edge types and bundled paths",
       "updated_at": "2026-03-07T00:03:47.279630-05:00"
+    },
+    "ff3eb5a1-3c1f-477a-97be-1558c86bb30a": {
+      "author": "Bobby Grayson",
+      "change_id": "ff3eb5a1-3c1f-477a-97be-1558c86bb30a",
+      "created_at": "2026-11-14T21:45:05.759938-05:00",
+      "metadata": {
+        "branch": "95-the-pre-edit-hook-is-removed",
+        "confidence": 90,
+        "prompt": "ok lets get rid of it and remove it from tests. 2 is fine go with your guy, ill fix CI later im busy"
+      },
+      "node_type": "goal",
+      "status": "completed",
+      "title": "Remove the pre-edit why hook; harden the benchmark scenarios, then rerun",
+      "updated_at": "2026-11-14T22:27:52.324441-05:00"
     },
     "ff54b327-6672-4c08-89c7-96b73bd6f4bc": {
       "author": "Bobby Grayson",

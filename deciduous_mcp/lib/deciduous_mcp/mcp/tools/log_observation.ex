@@ -121,7 +121,7 @@ defmodule DeciduousMcp.MCP.Tools.LogObservation do
            node_type: "observation",
            title: args["title"],
            description: args["description"],
-           status: "active",
+           status: "completed",
            metadata:
              %{}
              |> maybe_put("branch", args["branch"])

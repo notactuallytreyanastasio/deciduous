@@ -1,291 +1,118 @@
-# Deciduous Architecture
+<!-- Generated from content/architecture.md by scripts/docs/build.mjs. Edit the source. -->
 
-One graph per repository: goals, options, decisions, actions, outcomes,
-observations and revisits, joined by typed edges. Three things write it (the
-CLI, the MCP tools an agent calls while it works, and since 1.1.0 an import of
-the Claude Code transcript after the fact), and the whole design question is
-where the graph lives and how the copies agree. This page is that story for
-1.1.0.
+# Architecture and trust
 
----
+The graph lives in PostgreSQL behind one server process. Agents reach that server over HTTPS MCP; the CLI reaches the same server, over the same HTTPS and token, through ordinary JSON endpoints (`/ops`, `/export`, `/events`) rather than MCP, sending each write from a local log of operations. Each developer's `.deciduous/deciduous.db` is a cache of the server's copy, not a second source of truth. One bearer token opens the whole server: every workspace, read and write.
 
-## Where the graph lives
+## What runs where
 
-`deciduous init` asks. The answer decides which of two models a project runs
-under, and most of the architecture follows from it.
-
-```
-Where should this project's graph live?
-
-  1) This machine: the deciduous server as a background service, using PostgreSQL on
-     localhost:5432 as you (answering now)
-  2) This machine: the server as a background service, using a PostgreSQL you name
-     (any host, port, user, password)
-  3) This machine, in Docker: a new PostgreSQL and the server in containers
-  4) A server someone else runs: you need its URL and token
+```text
+ developer machine                                   the server's host
+ ┌───────────────────────────────┐                   ┌──────────────────────────────┐
+ │ agent (Claude Code, ...)  ────┼── POST /mcp ─────►│ deciduous-mcp (Elixir)       │
+ │                               │   Bearer <token>  │   /mcp  /ops  /export        │
+ │ deciduous CLI                 │                   │   /events /blob /documents   │
+ │   .deciduous/deciduous.db     │── POST /ops ─────►│   /health /ready             │
+ │   (cache)                     │◄─ GET /export ────│                              │
+ │   .deciduous/remote-log.jsonl │                   │          │                   │
+ │   (writes not yet sent)       │◄─ WS /events ─────│          ▼                   │
+ └───────────────────────────────┘                   │   PostgreSQL: every          │
+                                                     │   workspace's nodes, edges,  │
+                                                     │   documents, messages        │
+                                                     └──────────────────────────────┘
 ```
 
-| Store | Path | Tracked in git | Role |
-|---|---|---|---|
-| SQLite database | `.deciduous/deciduous.db` | no | A per-machine cache. Every CLI command reads and writes it. Holds local-only data too: the agent board (local model), roadmap state, Q&A history. |
-| Graph file | `.deciduous/graph.json` | yes, in the git model | The shared graph for projects with no `[remote]`: every node, edge, theme and tag, keyed by `change_id`. Every database write is mirrored into it at once; a `git checkout`, `pull`, `reset` or `stash` is followed by the next command. `deciduous sync` reconciles the two. |
-| Shared server | PostgreSQL behind an Elixir MCP endpoint, `[remote] url` in `.deciduous/config.toml` | the config is; the data is not | The truth for projects with a `[remote]`. One workspace per repository. Agents write to it over HTTP; the CLI writes locally and replays each write as an op. |
-| Op log | `.deciduous/remote-log.jsonl` | no | This machine's writes on their way to the server, one op per field change, replayed through `POST /ops` after each write and by `remote push`. Only kept when the project has a `[remote]`. |
-| Documents | `.deciduous/documents/<name>.<hash8>` | no | Files attached to nodes, named by original filename plus the first eight hex digits of their SHA-256. With a `[remote]`, `remote push --seed` sends them, bytes included. |
-| Token | `~/.config/deciduous/credentials` (mode 0600) | outside every repository | The server's bearer token. Also read from `DECIDUOUS_MCP_TOKEN`. Never in `config.toml`. |
-| This machine's server | `~/.config/deciduous/server/` | no | The release's single-file server executable, its `.env` (database URL, token, port, `DECIDUOUS_SERVER_MODE`), logs, and a launchd or systemd user service. |
+| Piece | Where | What it holds |
+| --- | --- | --- |
+| `deciduous-mcp` | A VM behind a TLS proxy ([Run a server](content/run-a-server.md)), or this machine ([Without a shared server](content/local.md)) | Nothing durable. Speaks MCP at `/mcp`, applies CLI ops at `/ops`, serves exports, documents and the event socket. |
+| PostgreSQL | Next to the server, or managed | Every workspace: nodes, edges, document bytes, board messages, workspace claims, write activity. Back this up; it is the graph. |
+| `.deciduous/deciduous.db` | Each clone | A cache of one workspace, plus themes, tags and the local command log, which the server does not have. |
+| `.deciduous/remote-log.jsonl` | Each clone, next to the cache | CLI writes the server has not acknowledged. With it: `remote-delivered.jsonl` and `remote-log.lock`. |
+| `.deciduous/config.toml` | Each clone, committed | `[remote] url` and `workspace`. Never a token. |
+| `~/.config/deciduous/credentials` | Each machine | The one stored token. |
 
-How the roles shifted, release by release, matters because older pages still
-tell older stories:
+The cache, the log and `.deciduous/documents/` (local copies of attached files, secrets included) are ignored by git only if `deciduous init` wrote the `.gitignore` block (`.deciduous/*`, with `config.toml` and `graph.json` let back in). A clone joined with `deciduous remote init <url>` alone gets no ignore rules, and `git status` then lists `deciduous.db`, `remote-log.jsonl`, `remote-delivered.jsonl` and `remote-log.lock` as untracked, ready for a careless `git add`. Add the block by hand in that case.
 
-- **0.17** kept one JSON file per record under `.deciduous/sync/`; **0.18**
-  folded that into the single `graph.json` and made the git merge driver the
-  mechanism (`deciduous merge-record`, registered by `init`, `update` and
-  `sync`). A `.deciduous/sync/` directory today is a leftover `sync` folds in
-  once and deletes.
-- **0.19 and 1.0.0** added the shared server. "Nothing writes back from the
-  server to SQLite except `remote pull`. The local database is a cache."
-- **1.0.5** removed the GitHub Pages export: `deciduous sync` only reconciles
-  `graph.json` with the database and no longer writes `docs/graph-data.json`.
-- **1.0.8** replaced snapshot pushes with the op log, so a status change
-  cannot put back a title an agent changed meanwhile.
-- **1.0.11** made the local database follow `graph.json` on every checkout,
-  so a node added on one branch no longer appears on every branch, and made
-  "this machine's server" a native user service against PostgreSQL on 5432
-  instead of Docker.
-- **1.0.12** made `update` keep every section and command file the user
-  edited, and give projects with a `[remote]` remote-aware templates.
+The server's HTTP routes: `/health` (unauthenticated, process liveness), `/ready` (database and migrations), `/mcp`, `/ops`, `/export`, `/import`, `/claim`, `/locate`, `PUT /blob/:hash`, `/documents/:id`, `/messages`, `/events`. Everything except `/health` and `/ready` requires the token.
 
-In the remote model `init` and `update` skip `.gitignore`, `.gitattributes`,
-the merge driver and `graph.json`: the graph lives on the server, and a
-worktree whose config lacks `[remote]` sends to its main checkout's server.
-Themes and tags are not sent to the server; the board is never in `graph.json`
-or any export.
+## Two write paths, one store
 
-## What writes the graph
+An agent's MCP write is a transaction in PostgreSQL. When the tool returns, every other agent can read it.
 
-```
-you / the agent
-  │
-  ├─ deciduous add | link | status | prompt | delete | unlink | doc | tag | archaeology …
-  │      → SQLite, mirrored to graph.json (git model) or logged as an op and sent (remote model)
-  │
-  ├─ MCP tools, two servers with different tool sets:
-  │      deciduous mcp         stdio, 34 tools, writes the local database like the CLI
-  │      the shared server     HTTP, 21 tools (add_node, capture_conversation_turn, ask_graph,
-  │                            post_message, check_activity …), writes PostgreSQL directly
-  │
-  └─ deciduous transcript import <session>      (1.1.0)
-         → reads ~/.claude/projects/<slug>/<session>.jsonl, derives goals from prompts,
-           actions from edits and commits, outcomes from test runs, each with
-           metadata.evidence = proven | inferred
+A CLI write (`deciduous add`, `link`, `status`, and `deciduous mcp` over stdio in a project with a `[remote]`) goes through three steps:
+
+1. The write and an op describing it commit together in the local database (the op sits in a `remote_outbox` table), so a crash cannot keep one without the other.
+2. The op is appended to `.deciduous/remote-log.jsonl`. An op names only what changed: `{"kind":"update_node","change_id":"…","set":{"status":"completed"}}`, not the whole node.
+3. Before the command exits, the waiting ops are sent to `POST /ops`, with a 10-second budget. The server applies each op at most once, by `op_id`, field by field. Acknowledged ops are removed from the log.
+
+If step 3 fails, the command still exits 0, prints why, and the op waits. The next write that gets through sends everything queued before it; `deciduous remote push` sends it on demand. `remote status` lists what waits and what the server rejected. The log is why an edit made while the server was down still arrives, and why a status change does not resend (and overwrite) a title an agent changed meanwhile; through 1.0.7 the CLI pushed whole nodes by comparing snapshots and did both. [Troubleshooting](content/troubleshooting.md#the-local-write-succeeded-but-the-server-did-not-get-it) shows the output.
+
+There are no locks. Until 1.0.8 every MCP write took a ten-second lease on its workspace and branch; it refused one-shot clients their own next call and could not cover CLI ops replayed later, so it was removed. Each write is atomic on its own, `capture_conversation_turn`, `log_decision` and `close_thread` included, and the server records who wrote where so `check_activity` can show it.
+
+## The local database is a cache
+
+CLI reads (`nodes`, `show`, `pulse`, `serve`, `writeup`) read the local database. It does not refresh itself. After agents write over MCP, `remote status` shows the gap and `remote pull` closes it:
+
+```text
+                 local    server
+  nodes              1         2
+
+Only on the server (1)
+  observation 96096527 "MCP probe obs"
+
+Differs: `deciduous remote pull` takes the server's side.
 ```
 
-The transcript path exists because an agent that logs its own decisions is an
-agent that can forget to. Up to 1.0.2 deciduous tried to force it with a hook
-that denied the agent's next tool call until it wrote to the graph; 1.0.3
-removed it, because a rule that blocks work has to be one the agent can
-satisfy every time and this one could not (a graph write sent beside the next
-action did not count, and an environment variable typed into the session never
-reached the hook). The hooks `init` installs now, `version-check.sh` and
-`board-mentions.sh`, never block. Logging is encouraged by the `CLAUDE.md`
-section, the MCP tools' own descriptions and replies, and the instructions the
-shared server sends on `initialize`; and whatever the agent did not log, the
-transcript import recovers afterwards with the evidence labelled.
+Themes and tags exist only in the cache; they are never sent. Losing a clone's database loses nothing that reached the server: a fresh clone plus `remote pull` rebuilds it. Losing PostgreSQL loses the graph.
 
-A transcript-derived action, from a scratch project:
+A project with no `[remote]` is the exception: there the local database is the graph, mirrored into a git-tracked `.deciduous/graph.json` ([Without a shared server](content/local.md#no-server-at-all)).
 
-```
-$ deciduous show 13
+## The trust boundary
 
-Node #13 action
-────────────────────────────────────────────────────────────
-Title: Edit src/lib.rs, src/widget.rs
-Description: Reading the module, then adding the widget.
-Status: pending
-Change ID: 09d8fc49-fbc7-8448-83b2-6286a557c26a
-Created: 2026-10-01T10:00:08Z
-Updated: 2026-10-01T10:00:08Z
+The server has exactly one token, `DECIDUOUS_MCP_TOKEN`. It refuses to start without one or with one shorter than 32 bytes, and compares what clients present in constant time. Whoever holds it can read and write every workspace on that server, list them all, and read any node by id. There are no users, roles or per-workspace tokens.
 
-Metadata
-  Branch: feat/widget
-  Files: src/lib.rs (git:3048f12804ac39bd0b0adee36ab1ba9b09b4b151), src/widget.rs (git:d456351e4e617162562a1093bcee361646b4c8ee)
-  Consulted: src/lib.rs
-  Evidence: proven transcript, session 0f1e2d3c, 2 tool call(s)
+Workspaces separate graphs; they do not separate people.
 
-Connections
-  Incoming (1):
-    #12 ─[leads_to]→ here: files changed in this turn
-  Outgoing (1):
-    here ─[leads_to]→ #14: command run in this turn
-```
+- `X-Deciduous-Workspace` routes. A connection that sends it is pinned: tool arguments cannot move its writes elsewhere, and `"*"` reads are confined to that workspace. But the header is chosen by the client. Any token holder can connect without it, or with another name.
+- Workspace claims stop accidents, not adversaries. The first repository to claim a workspace records its root commit ids, and an unrelated repository with the same directory name is refused (`belongs to another repository`). A client can still name the workspace explicitly to share it, and a client without git sends no roots and is not checked. Claims are checked only on the CLI's paths (`/claim`, `/ops`, `/import`, and `/export` for a client that sends roots). MCP tool calls are never checked against them, so an agent registered with the wrong workspace name writes into that workspace unrefused. Pin each agent's registration with `X-Deciduous-Workspace`.
 
-Decisions and options are not derived from transcripts; see
-[transcripts.md](transcripts.md).
+So: one server per group of people who may see each other's graphs. Two teams that must not read each other need two servers (or at least two databases and two tokens), not two workspaces.
 
-## What reads it
+Inside that boundary:
 
-| Reader | What it gives |
-|---|---|
-| `deciduous nodes`, `edges`, `show <id>`, `graph` | The local database as text or JSON. `show` prints evidence, consulted files and file hashes; `show --json` prints `metadata_json` raw. |
-| `deciduous serve` | The embedded React viewer on `http://localhost:3000`, reading the local database through `/api/graph`. See [WEB_VIEWER.md](WEB_VIEWER.md). |
-| `deciduous dot`, `deciduous writeup` | Graphviz DOT (and PNG with graphviz installed) and a PR body from a node range. |
-| `deciduous pulse`, `narratives pivots`, `archaeology timeline` | Health, pivot chains and a chronological listing. |
-| `ask_graph`, `query_nodes`, `show_node` (shared server) | Retrieval across one workspace or every workspace (`workspace: "*"`), with the route each answer took. |
-| `deciduous remote status`, `remote watch` | Drift between this copy and the server, field by field; a live line per write. |
+- Graph text is data written by people and agents. A node's description saying "run this" is not an instruction to an agent that reads it.
+- `/events` takes the token in the `Authorization` header or, as a fallback for WebSocket clients that cannot set headers, in a `?token=` query parameter. The query form ends up in proxy access logs; `deciduous remote watch --url` and `--claude-code` print such a URL. Redact query strings in the proxy's logs, or keep those URLs out of anything shared.
+- The server does not terminate TLS. Put it behind a proxy that does, and keep its port off the public network: a native server binds `127.0.0.1` (`DECIDUOUS_BIND_ADDRESS`), the Docker bundle publishes on `127.0.0.1` only. A server started by hand with no bind address listens on every interface.
+- The token belongs in the client's secret mechanism and in `~/.config/deciduous/credentials`, never in `.deciduous/config.toml`, a committed `.mcp.json`, or the graph.
 
-## The model, in one screen
+## TLS to PostgreSQL
 
-`goal -> options -> decision -> actions -> outcomes`. Observations attach
-anywhere; a revisit marks a pivot and leads to the new decision. Edge types:
-`leads_to`, `requires`, `chosen`, `rejected`, `blocks`, `enables`, `took_from`
-(a borrow, usually across branches). Statuses: `pending`, `active`,
-`completed`, `rejected`, `superseded`, `abandoned`. Every node has a local `id`
-(different on every machine), a `change_id` (the same everywhere), and on the
-server a server id; the CLI takes all three. The full treatment is
-[CONCEPTS.md](CONCEPTS.md).
+Set by `DB_SSL` and `DB_SSL_VERIFY` in the server's environment or settings file, read by `deciduous_mcp/config/runtime.exs` in production mode:
 
-## Agent coordination
+| `DB_SSL` | `DB_SSL_VERIFY` | libpq equivalent | What is checked |
+| --- | --- | --- | --- |
+| unset or `false` | (ignored) | `disable` | Nothing; no TLS. Right for a database on the same private Docker network. |
+| `true` | `full` (default; also `peer`, `verify-full`) | `verify-full` | The certificate chain (`verify_peer`) and that the certificate names the host in `DATABASE_URL`. |
+| `true` | `ca` (also `verify-ca`) | `verify-ca` | The chain only, for a database reached by an address its certificate does not name. |
+| `true` | `none` (also `require`) | `require` | Nothing: encrypted, server not authenticated. Logged as a warning at every boot. |
 
-Agents working in parallel on one repository talk on the message board
-(`deciduous board post|read|show`, `post_message` and `read_messages` on both
-MCP servers), not in a scratch file. Locally it lives in the main worktree's
-database, so every worktree reads one board; with a `[remote]`, in the
-server's `agent_messages` table. `@label` addresses a message, `--reply-to`
-answers one, and `board read --unanswered <label>` is what a session reads at
-start. On the server, `check_activity` reports who has written to which branch
-in the last five minutes, and `GET /events` streams every write.
+The chain is checked against the system CA store, or against `DB_SSL_CA_FILE` (a PEM file) for a private CA. A missing or empty CA file stops the server at boot instead of failing every connection later. Each boot logs the mode in effect; this machine's native server, on a local PostgreSQL, logs `Database TLS: off (DB_SSL unset or false)`.
 
-## Source layout
+Earlier versions of these docs said the server used `verify_none` whenever `DB_SSL=true`. That was true of 1.0.0 and 1.0.1. Since then, `true` alone means full verification, and unverified TLS has to be asked for by name. A 1.0.1 deployment upgrading with a private CA needs `DB_SSL_CA_FILE`; one whose certificate does not name the address it connects to needs `DB_SSL_VERIFY=ca`.
 
-```
-src/
-├── main.rs            CLI: clap definitions and command dispatch
-├── lib.rs             crate exports
-├── db.rs              SQLite via Diesel: nodes, edges, documents, themes, board, mirror digest
-├── schema.rs          Diesel tables (decision_nodes, decision_edges, node_documents, themes,
-│                      node_themes, agent_messages, command_log, roadmap_*, qa_interactions …)
-├── config.rs          .deciduous/config.toml: [branch], [github], [hooks], [remote]
-├── records.rs         graph.json: the record store, reconcile, follow-on-checkout, merge driver
-├── oplog.rs           .deciduous/remote-log.jsonl: ops queued for the server, acks, compaction
-├── remote.rs          client of the shared server: setup, init, status, push, pull, adopt
-├── server.rs          installing and checking "this machine's server" from init and update
-├── local_server.rs    the pure decisions behind that: database URL, mode, .env, service units
-├── watch.rs           `remote watch`: the GET /events WebSocket client
-├── board.rs           the message board, local and remote backends
-├── transcript.rs      `transcript import` and `transcript list` (1.1.0)
-├── mcp/               `deciduous mcp`, the stdio server
-│   ├── protocol.rs    JSON-RPC and MCP message types
-│   ├── tools.rs       the 34 tool definitions and dispatch
-│   ├── handlers.rs    tool handlers over Database
-│   └── query.rs       pure graph analysis used by the reporting tools
-├── serve.rs           `deciduous serve`: the viewer's HTTP API, embeds viewer.html
-├── api.rs             `deciduous serve --api`: the multi-graph bearer-token daemon
-├── export.rs          DOT export and PR writeups
-├── archaeology.rs     pivot, timeline, supersede
-├── narratives.rs      .deciduous/narratives.md and pivot chains
-├── pulse.rs           the health report
-├── hooks.rs           hooks listed in config.toml (deciduous ships none since 1.0.3)
-├── init/
-│   ├── mod.rs         init and update
-│   ├── templates.rs   CLAUDE.md section, commands, skills, hook scripts (git model)
-│   ├── remote_templates.rs   the same for projects with a [remote]
-│   ├── guard.rs       how update replaces only what deciduous wrote
-│   └── known_templates.rs    every template text ever shipped, for recognising old installs
-├── opencode.rs        OpenCode integration (.opencode/, AGENTS.md)
-├── roadmap.rs, github.rs   ROADMAP.md and GitHub Issues sync through `gh`
-├── events.rs          reader for the pre-0.17 JSONL event log, migration only
-├── changelog.rs       release notes shown by `update`
-├── demo_swarm/        `deciduous demo-swarm` (hidden): the multi-agent Tetris demonstration
-└── viewer.html        the built viewer, generated from web/
+## Source map
 
-deciduous_mcp/         the shared server: Elixir on Bandit, PostgreSQL;
-                       21 MCP tools, /ops, /import, /export, /events, /messages
-web/                   the viewer's source (React, Vite); web/src/App.tsx is most of it
-```
-
-Not in 1.1.0: a terminal UI (`deciduous tui` is not a command), GitHub Pages
-export from `sync`, `diff export`/`diff apply` patches, `.deciduous/sync/`,
-and blocking hooks.
-
-## Tests
-
-```bash
-cargo test            # unit and CLI tests against temporary databases
-cargo clippy          # warnings denied in CI; the toolchain is pinned to 1.92.0 by rust-toolchain.toml
-```
-
-### The integration battery
-
-`tests/e2e_*.rs` drive real processes across real boundaries: the built
-binary, `deciduous mcp` over stdio, `deciduous serve --api` over TCP, git
-clones of a bare origin with the merge driver, and a shared graph server over
-HTTP MCP. A plain `cargo test` skips all of it (each test prints one
-`skipped:` line), so the normal suite stays fast and needs no network.
-
-| File | What it holds to account |
-|------|--------------------------|
-| `e2e_bridge.rs` | CLI writes reaching the server: offline replay, deletes, no stale overwrites, `remote status` |
-| `e2e_server.rs` | The HTTP MCP server: workspace pins, atomicity, validation, protocol edges, auth on every route |
-| `e2e_gitsync.rs` | Teammates through git: merge driver failures, clock skew, `sync --check` |
-| `e2e_conflicts.rs` | Three clones, one server, some offline: stale ops refused, edits arriving through git and the server in both orders |
-| `e2e_stdio.rs` | The stdio server and API daemon: id range, path confinement, hangs, error ids |
-| `e2e_concurrency.rs` | Many processes on one project: every acknowledged write lands, no "database is locked" |
-| `e2e_model.rs` | Seeded random interleavings of every surface, checked against a model at each sync |
-| `e2e_fuzz.rs` | Malformed, huge and invalid-UTF-8 input to both MCP servers |
-| `e2e_swarm.rs` | `demo-swarm`'s trust-gated start with a stub `claude` (macOS) |
-
-Local-only parts (no server):
-
-```bash
-DECIDUOUS_E2E=1 cargo test --test e2e_gitsync --test e2e_stdio \
-  --test e2e_concurrency --test e2e_model --test e2e_fuzz --test e2e_swarm
-```
-
-Everything, against a throwaway server built from your checkout (never
-production; every test writes its own fresh workspaces, but they stay):
-
-```bash
-cd deciduous_mcp
-COMPOSE_PROJECT_NAME=dx-e2e DECIDUOUS_PORT=4816 DECIDUOUS_IMAGE=deciduous-mcp:e2e \
-  DECIDUOUS_ENV_FILE=/tmp/dx-e2e.env sh scripts/setup.sh
-cd ..
-export DECIDUOUS_E2E=1 DECIDUOUS_E2E_SERVER=http://127.0.0.1:4816
-export DECIDUOUS_E2E_TOKEN=$(sed -n "s/^DECIDUOUS_MCP_TOKEN='\(.*\)'$/\1/p" /tmp/dx-e2e.env)
-cargo test --test 'e2e_*'
-docker compose -p dx-e2e down -v && docker image rm deciduous-mcp:e2e
-```
-
-The randomized tests print their seed first and again in any failure.
-`DECIDUOUS_E2E_SEED=<seed>` replays that run exactly; `DECIDUOUS_E2E_STEPS=<n>`
-makes it longer. CI runs the whole battery on every pull request
-(`.github/workflows/integration.yml`) against a server built from the same
-commit, plus `mix test` for the server itself.
-
-## Development workflow
-
-```bash
-cargo build --release
-./target/release/deciduous <command>
-
-# The viewer: after any change under web/src
-cd web && npm run build && cd ..
-cp web/dist/index.html src/viewer.html        # embedded by serve.rs
-cp web/dist/index.html docs/demo/index.html   # the static demo; the two files are identical
-cargo build --release
-```
-
-`src/viewer.html` is generated; do not hand-edit it.
-
-## Known gaps in 1.1.0
-
-- The viewer does not show evidence kind, consulted files or file hashes;
-  `show` and `show --json` do.
-- `deciduous commands` prints "No commands logged." in a fresh 1.1.0 project:
-  nothing in the CLI writes `command_log` any more.
-- `deciduous add --help` lists six node types and `status --help` four
-  statuses; the binary accepts seven and six (`revisit`; `superseded`,
-  `abandoned`).
-- A write made on a branch while a server is configured is on the server for
-  every branch: the server has no branches.
-- Themes and tags are not sent to the server.
+| Path | What is there |
+| --- | --- |
+| `deciduous_mcp/lib/deciduous_mcp/web/router.ex` | Every HTTP route |
+| `deciduous_mcp/lib/deciduous_mcp/web/auth.ex`, `workspace_plug.ex` | The token check; the workspace pin |
+| `deciduous_mcp/lib/deciduous_mcp/mcp/scope.ex` | How a call's workspace is decided |
+| `deciduous_mcp/lib/deciduous_mcp/mcp/tools/` | The 21 tools |
+| `deciduous_mcp/lib/deciduous_mcp/activity.ex` | Write activity, and why the branch lock went |
+| `deciduous_mcp/lib/deciduous_mcp/graph/workspaces.ex` | Workspace claims by root commit |
+| `deciduous_mcp/config/runtime.exs` | Every setting the server reads, including database TLS |
+| `src/oplog.rs` | The op log: format, crash safety, compaction |
+| `src/remote.rs` | `remote *`, token lookup, status and pull |
+| `src/server.rs`, `src/local_server.rs` | `remote setup` and this machine's server |
+| `src/records.rs` | `graph.json` and the merge driver, for projects with no server |
+| `src/mcp/` | The stdio MCP server |

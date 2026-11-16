@@ -449,7 +449,7 @@ mod tests {
     #[test]
     fn every_current_harness_template_is_in_the_known_list() {
         // Fails when a template changes without running
-        // `python3 scripts/gen_known_templates.py > src/init/known_templates.rs`.
+        // `python3 scripts/gen_known_templates.py --write`.
         // Without the regeneration, installs made from the old text would read
         // as the user's own on the next update and get appended to, not replaced.
         use crate::init::remote_templates as r;

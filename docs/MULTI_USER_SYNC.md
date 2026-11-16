@@ -1,119 +1,190 @@
-# Multi-User Sync
+<!-- Generated from content/local.md by scripts/docs/build.mjs. Edit the source. -->
 
-Several people, several machines, several agents, one graph. There are two
-ways a project shares it, chosen when `deciduous init` asks where the graph
-lives, and they do not mix:
+# Without a shared server
 
-| | Shared server (`[remote]` in `.deciduous/config.toml`) | Git (no `[remote]`) |
-|---|---|---|
-| The truth | PostgreSQL behind the server; one workspace per repository | `.deciduous/graph.json`, committed with the code |
-| Agents write | straight to the server over MCP | to the local database, which mirrors `graph.json` |
-| The CLI writes | the local database, then an op to the server | the local database and `graph.json` at once |
-| Concurrent edits meet | on the server, compare-and-set field by field | in git, through the `deciduous merge-record` merge driver |
-| Catch up | `deciduous remote pull` | `git pull`; the next command follows the file |
-| Check | `deciduous remote status` (exit 1 on drift) | `deciduous sync --check` (exit 1 if pending) |
-| Boards, documents | on the server (`remote push --seed` for documents) | the board in the main worktree's database; documents stay local |
+There are two fallbacks for when nobody runs a server you can join. `deciduous remote setup --local` runs the same server on your own machine as a background service, so the CLI and your agents work exactly as they would against a team server, with one person writing. `DECIDUOUS_NO_SERVER=1 deciduous init` skips the server entirely and shares the graph through a git-tracked `.deciduous/graph.json`. Use the first if you might join a team later; use the second only when a running service is not an option.
 
-In both models `.deciduous/deciduous.db` is a per-machine cache and is never
-committed. `deciduous diff export` and `diff apply` do not exist; the patch
-model was removed in 0.17. `.deciduous/sync/` was 0.17 only, and `deciduous
-sync` folds a leftover one into `graph.json` and deletes it.
+## A server on this machine
 
----
+`remote setup --local` looks for a server this machine already has, and installs one if there is none.
 
-## Identity: local ids, change ids, server ids
+> **On Linux, 1.1.0's `--local` does not finish on its own.** With apt's PostgreSQL it needs a role with a password and `--database-url`, and the systemd unit it writes is refused until one line is edited; both are under [What a fresh install does](#what-a-fresh-install-does). The fix for the unit is PR #330, not yet released. `remote setup --docker-postgres` avoids both.
 
-| Field | Scope | Example | Use it for |
-|-------|-------|---------|------------|
-| `id` | one machine | `42` | typing quickly at your own prompt |
-| `change_id` | everywhere | `8311856e-…` | anything that crosses machines |
-| server id | the server | a UUID the MCP tools return | what agents quote; resolved last |
-
-Alice's goal is `#12` on her laptop and `#907` on Bob's. Its `change_id` is the
-same on both. Records reference each other only by `change_id`; local ids are
-assigned on import and never leave the machine.
-
-Every command that takes a node id also takes a `change_id` prefix (four or more
-hex characters, unique). `deciduous nodes` prints the first eight in the CHANGE
-column:
-
-```
-ID    CHANGE    TYPE         STATUS     TITLE
-1     8311856e  goal         pending    Rate limit the public API
-5     34367f53  action       pending    Add token bucket middleware
-```
-
-```bash
-deciduous link 8311856e 5 -r "implements the goal Alice logged"
-deciduous status 34367f53 completed
-deciduous show 8311
-```
-
-The MCP tools accept the same thing: `"node_id": "8311856e"` instead of an
-integer. A digit-only prefix is tried as a local id first; quote eight or
-more characters of a server id when it could also be the start of a local
-node's `change_id`.
-
-## The shared server
-
-Agents write through the server's MCP tools and never touch the local
-database. The CLI writes locally first, so it works offline, and appends one
-op per field change to `.deciduous/remote-log.jsonl`; the ops are replayed to
-`POST /ops` before the command exits, and by `deciduous remote push` later.
-The server applies each op at most once and only over the value it replaced,
-so a `status` change queued while an agent retitled the node cannot put the
-old title back; it is refused by name instead.
-
-```bash
-deciduous remote status        # waiting ops, and every node, edge, document that differs, field by field
-deciduous remote pull          # send what is waiting, then take the server's rows (newer edit wins per node)
-deciduous remote push          # send what is waiting; --seed for history from before the remote
-deciduous remote watch         # one line per write, as agents make them
-```
-
-```
-Log: 0 write(s) waiting, 0 rejected  (.deciduous/remote-log.jsonl)
-
-                 local    server
-  nodes            719       719
-  edges            845       845
-
-In sync: no writes waiting, and every node, edge and document matches field by field.
-Themes and tags are not sent to the server, so they are not compared.
-```
-
-A git worktree whose `config.toml` lacks `[remote]` sends to its main
-checkout's server (same repository, one workspace). The server has no
-branches: a node written on any branch is in the workspace for every branch.
-`init` and `update` on a project with a `[remote]` leave `.gitignore`,
-`.gitattributes`, the merge driver and `graph.json` alone. The rest of the
-server model, including how workspaces are named and what `check_activity`
-and `took_from` are for, is in [remote-graph.md](remote-graph.md).
-
-## Git: the graph file
+ On a machine that has one, it reuses it and changes nothing about it:
 
 ```text
-.deciduous/
-├── deciduous.db            private cache (gitignored)
-├── config.toml             shared
-└── graph.json              shared: the graph
+$ deciduous remote setup --local
+deciduous remote setup
+Every project writes its decision graph to a shared server. This connects /home/you/code/my-app
+to one: a server on this machine, or one someone else runs.
+
+   Found local server at http://127.0.0.1:4000
+   Wrote .deciduous/config.toml [remote] url = http://127.0.0.1:4000
+   Connected http://127.0.0.1:4000 holds 0 nodes, 0 edges in workspace my-app
+   Unchanged Claude Code already has a deciduous MCP server
+
+Done: this project writes to http://127.0.0.1:4000. Restart Claude Code so it picks up the server;
+it sends the logging instructions when it connects.
 ```
 
-```json
-{
-  "version": 1,
-  "nodes":  { "<change_id>": { … } },
-  "edges":  { "<edge_id>":   { … } },
-  "themes": { "<change_id>": { … } },
-  "tags":   { "<node_change_id>--<theme_change_id>": { … } }
-}
+"This machine has a server" means `~/.config/deciduous/server/.env` exists. That settings file is authoritative once written: every later `--local`, in every project, points at the server it describes. The flags that choose how a new server is built do not replace an existing one. `--docker` on a machine with a native server is refused:
+
+```text
+Error: this machine's server is already set up to run as a background service (/Users/you/.config/deciduous/server/.env), and it is kept that way. To replace it, stop it and move that file away first; its database is not touched.
 ```
 
-Every graph write goes to the database and to that file at the same time. When
-git changes the file (a pull, a checkout, a reset, a stash), the database
-follows it before the next command runs. `deciduous init` writes the rules:
+and `--database-url` against the same native server is accepted but ignored, with one line saying so: `Using the server already set up in ~/.config/deciduous/server/.env; its database and port stand`.
 
+The `Unchanged Claude Code already has a deciduous MCP server` line deserves a second look. `remote setup` registers its server with Claude Code at user scope only when `claude mcp get deciduous`, run in the project, finds no `deciduous` server in any scope: user, the project's `.mcp.json` (even one still waiting for approval), or local. If one is found, it is left alone even when it points somewhere else, and the "Restart Claude Code" advice below it will not fix that. Check with `claude mcp get deciduous`; the [Claude Code section of Connect your agents](content/clients.md) has the fix.
+
+### What a fresh install does
+
+The output above was observed on a machine that already had a server. The steps below were run on Linux (debian:12 with systemd 252 and PostgreSQL 15 from apt, deciduous 1.1.0) and checked against `src/server.rs` and `src/local_server.rs`; the macOS service step was read, not run.
+
+| Flag | Server runs as | Database |
+| --- | --- | --- |
+| `--local` (nothing else) | the release's single-file `deciduous-mcp` executable, as a user service | PostgreSQL on `localhost:5432` as `$USER`, no password, database `deciduous`. Works with Homebrew's PostgreSQL, which trusts localhost. Not with apt's: see below |
+| `--database-url <url>` | the same user service | the PostgreSQL you name |
+| `--docker` | a container from the release's `deciduous-mcp-docker.tar.gz` | the PostgreSQL from the first two rows; `localhost` is rewritten to `host.docker.internal`. On Linux that is the Docker gateway, where PostgreSQL does not listen out of the box: set `listen_addresses` and add a `pg_hba.conf` line for `172.16.0.0/12`, or use `--docker-postgres` |
+| `--docker-postgres` | a container (implies `--docker`) | a new PostgreSQL 17 container |
+| `--port <port>` | any of the above | used only on first setup. Without it, `DECIDUOUS_PORT` from the environment is used; failing that, a terminal asks (suggesting a free port in 20000-32767), and without a terminal a free port is chosen and printed (`Chose port N`) |
+
+With no flags and a terminal, `remote setup` asks the same questions as a menu. Without a terminal and without `--local` or `--url`, it stops and prints the four scripted forms.
+
+**Debian and Ubuntu: `--local` alone fails.** The CLI's hint for a machine without PostgreSQL is `sudo apt install postgresql`, but that package's `pg_hba.conf` requires a password for TCP to `127.0.0.1` (`host all all 127.0.0.1/32 scram-sha-256`), the CLI connects over TCP with no password, and nothing creates a `$USER` role. Even with the role, the failure is the client's, not PostgreSQL's:
+
+```text
+Preparing postgres://you@localhost:5432/deciduous ...
+Error: cannot connect to you@localhost:5432/deciduous: key :password not found in: [ parameters: [], ... username: "you", database: "deciduous", port: 5432, sync_connect: true ]
 ```
+
+Give the role a password and name it in the URL:
+
+```bash
+sudo -u postgres createuser --createdb --pwprompt $USER
+deciduous remote setup --database-url postgres://$USER:<password>@localhost:5432/deciduous
+```
+
+On debian:12 that created the database and got as far as the service step, which fails in 1.1.0 for the reason below.
+
+Before any of the steps, setup checks for a service manager. On Linux without a `systemctl --user` session (a container, WSL without systemd, a login without a user bus) it prints `Note systemd user services are not available here ...`, offers Docker if there is a terminal, and otherwise still installs the executable, prepares the database and writes `.env`, then stops with the command to run the server in the foreground and rerun setup.
+
+The native install, in order:
+
+1. Downloads `deciduous-mcp-<os>-<arch>` for the CLI's own version, checks it against the release's `checksums.txt`, and installs it as `~/.config/deciduous/server/bin/deciduous-mcp`.
+2. Picks the bearer token. If the machine already has one (`DECIDUOUS_MCP_TOKEN`, else `~/.config/deciduous/credentials`) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.
+3. Runs the executable once with `DECIDUOUS_MCP_COMMAND=prepare-database`: it connects, creates the database if missing (the role needs `CREATEDB`), migrates, and exits. A refusal usually comes back in PostgreSQL's words (`role "x" does not exist`, `password authentication failed`). Two exceptions were seen on Linux:
+   - No password in the URL against a server that wants one gives the `key :password not found` keyword list above.
+   - On a machine where another user ran the server executable first, it prints only `Error: error: AccessDenied`, because the executable unpacks `/tmp/libc-musl-<hash>.so` owned by that user and a second user cannot replace it (moving the file away fixed it).
+
+   If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing `brew install postgresql@17 && brew services start postgresql@17` / `sudo apt install postgresql`.
+4. Writes `~/.config/deciduous/server/.env`, mode 600. This machine's file has these keys (values other than the secrets shown):
+
+   ```text
+   DECIDUOUS_SERVER_MODE=native
+   DECIDUOUS_SERVER_VERSION=1.1.0
+   DECIDUOUS_BIND_ADDRESS=127.0.0.1
+   DECIDUOUS_PORT=4000
+   DECIDUOUS_MCP_TOKEN='<token>'
+   DATABASE_URL='<ecto url>'
+   DB_SSL=false
+   DB_SSL_VERIFY=full
+   DB_SSL_CA_FILE=
+   POOL_SIZE=10
+   DECIDUOUS_PREPARE_DATABASE=true
+   ```
+
+5. Installs a user service that starts at login and restarts on exit (**on Linux this fails in 1.1.0**; see below): a LaunchAgent `dev.deciduous.server` at `~/Library/LaunchAgents/dev.deciduous.server.plist` on macOS, a systemd user unit `deciduous-server.service` on Linux. The service definition carries only paths; the token and database URL stay in `.env`, which the server reads itself through `DECIDUOUS_ENV_FILE`. Output goes to `~/.config/deciduous/server/logs/server.log`. On Linux, user services stop at logout unless you run `loginctl enable-linger $USER`.
+6. Waits for `/ready`, then stores the token in `~/.config/deciduous/credentials` if it differs from the one there, writes `[remote]`, and registers with Claude Code as above. Without Claude Code on `PATH` it prints `Note Claude Code not found; register the server in your client: http://127.0.0.1:<port>/mcp` instead.
+
+**Linux: the service does not start in 1.1.0, or on main.** The unit file the CLI writes puts `WorkingDirectory` in double quotes, and systemd refuses the whole unit. Fixed by [PR #330](https://github.com/notactuallytreyanastasio/deciduous/pull/330), not yet merged or released as of 2026-11-08. Setup stops after writing `.env`:
+
+```text
+Error: `systemctl --user restart deciduous-server.service` failed: Failed to restart deciduous-server.service: Unit deciduous-server.service has a bad unit file setting.
+```
+
+`systemd-analyze verify` (systemd 252) says why:
+
+```text
+/home/you/.config/systemd/user/deciduous-server.service:8: WorkingDirectory= path is not absolute: "/home/you/.config/deciduous/server"
+deciduous-server.service: Unit configuration has fatal error, unit will not be started.
+Unit deciduous-server.service has a bad unit file setting.
+```
+
+Until that is fixed, remove the quotes from that one line, start the service, and run setup again to finish connecting the project:
+
+```bash
+sed -i 's/^WorkingDirectory="\(.*\)"$/WorkingDirectory=\1/' ~/.config/systemd/user/deciduous-server.service
+systemctl --user daemon-reload && systemctl --user restart deciduous-server.service
+deciduous remote setup --local
+```
+
+Setup stopped before step 6, so without the last line the project has no `[remote]`, no stored token and no Claude Code entry. Run again, it finds the running server (`Found local server at http://127.0.0.1:<port>`), stores the token and writes `[remote]`. Checked on debian:12: before the edit `systemd-analyze verify` refuses the unit, after it the unit verifies clean. The quoted `ExecStart=` and `Environment=` lines are fine. macOS (launchd) is not affected.
+
+The edit does not last. Whenever the server is not answering (after a logout without linger, or `systemctl --user stop`), the next `remote setup --local` in any project prints `Starting the server at ..., which is not answering`, rewrites the unit with the quotes, and fails the same way. Repeat the `sed` and the restart.
+
+The server binds `127.0.0.1` because `DECIDUOUS_BIND_ADDRESS` says so; a server started by hand without that setting listens on every interface. Every start re-runs the migrations (`DECIDUOUS_PREPARE_DATABASE=true`), and `deciduous update` in a project that writes to this server replaces an older executable and restarts the service. Docker installs are not upgraded by `update`.
+
+A database URL may carry `?sslmode=`. The CLI maps it onto the server's TLS settings: `require` → `DB_SSL=true DB_SSL_VERIFY=none`, `verify-ca` → `ca`, `verify-full` → `full`. `disable`, `allow` and `prefer` all turn TLS off; `prefer` does not mean "try TLS" here. Any other query parameter is refused rather than dropped. The meaning of each mode is on [Architecture](content/architecture.md#tls-to-postgresql).
+
+The first log lines after a start say what the server is doing. From this machine's `server.log`:
+
+```text
+[info] Database TLS: off (DB_SSL unset or false)
+[info] Events.Listener: listening on graph_events
+[info] Running DeciduousMcp.Web.Router with Bandit 1.13.1 at 127.0.0.1:4000 (http)
+```
+
+To remove a native install (from `DEPLOY.md`; the database is left in PostgreSQL):
+
+```bash
+launchctl bootout gui/$(id -u)/dev.deciduous.server      # macOS
+rm ~/Library/LaunchAgents/dev.deciduous.server.plist
+systemctl --user disable --now deciduous-server.service  # Linux
+rm ~/.config/systemd/user/deciduous-server.service && systemctl --user daemon-reload
+rm -r ~/.config/deciduous/server
+```
+
+`DEPLOY.md` leaves out the unit file; `disable` only removes its `WantedBy` link, and `systemctl --user` keeps listing the unit until the file is gone. The stored token in `~/.config/deciduous/credentials` and each project's `[remote]` also stay behind.
+
+### One token per machine
+
+The CLI keeps exactly one stored token, in `~/.config/deciduous/credentials`, not one per server URL. If you write to a local server for some projects and to a team server for others, only one of them can use the stored token. Two things replace it without asking:
+
+- `deciduous remote login --url https://deciduous.example.com` stores the team token over the local one.
+- `deciduous remote setup --local` stores the local server's token over whatever is there, whenever they differ.
+
+The other server's projects then fail on every write. The write itself still succeeds locally and the command exits 0; the op waits in the log:
+
+```text
+Created node 6 (type: observation, title: written with the other server's token) [branch: main]
+Warning: the local write succeeded but the server refused it: the server rejected the token (401). Check DECIDUOUS_MCP_TOKEN.
+1 write(s) wait in /home/you/code/my-app/.deciduous/remote-log.jsonl, and every later write will be refused the same way until that is fixed. `deciduous remote status` lists them.
+```
+
+`DECIDUOUS_MCP_TOKEN` is read before the stored file, so the working arrangement is: store the token you use most, and export the other one in the environment of the projects that need it (a per-directory env tool such as direnv, or a wrapper script). Once the right token is in place, `deciduous remote push` sends what waited.
+
+The ordering also matters the first time. A brand-new local server adopts whatever token the machine already holds (step 2 above), so installing a local server after `remote login` to a team server gives the local server the team's token. Both then accept the same secret, and rotating the team token later breaks the local server's projects too. Run `remote setup --local` with `DECIDUOUS_MCP_TOKEN` unset and the credentials file empty if you want the two kept apart. (This ordering was read from `machine_token()` in `src/server.rs`, not run.)
+
+Claude Code has the same shape of problem: one user-scope `deciduous` entry. For a second server, register it at local scope in the repositories that use it, or in a project `.mcp.json`, which needs `DECIDUOUS_MCP_TOKEN` exported where `claude` starts; see [Connect your agents](content/clients.md).
+
+## No server at all
+
+`deciduous init` does not complete without a server. In a terminal it asks; without one it writes its files (`.claude/`, `CLAUDE.md`, `.gitignore`, `.github/` and the rest), then prints the four `remote setup` forms and exits 1. To opt out, say so:
+
+```text
+$ DECIDUOUS_NO_SERVER=1 deciduous init
+   Creating .gitignore (track .deciduous/graph.json, ignore the database)
+   Creating .gitattributes (merge the graph file record by record, fold it in PR diffs)
+   Configured git merge driver for graph records
+   Creating .deciduous/graph.json (run `deciduous sync` to fill it, then commit it)
+   ...
+   Skipped shared graph server (DECIDUOUS_NO_SERVER is set)
+```
+
+The ignore rules keep the database private and track two files:
+
+```text
 # .gitignore
 .deciduous/*
 !.deciduous/config.toml
@@ -123,222 +194,104 @@ follows it before the next command runs. `deciduous init` writes the rules:
 .deciduous/graph.json merge=deciduous linguist-generated=true
 ```
 
-and registers the merge driver in the clone's git config
-(`merge.deciduous.driver = deciduous merge-record %O %A %B`). `linguist-generated`
-folds the file in pull request diffs; it is still there to expand.
+and the merge driver goes into `.git/config`, which git never shares:
 
-### What a record looks like
-
-One entry of `nodes`, keyed by its `change_id`:
-
-```json
-{
-  "author": "Alice Example",
-  "change_id": "8311856e-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-  "created_at": "2026-10-24T12:47:10-04:00",
-  "metadata": {
-    "branch": "main",
-    "confidence": 90,
-    "prompt": "Add rate limiting to the public API..."
-  },
-  "node_type": "goal",
-  "status": "pending",
-  "title": "Rate limit the public API",
-  "updated_at": "2026-10-24T12:47:10-04:00"
-}
+```text
+merge.deciduous.name deciduous decision graph record
+merge.deciduous.driver deciduous merge-record %O %A %B
 ```
 
-Maps and keys are sorted and the file ends with a newline, so two machines
-holding the same graph write byte-identical files and a diff shows only what
-changed. `metadata` is the expanded form of the database's `metadata_json`.
+Every write goes to the local database and is mirrored into `graph.json` at once. Each write also says where it went, so nobody mistakes this mode for a shared one:
 
-An `edges` entry is the same idea. Its key is a hash of
-`(from_change_id, to_change_id, edge_type)`, so the same edge created on two
-machines lands under one key.
-
-A deleted record is not dropped. It is rewritten with `deleted_at` set (a
-tombstone) and keeps its last fields, so the deletion reaches machines that
-already have the record and `git log` still shows what was deleted.
-
-### Why one file
-
-0.17 kept one small JSON file per record under `.deciduous/sync/`, so two
-people adding records never touched the same file and git merged with no
-conflict. It worked, and it cost more than it solved: a real graph was 2,781
-files and 11 MB of mostly directory overhead for ~1 MB of content, `git status`
-after a sync was a wall of paths, and a PR touching the graph was hundreds of
-files. 0.18 folded it into one file. The trade is that every concurrent change
-now collides in git, which turned the merge driver from a nicety into the
-mechanism, and a mechanism exercised on every merge is one you find out about
-quickly rather than one that rots until the day it matters.
-
-### The workflow
-
-```bash
-git pull
-deciduous sync              # optional since 1.0.11: any command follows graph.json first
-# ... work; every add/link/status/delete writes the file immediately ...
-git add .deciduous/graph.json
-git commit -m "graph: chose token bucket over fixed window"
-git push
+```text
+Note: written to /home/you/code/my-app/.deciduous/deciduous.db only; this project has no shared server. `deciduous remote setup` connects one.
 ```
 
-```
-$ deciduous sync --check
-Checked .deciduous/graph.json (8 nodes, 7 edges, 1 themes, 1 tags on disk)
+### Two clones, one graph
+
+This was run with a bare origin and two clones, `a` and `b`. In `a`: add a goal, `deciduous sync`, commit `.gitignore .gitattributes .deciduous/config.toml .deciduous/graph.json` by name, push. A fresh clone `b` sees the goal immediately (the database follows `graph.json` on the next command), but its `.git/config` has no merge driver until something registers it. `deciduous sync` does:
+
+```text
+$ deciduous sync
+Configured git merge driver for the graph file (this clone)
+Synced /home/you/code/b/.deciduous/graph.json (1 nodes, 0 edges, 0 themes, 0 tags on disk)
   Database and records already agree
 ```
 
-`sync --check` exits 1 if `sync` would write to `graph.json` or something is
-unresolved (an edge waiting for a node, a record that will not read, an
-unfinished merge), which makes it a usable pre-push hook. A local database
-that is merely behind the file is not pending: the next command catches it up.
+Then both clones changed the graph at once. `a` added an option, linked it, and set the goal `active`; `b` added a different option, linked it, and replaced the goal's prompt. Both committed; `a` pushed; `b` pulled:
 
-`deciduous sync` no longer writes `docs/graph-data.json`; that export went
-with GitHub Pages in 1.0.5.
+```text
+$ git pull --no-edit origin HEAD
+Merge made by the 'ort' strategy.
+ .deciduous/graph.json | 24 +++++++++++++++++++++++-
+$ deciduous nodes
+ID    CHANGE    TYPE         STATUS     TITLE
+1     94e4b9f7  goal         active     Shared goal
+3     d04a258b  option       pending    Option from A
+2     01ed84dd  option       pending    Option from B
+```
 
-### Branches, old commits and resets
+No conflict markers, both new options and both edges, and node 1 carries `a`'s status and `b`'s prompt. The driver merges record by record, and a record both sides changed field by field, breaking ties on `updated_at`. Deletes are tombstones, so a delete reaches clones that already had the node. A file that does end up with conflict markers (merged in a clone with no driver registered) is repaired by the next `deciduous sync`.
 
-The database is one per clone and shared by every branch you check out;
-`graph.json` is versioned like any other file. Since 1.0.11 the database
-follows the file: before any command (or, in a running `deciduous mcp`, before
-any tool call), if `graph.json` is not the file the database last mirrored,
-the database is brought to it.
+The routine:
 
-- **A branch's nodes stay on that branch.** A node added on `spike` leaves the
-  local graph on `git checkout main` and comes back on `git checkout spike`,
-  under the same local id, with its documents. It is never written into
-  `main`'s file.
-- **Git can take things out.** `git reset --hard`, `git stash` and
-  `git checkout -- .deciduous/graph.json` discard graph changes as they
-  discard code changes; `git stash pop` brings them back.
-- **A detached commit is read, not written.** On `git checkout <old commit>`,
-  a bisect step or a CI checkout, the local graph shows that commit's graph and
-  the file is left as the commit has it. Adds and edits made there are kept in
-  the database as unpublished and published into the next branch you check
-  out; deletions there are refused by name. A stopped rebase, merge,
-  cherry-pick or revert is detached too, but there the file is being
-  rewritten, so writes go into it as usual.
+```bash
+git pull
+deciduous sync          # takes in what the pull brought, registers the driver if missing
+deciduous sync --check  # before pushing: reports what sync would change, writes nothing
+git add .deciduous/graph.json
+```
 
-The database records the digest of the file it mirrors; git never updates
-it, so a checkout shows up as a digest that differs. Writes made while HEAD is
-detached, or whose file write failed, are recorded in a local `unpublished`
-table, which is how a local write the file never got is told from a row git
-took out.
+`sync --help` says `--check` exits 1 when anything is pending, and the `CLAUDE.md` that init writes tells agents the same (`deciduous sync --check    # what is pending? (exit 1 if anything)`). It exits 0 with changes pending, on 1.1.0 and on main. With the database edited behind the file it printed `Changes would: 1 nodes updated from records` or `Changes would: 1 nodes set back to graph.json's version`, depending on how the row was edited, and exited 0 both times. Read its output rather than relying on the exit status in a hook. Ordinary writes are mirrored into the file as they happen, so in day-to-day use there is rarely anything pending.
 
-### How reconcile decides
+Numeric ids are per clone (`b` numbered "Option from B" 2, `a` numbered "Option from A" 2). Refer to nodes across machines by change_id prefix: `deciduous link 94e4b9f7 01ed84dd`.
 
-For nodes, themes, edges and tags, `deciduous sync` compares the file to the
-database by `change_id`:
+What this mode does not have: an MCP server over HTTP, `check_activity`, live `remote watch`, and anything faster than a git push. Agents can write through `deciduous mcp`, the stdio server, against the local database, but init registers it with no client (it writes no `.mcp.json`). For Claude Code, in the project:
 
-| File | Database | Result |
-|------|----------|--------|
-| record | missing | import (gets a fresh local id) |
-| missing | row | export |
-| record newer (`updated_at`) | row older | update the row |
-| record older | row newer | rewrite the record |
-| tombstone at or after the row's `updated_at` | row | delete locally |
-| tombstone before the row's `updated_at` | row | the row was edited after the delete: rewrite the record |
+```text
+$ claude mcp add --transport stdio --scope project deciduous -- deciduous mcp
+Added stdio MCP server deciduous with command: deciduous mcp to project config
+$ cat .mcp.json
+{
+  "mcpServers": {
+    "deciduous": {
+      "type": "stdio",
+      "command": "deciduous",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
+    }
+  }
+}
+```
 
-Edges import once both endpoints exist locally; one whose endpoint has not
-arrived is reported as pending (`sync --check` exits 1) and imports later. An
-edge that points at a tombstoned node is skipped. Edges have no `updated_at`:
-an edge both sides have whose rationale differs takes the file's version.
+(Claude Code 2.1.319; the format is on [Claude Code's MCP page](https://code.claude.com/docs/en/mcp).) The stdio tools are not the server's. They take local ids, link with `link_nodes`, and `add_node` has no `parent_id`, although the generated `CLAUDE.md` says "create and link in one call: `add_node` with `parent_id`". The stdio server answers that with `add_node has no argument "parent_id". Its arguments are: branch, commit, confidence, description, files, node_type, prompt, title`. See [MCP tools](content/mcp.md). `graph.json` also carries every prompt and description you write, so treat it like any other committed file.
 
-Deleting a node tombstones its edges and tags with a `deleted_with` marker. If
-the node comes back (edited elsewhere after the delete), those tombstones no
-longer count and the edges and tags come back with it. A deliberate unlink or
-untag has no marker and stays.
+### Moving to a server later
 
-A local write is always stamped later than the version of its record already
-in the file, even when that version's timestamp is ahead of this clock
-(`add --date` in the future, a fast clock elsewhere); otherwise the next sync
-would revert the edit. A `graph.json` that does not parse stops the run rather
-than being read as an empty graph, which would export every local row over
-whatever is actually there. A record filed under a key that disagrees with its
-own `change_id` (a hand edit) is reported and never written over. Same-named
-themes created on two machines are folded: the smaller `change_id` becomes
-canonical and the other's tags are re-pointed.
+Point the project at a server with `deciduous remote init https://deciduous.example.com --workspace my-app` (or `remote setup --url`, or `--local`). If you registered the stdio server above, remove it first (`claude mcp remove deciduous -s project`, and commit the `.mcp.json` change): while any server called `deciduous` is registered, `remote setup` prints `Unchanged` and leaves it, and `remote init` registers nothing with Claude Code at all. The history written before the project had a remote goes up with it. From a clone of the two-clone repository above, pointed at an empty workspace:
 
-`deciduous sync` is idempotent: a second run reports "already agree".
+```text
+$ deciduous remote init http://127.0.0.1:4000 --workspace docsref-seed2
+Remote: http://127.0.0.1:4000
+  workspace: docsref-seed2
+  claim: claimed (by this repository's root commit)
+  server holds 0 nodes, 0 edges, 0 documents
+  sent 2 local node(s), 1 edge(s) the server lacked
+```
 
-### Two people change the graph
+`deciduous remote status` then says In sync. If it ever lists rows as "only here" that no op covers, `deciduous remote push --seed` sends them; it adds what the server lacks and never changes a row the server already has. [Operating a server](content/operating.md) covers the other push flags. Once a project has a `[remote]`, `deciduous sync` is no longer the step that shares anything.
 
-Everyone writes one file, so git reports a conflict on every concurrent
-change, and never shows it to you, because the merge driver runs. Git hands
-it the common ancestor (`%O`) and both sides, and it merges record by record:
+`graph.json` does not go away. Every write is still mirrored into it, the ignore rules still track it, and `deciduous sync` still syncs it. Commit `.deciduous/config.toml` so teammates' clones pick up the `[remote]`. A teammate who wrote nodes before pulling it has rows the server never got and no op to send them; `remote push` says `Nothing to push`, and `remote status` names the fix:
 
-| Situation | Result |
-|-----------|--------|
-| Only one side has a record | keep it: both people's new nodes survive |
-| Both sides have it, unchanged | keep it |
-| Both sides changed it | merge field by field, below |
-| One side dropped it, the other left it alone | it goes |
-| One side dropped it, the other edited it | the edit wins |
+```text
+Only here (1)
+  action b4b791a1 "A wrote before pulling"  (no op covers it: `deciduous remote push --seed`)
+$ deciduous remote push --seed
+Seeded: my-app -> http://127.0.0.1:4000
+  nodes 1 of 1
+  edges 0 of 0
+```
 
-For the record both sides changed:
-
-| Situation | Result |
-|-----------|--------|
-| Only one side changed a field | that side's value |
-| Both changed `metadata` | merged key by key (Alice's `confidence` and Bob's `commit` both survive) |
-| Both changed the same field to different values | the side whose record has the later `updated_at` |
-| `updated_at` / `deleted_at` | the later one; `created_at` the earlier |
-| One side deleted, the other edited after the delete | the edit wins, the record lives |
-| One side deleted, the other edited before the delete | the tombstone stands, keeping the edited fields |
-| Both created the record independently (no ancestor) | every differing field is a collision: later `updated_at` wins, `metadata` still unions |
-
-A version that still carries conflict markers is resolved by merging its own
-sides first. An ancestor that will not parse fails the driver, because a merge
-without it would hand every differing field to the newer record; the error
-names the way to do that knowingly (`deciduous merge-record /dev/null <ours>
-<theirs>`).
-
-When the driver fails, or git cannot run it (`deciduous` not on the PATH git
-sees: GUI clients, CI images), git does not fall back to an ordinary conflict.
-It leaves our side in the file with no markers and marks the path unmerged
-(`UU` in `git status`). That file looks clean; committing it silently drops the
-other side. `deciduous sync --check` reports the unmerged state and exits 1,
-and `deciduous sync` finishes the merge from git's own three versions
-(`git ls-files -u`), keeping local writes made since, and stages the result.
-While a merge, rebase or cherry-pick is stopped, `sync` also folds the
-incoming commit's version (`MERGE_HEAD`, `REBASE_HEAD`, `CHERRY_PICK_HEAD`) into
-the working file.
-
-A clone that never ran `deciduous sync`, or a GitHub web merge, can still
-produce conflict markers inside `graph.json`. `deciduous sync` reconstructs
-both sides from the markers (using the `|||||||` base when
-`merge.conflictStyle` is `diff3` or `zdiff3`), applies the same merge, rewrites
-the file and imports the result; `sync --check` reports it and exits 1 without
-touching the file.
-
-### Where writes come from
-
-The graph file is written by the database layer, so every entry point
-publishes: the CLI, `deciduous mcp`, the archaeology commands, and the HTTP API
-daemon when a `graph.json` sits next to a graph's database. A write to the
-file that fails is reported on stderr and never fails the database write; the
-next `deciduous sync` exports whatever is missing.
-
-### Upgrading
-
-From **0.17** (`.deciduous/sync/`): `deciduous update`, then `deciduous sync`.
-The first sync folds every record into `graph.json` and deletes the directory;
-a record the file already has in a newer version is not overwritten. If any
-file will not parse, the directory is kept and the files listed. Afterwards
-`git rm -r .deciduous/sync`.
-
-From **pre-0.17** (`.deciduous/sync/events/*.jsonl` and `checkpoint.json`):
-the same `deciduous sync` replays them into `graph.json` and deletes them.
-`deciduous events` still exists as a hidden, deprecated alias so old scripts
-do not break.
-
-## Not synced through git
-
-- **Documents** (`.deciduous/documents/`): metadata and files stay on the
-  machine that attached them. With a `[remote]`, `remote push --seed` sends
-  them to the server.
-- **The message board**: coordination, not graph; never in `graph.json` or on
-  any export.
-- **Sessions, the Q&A history and the command log**: local by design.
-- **Roadmap items**: synced through `ROADMAP.md` itself.
+Once every clone has the `[remote]`, the server is the shared copy and committing `graph.json` only duplicates it. To stop, drop `!.deciduous/graph.json` from `.gitignore` and `git rm --cached .deciduous/graph.json`.

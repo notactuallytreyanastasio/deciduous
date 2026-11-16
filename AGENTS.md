@@ -194,6 +194,34 @@ AUDIT regularly -> Check for missing connections
 | About to write/edit code | `action` | "Implementing Redux store" |
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
+| Work lands, is dropped, or is replaced | `status` | `deciduous status 12 completed` |
+
+### Close What You Open
+
+A node that is never closed is listed as open for good. Set its status in the same turn as the work, the way you link a node in the same turn you create it.
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Not started. A goal, option, decision, action or revisit is born with it |
+| `active` | In flight now. Keep it to a handful |
+| `completed` | Done. An outcome or observation is born with it: they record what already happened |
+| `rejected` | An option not taken |
+| `superseded` | Replaced by a later node; link that node |
+| `abandoned` | Dropped without being done |
+
+Open is `pending` or `active`. Everything else is closed.
+
+```bash
+deciduous nodes --open    # what is still open (--status <s>, --json)
+deciduous pulse           # open goals, each with its open work
+deciduous audit           # what drifted: records left open, committed actions never closed, orphans
+deciduous why src/db.rs   # the decisions behind a file (or src/db.rs:120-180): what was chosen, what was rejected
+```
+
+Edge types say what a link means; `leads_to` is the fallback, not the answer to everything:
+
+- option -> decision: `-t chosen` or `-t rejected`
+- one thing waiting on another: `-t blocks`; one thing making another possible: `-t enables`
 
 ### Document Attachments
 
