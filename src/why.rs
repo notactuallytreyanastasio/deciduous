@@ -26,6 +26,9 @@ use std::process::Command;
 /// spare; a cap at all because a graph may hold a cycle.
 const MAX_CLIMB: usize = 12;
 
+/// old decision -> observation -> revisit -> new decision is three hops.
+const MAX_REPLACEMENT_HOPS: usize = 4;
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Commit {
     pub hash: String,
@@ -82,6 +85,11 @@ pub struct Choice {
     pub rejected: Vec<NodeRef>,
     /// Options linked to the decision that nothing marks either way.
     pub considered: Vec<NodeRef>,
+    /// For a decision that was superseded or abandoned: the decisions
+    /// reached from it, which is where `archaeology pivot` puts the
+    /// replacement (old -> observation -> revisit -> new).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub replaced_by: Vec<NodeRef>,
 }
 
 /// Everything one goal has to say about the file.
@@ -428,7 +436,31 @@ fn choice(
         chosen: Vec::new(),
         rejected: Vec::new(),
         considered: Vec::new(),
+        replaced_by: Vec::new(),
     };
+    if is_reversed(&decision.status) {
+        // Forward, and no further than the first decision on each path:
+        // what replaced the replacement is that decision's own story.
+        let mut seen: HashSet<i32> = HashSet::from([decision.id]);
+        let mut queue: VecDeque<(i32, usize)> = VecDeque::from([(decision.id, 0)]);
+        while let Some((id, depth)) = queue.pop_front() {
+            if depth == MAX_REPLACEMENT_HOPS {
+                continue;
+            }
+            for e in around.get(&id).into_iter().flatten() {
+                if e.from_node_id != id || !seen.insert(e.to_node_id) {
+                    continue;
+                }
+                match by_id.get(&e.to_node_id) {
+                    Some(n) if n.node_type == "decision" => out.replaced_by.push(NodeRef::of(n)),
+                    Some(n) if matches!(n.node_type.as_str(), "observation" | "revisit") => {
+                        queue.push_back((e.to_node_id, depth + 1))
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
     let mut seen: HashSet<i32> = HashSet::new();
     let mut edges: Vec<&&DecisionEdge> = around.get(&decision.id).into_iter().flatten().collect();
     // An edge that says chosen or rejected outranks a plain one to the
@@ -542,6 +574,9 @@ pub fn render(report: &WhyReport, limit: usize, hits: usize) -> String {
             for o in &c.considered {
                 out.push_str(&line(4, "option  ", o));
             }
+            for o in &c.replaced_by {
+                out.push_str(&line(4, "replaced by", o));
+            }
         }
         let n = if hits == 0 {
             t.hits.len()
@@ -605,6 +640,13 @@ pub fn brief(report: &WhyReport) -> Option<String> {
                         s.push_str(&format!(" ({})", clip(r, 90)));
                     }
                 }
+            }
+            for o in &c.replaced_by {
+                s.push_str(&format!(
+                    "; replaced by decision {}: {}",
+                    o.id,
+                    clip(&o.title, 110)
+                ));
             }
             lines.push(s);
         }
@@ -875,6 +917,63 @@ mod tests {
         let nodes = vec![node(1, "action", "a", "pending", r#"{"files":["f"]}"#)];
         assert_eq!(why(&nodes, &[], "f", None, &[]).threads.len(), 1);
         assert!(why(&nodes, &[], "f", Some((1, 9)), &[]).threads.is_empty());
+    }
+
+    #[test]
+    fn a_superseded_decision_names_what_replaced_it() {
+        // What `archaeology pivot` builds.
+        let nodes = vec![
+            node(
+                1,
+                "decision",
+                "Tokens table is the truth",
+                "superseded",
+                "{}",
+            ),
+            node(
+                2,
+                "action",
+                "revoke by token",
+                "completed",
+                r#"{"commit":"abc1234"}"#,
+            ),
+            node(3, "observation", "tokens went stale", "completed", "{}"),
+            node(4, "revisit", "reconsider", "completed", "{}"),
+            node(
+                5,
+                "decision",
+                "Sessions store is the truth",
+                "pending",
+                "{}",
+            ),
+            node(6, "decision", "Something later still", "pending", "{}"),
+        ];
+        let edges = vec![
+            edge(1, 1, 2, "leads_to", None),
+            edge(2, 1, 3, "leads_to", None),
+            edge(3, 3, 4, "leads_to", None),
+            edge(4, 4, 5, "leads_to", None),
+            edge(5, 5, 6, "leads_to", None),
+        ];
+        let r = why(
+            &nodes,
+            &edges,
+            "f",
+            None,
+            &[commit("abc1234", "2026-03-01")],
+        );
+        let c = &r.threads[0].choices[0];
+        assert_eq!(
+            c.replaced_by.iter().map(|n| n.id).collect::<Vec<_>>(),
+            vec![5]
+        );
+        let b = brief(&r).unwrap();
+        assert!(b.contains("decision 1 [superseded]"), "{b}");
+        assert!(
+            b.contains("replaced by decision 5: Sessions store is the truth"),
+            "{b}"
+        );
+        assert!(render(&r, 0, 0).contains("    replaced by 5 Sessions store is the truth"));
     }
 
     #[test]
