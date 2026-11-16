@@ -1012,8 +1012,15 @@ enum TranscriptAction {
     /// Importing the same transcript again changes nothing.
     Import {
         /// Transcript files or session ids
-        #[arg(required = true)]
+        #[arg(required_unless_present = "hook")]
         transcripts: Vec<String>,
+
+        /// Run as a Claude Code hook: read the hook's JSON from stdin and
+        /// import the transcript it names (`transcript_path`). Prints nothing
+        /// on stdout and always exits 0, so a session ends the same way
+        /// whatever the import does
+        #[arg(long, conflicts_with_all = ["transcripts", "dry_run", "json"])]
+        hook: bool,
 
         /// Show what would be created without writing anything
         #[arg(long)]
@@ -5588,11 +5595,32 @@ fn main() {
                 dry_run,
                 no_hash,
                 json,
+                hook,
             } => {
                 let opts = deciduous::transcript::ImportOptions {
                     dry_run,
                     hash_files: !no_hash,
                 };
+                if hook {
+                    use std::io::Read;
+                    let mut input = String::new();
+                    let _ = std::io::stdin().read_to_string(&mut input);
+                    let path = serde_json::from_str::<serde_json::Value>(&input)
+                        .ok()
+                        .and_then(|v| v.get("transcript_path")?.as_str().map(PathBuf::from));
+                    match path {
+                        None => eprintln!(
+                            "deciduous: the hook input names no transcript_path; nothing imported"
+                        ),
+                        Some(path) => match deciduous::transcript::import(&db, &path, &opts) {
+                            Ok(_) => {}
+                            // A session that never got a prompt has nothing to import.
+                            Err(deciduous::transcript::TranscriptError::Empty(_)) => {}
+                            Err(e) => eprintln!("deciduous: transcript not imported: {e}"),
+                        },
+                    }
+                    return;
+                }
                 let mut failed = false;
                 let mut reports = Vec::new();
                 for arg in &transcripts {
@@ -7351,6 +7379,12 @@ fn print_transcript_report(r: &deciduous::transcript::ImportReport) {
     let mut notes = Vec::new();
     if r.already_present > 0 {
         notes.push(format!("{} already present", r.already_present));
+    }
+    if r.attached_to_logged_goals > 0 {
+        notes.push(format!(
+            "{} prompts attached to the goal logged for them",
+            r.attached_to_logged_goals
+        ));
     }
     if r.files_hashed > 0 {
         notes.push(format!("{} files hashed", r.files_hashed));

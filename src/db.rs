@@ -2833,7 +2833,13 @@ impl Database {
             node_type,
             title,
             description,
-            status: default_status(node_type),
+            // A derived action is an edit or a commit the transcript
+            // recorded: it happened, so it is not open work.
+            status: if node_type == "action" {
+                "completed"
+            } else {
+                default_status(node_type)
+            },
             created_at,
             updated_at: created_at,
             metadata_json: metadata.as_deref(),

@@ -849,6 +849,8 @@ deciduous transcript list                 # this project's sessions: imported or
 deciduous transcript import <session-id>  # or a path to the .jsonl; --dry-run to see counts
 ```
 
+When a session ends, a `SessionEnd` hook in `.claude/settings.json` runs the import for it (`[transcript] auto_import = false` in `.deciduous/config.toml` turns that off). What it derives for a prompt hangs under the goal you logged for that prompt, when the goal carries the prompt verbatim: log the goal with `-p`, and the two meet.
+
 What the import cannot derive is a decision or an option: whether one approach was chosen over another is a judgement about prose. Log those as you make them; the import fills in what happened around them.
 
 ### Parallel Agents: The Message Board
@@ -1983,9 +1985,10 @@ printf '%s\n' "$out"
 exit 0
 "#;
 
-/// Claude Code settings.json with hooks configuration: the version check and
-/// the board-mentions hook. Nothing here makes an agent log (see
-/// RETIRED_HOOK_SCRIPTS).
+/// Claude Code settings.json with hooks configuration: the version check,
+/// the board-mentions hook, and the SessionEnd transcript import. Nothing
+/// here makes an agent log (see RETIRED_HOOK_SCRIPTS); the import reads what
+/// Claude Code already wrote.
 pub const CLAUDE_SETTINGS_JSON: &str = r#"{
   "hooks": {
     "PreToolUse": [
@@ -2017,6 +2020,17 @@ pub const CLAUDE_SETTINGS_JSON: &str = r#"{
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/board-mentions.sh\" prompt",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v deciduous >/dev/null 2>&1 && deciduous transcript import --hook || true",
+            "timeout": 60
           }
         ]
       }

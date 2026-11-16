@@ -5,7 +5,7 @@
 A graph written by following the shipped instructions could not say what was open: on this repository's own, 1,462 of 1,477 nodes were `pending`, 499 of them outcomes and observations, and `pulse` printed 1,991 lines under "Active Goals". Reported against 0.16.0 in #208; still true in 1.1.0.
 
 ### Changed
-- **An outcome or an observation is born `completed`.** They record what already happened. Everything else is still born `pending`. The CLI, the local MCP server and the graph server's `add_node` agree; the server's `log_observation` and `capture_conversation_turn` wrote observations as `active`, which never closed either. A status given explicitly still wins.
+- **An outcome or an observation is born `completed`.** They record what already happened. Everything else is still born `pending`. An action a transcript import derives is born `completed` too: the edit or commit happened. The CLI, the local MCP server and the graph server's `add_node` agree; the server's `log_observation` and `capture_conversation_turn` wrote observations as `active`, which never closed either. A status given explicitly still wins.
 - **`pulse` lists open work.** "Open Goals" are goals that are `pending` or `active`, most recently touched first, each with its open descendants and a count of the closed ones. Ten goals and eight descendants each by default (`--goals`, `--children`, `--all`); orphans and coverage gaps are capped at fifteen and limited to open nodes. `--json` is never cut and gains `closed_children` and `last_activity` per goal. On this repository: 142 lines.
 
 ### Added
@@ -14,6 +14,9 @@ A graph written by following the shipped instructions could not say what was ope
 - **The instructions teach closing.** The trigger table every harness gets (Claude Code, OpenCode, Windsurf; local and remote) gains a status row, the six statuses with what each means, and when to use `chosen`, `rejected`, `blocks` and `enables` instead of `leads_to`.
 
 - **`deciduous init --no-server`** (and `remote setup --no-server`, and a fifth choice in the setup menu): the graph lives in `.deciduous/graph.json`, committed with the code, and nothing is installed or run. The choice is written to `.deciduous/config.toml` as `[graph] server = "none"`, so `update` stops asking, `init` and `update` no longer exit 1 without a terminal on such a project, and writes stop printing the "no shared server" note. A project that never chose still gets the note. `DECIDUOUS_NO_SERVER=1` is unchanged and remembers nothing.
+
+- **A session imports itself.** `init` and `update` add a `SessionEnd` hook to `.claude/settings.json` that runs `deciduous transcript import --hook`: Claude Code hands the hook the session's `transcript_path` (checked against 2.1.325), and the goal, actions and outcomes of the session are in the graph when it ends, whether or not the agent logged anything. `--hook` prints nothing on stdout and always exits 0. `[transcript] auto_import = false` in `.deciduous/config.toml` stops `update` adding the hook or putting it back. This is not one of the logging hooks 1.0.3 removed: those blocked edits until the agent logged; this asks nothing of the agent.
+- **An import attaches to the goal the agent logged.** A session whose agent logged its goal (`add goal -p "<prompt>"`) and was then imported got two goals per prompt: one with the agent's options and decisions, one with the transcript's actions and outcomes. A logged goal whose `metadata.prompt` is the prompt verbatim, created after the prompt was sent and before the next one, is now the goal the import hangs its work under. The report says `attached_to_logged_goals`; `transcript list` shows such a session as imported.
 
 ### Fixed
 - **The local MCP server's `add_node` takes `parent_id`.** Every CLAUDE.md since 1.0.10 tells the agent to "create and link in one call: `add_node` with `parent_id`", which is the graph server's tool. On a project with no server the local tool had no such argument and refused the call as an unknown argument. It now takes `parent_id` (local id or change_id prefix), `edge_type`, `rationale` and `status`, and checks all four before writing: an unknown parent, edge type or status creates nothing.
@@ -31,6 +34,8 @@ A graph written by following the shipped instructions could not say what was ope
 - Whether an open goal with nothing open beneath it is done or dropped is a judgement; `audit` names the goals and stops.
 - The web viewer still shows status as one line of text, with no filter.
 - The guides still describe 1.1.0: `init --no-server` is not in the README or docs/ until it is released.
+- The hook is Claude Code only, and only `SessionEnd`: a session that runs for weeks is imported when it ends, not as it goes. `Stop` carries the same `transcript_path` every turn and would do it; it is not installed.
+- A logged goal is matched by its prompt, verbatim. An agent that logged a summary as the prompt still gets a second goal.
 - The local and server MCP tools still differ everywhere else: `link_nodes` against `add_edge`, `update_status` against `update_node`, no `capture_conversation_turn`, `log_decision`, `close_thread` or `ask_graph` locally, and no `change_id` on the local `add_node` to make a retry safe.
 - `deciduous tag 1 perf` is still `unrecognized subcommand`; it is `tag add 1 perf`.
 - CI still runs `cargo test --lib` and `--test cli_integration` by name in `type-check.yml`; eleven of twenty-one Rust test files run nowhere. Replacing the two steps with `cargo test` needs a push with the `workflow` scope.
