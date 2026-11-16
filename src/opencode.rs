@@ -1118,7 +1118,7 @@ When documentation is created, the `require-documentation.sh` hook will recogniz
 
 /// OpenCode command template: /sync
 pub const COMMAND_SYNC: &str = r#"---
-description: Sync decision graph with teammates - pull events, rebuild, push
+description: Sync decision graph with teammates - reconcile .deciduous/graph.json with the local database
 arguments: []
 ---
 
@@ -2803,7 +2803,7 @@ fn get_agents_workflow_section() -> String {
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
 | `/decision-graph` | Build a decision graph from commit history |
-| `/sync` | Multi-user sync - pull events, rebuild, push |
+| `/sync` | Multi-user sync - pull, reconcile `.deciduous/graph.json`, push |
 
 ### Available Skills
 
@@ -3022,7 +3022,7 @@ fn generate_basic_agents_md() -> String {
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
 | `/decision-graph` | Build a decision graph from commit history |
-| `/sync` | Multi-user sync - pull events, rebuild, push |
+| `/sync` | Multi-user sync - pull, reconcile `.deciduous/graph.json`, push |
 
 ### Available Skills
 
