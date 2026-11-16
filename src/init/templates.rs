@@ -570,7 +570,7 @@ pub const CLAUDE_MD_SECTION: &str = r#"
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
 | `/decision-graph` | Build a decision graph from commit history |
-| `/sync` | Multi-user sync - pull events, rebuild, push |
+| `/sync` | Multi-user sync - pull, reconcile `.deciduous/graph.json`, push |
 
 ### Available Skills
 

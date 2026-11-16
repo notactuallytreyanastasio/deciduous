@@ -78,7 +78,7 @@ All slash commands are bootstrapped by `deciduous init` and updated by `deciduou
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
 | `/decision-graph` | Build a decision graph from commit history (archaeology) |
-| `/sync` | Multi-user sync - pull events, rebuild, push |
+| `/sync` | Multi-user sync - pull, reconcile `.deciduous/graph.json`, push |
 
 ---
 
@@ -141,7 +141,7 @@ deciduous nodes --type revisit
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
 | `/decision-graph` | Build a decision graph from commit history |
-| `/sync` | Check this copy against the graph server and refresh it |
+| `/sync` | Multi-user sync - pull, reconcile `.deciduous/graph.json`, push |
 
 ### Available Skills
 
@@ -338,7 +338,7 @@ deciduous add goal "Title" -c 90 -p "User's original request"
 deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
-deciduous remote status   # What this copy and the graph server disagree on
+deciduous sync    # Reconcile .deciduous/graph.json with teammates
 
 # Metadata flags
 # -c, --confidence 0-100   Confidence level
@@ -374,7 +374,7 @@ main_branches = ["main", "master"]
 auto_detect = true
 ```
 
-### Audit Checklist (Before Ending a Session)
+### Audit Checklist (Before Every Sync)
 
 1. Does every **outcome** link back to what caused it?
 2. Does every **action** link to why you did it?
@@ -402,8 +402,6 @@ auto_detect = true
 ### Session Start Checklist
 
 ```bash
-deciduous remote pull     # Refresh the local cache from the graph server
-deciduous remote status   # Anything this copy has that the server lacks?
 deciduous check-update    # Update needed? Run 'deciduous update' if yes
                           # (auto-checked every 24h if auto-update is on)
 deciduous nodes           # What decisions exist?
@@ -437,17 +435,17 @@ When more than one agent works at once, coordinate through deciduous, never thro
 
 One board serves every git worktree of the repository, or the server when the project has a `[remote]`. Messages are not graph nodes: not in `graph.json`, not exported, not synced. With `DECIDUOUS_AGENT_LABEL` set in a session's environment, `board post` uses it for `--as`, and the `board-mentions.sh` hook shows that label's unanswered messages at session start and as new ones arrive.
 
-### The Graph Server
+### Multi-User Sync
 
-This project has a `[remote]` in `.deciduous/config.toml`: its graph lives on a shared server, and `.deciduous/deciduous.db` is this machine's cache of it. There is no `.deciduous/graph.json` to commit or merge, and `deciduous sync` is not the step here. Every CLI write is queued in `.deciduous/remote-log.jsonl` and sent before the command exits; MCP tools write to the server directly (pass the `workspace` named under `[remote]`).
+The graph is shared through one file, `.deciduous/graph.json`, committed with the code. It is written automatically on every change.
 
 ```bash
-deciduous remote status   # what differs between this copy and the server (exit 1 if anything)
-deciduous remote pull     # send what is waiting, then refresh the local cache from the server
-deciduous remote push     # send writes still waiting in the log (the server was down)
+deciduous sync            # after git pull: import teammates' records, export yours
+deciduous sync --check    # what is pending? (exit 1 if anything)
+git add .deciduous/graph.json  # before git push
 ```
 
-Local node ids differ per machine. To point at someone else's node, use its change_id prefix (the CHANGE column in `deciduous nodes`) or the server id an agent quotes: `deciduous link a1b2c3d4 <id> -r "..."`.
+Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits merge record by record through a git merge driver; if the file ever shows conflict markers, `deciduous sync` merges it.
 <!-- deciduous:end -->
 ## Session Start Checklist
 
@@ -712,7 +710,14 @@ The database contains the decision graph. If you need to clear data:
 
 ## Sharing the graph
 
-This repository has a `[remote]` in `.deciduous/config.toml`: the graph lives on the shared server, `.deciduous/deciduous.db` is this machine's cache of it, and MCP tools write to the server directly. CLI writes are queued in `.deciduous/remote-log.jsonl` and sent before the command exits.
+The committed `.deciduous/config.toml` names no server, so a clone of this repository shares its graph through the git-tracked `.deciduous/graph.json`: `deciduous sync` reconciles it with the local database both ways (newer `updated_at` wins, deletes are tombstones), and the `deciduous` merge driver registered by init/update merges concurrent edits record by record. Commit `graph.json` with the work it records.
+
+```bash
+deciduous sync            # after git pull: import what others recorded, export yours
+deciduous sync --check    # what is pending; exit 1 if anything
+```
+
+A checkout whose config is given a `[remote]` (`deciduous remote setup`) has its graph on that server instead: `.deciduous/deciduous.db` is this machine's cache of it, MCP tools write to the server directly, and CLI writes are queued in `.deciduous/remote-log.jsonl` and sent before the command exits. `deciduous update` then writes the server's version of the workflow section above and of `/sync`. This file said the repository had a `[remote]` from 1.1.0 until the update was next run here: it had been written on a checkout that did, and the `[remote]` was never committed.
 
 ```bash
 deciduous remote status   # what this copy and the server disagree on; exit 1 if anything
@@ -721,7 +726,7 @@ deciduous remote push     # resend writes the server did not get (it was down)
 deciduous remote watch    # one line per write as it lands, from every agent
 ```
 
-A project with no server shares its graph through the git-tracked `.deciduous/graph.json` instead: `deciduous sync` reconciles it with the local database both ways (newer `updated_at` wins, deletes are tombstones), and the `deciduous` merge driver registered by init/update merges concurrent edits record by record. `sync` has not exported `docs/graph-data.json` since 1.0.5; the copy in this repository is a hand-made export from 2026-09-04 that the static demo reads.
+`sync` has not exported `docs/graph-data.json` since 1.0.5; the copy in this repository is a hand-made export from 2026-09-04 that the static demo reads.
 
 Node references anywhere: local id **or** change_id prefix (`deciduous link a1b2c3d4 58`). `.deciduous/patches/`, `deciduous diff` and `.deciduous/sync/` are from 0.16 and 0.17 and do not exist.
 

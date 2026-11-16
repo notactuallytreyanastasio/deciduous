@@ -11,10 +11,6 @@ argument-hint: [focus-area]
 ## Step 1: Query the Graph
 
 ```bash
-# The graph lives on the server; refresh this machine's cache first
-deciduous remote pull
-deciduous remote status
-
 # See all decisions (look for recent ones and pending status)
 deciduous nodes
 
@@ -123,7 +119,7 @@ After recovering context, you MUST follow the logging workflow:
 EVERY USER REQUEST -> Log goal/decision first
 BEFORE CODE CHANGES -> Log action
 AFTER CHANGES -> Log outcome, link nodes
-BEFORE ENDING -> deciduous remote status
+BEFORE GIT PUSH -> deciduous sync
 ```
 
 **The user is watching the graph live.** Log as you go, not after.
@@ -141,7 +137,7 @@ deciduous link FROM TO -r "Connection reason"
 # Capture prompt when user redirects mid-stream
 deciduous add action "Switching approach" -c 85 -p "User said: use X instead"
 
-deciduous remote status  # anything the server has not got?
+deciduous sync  # Do this frequently!
 ```
 
 **When to use `--prompt`:** On root goals (always) and when user gives new direction mid-stream. Downstream nodes inherit context via edges.
@@ -176,7 +172,7 @@ AFTER CHANGES -> Log outcomes, observations
     |
 AUDIT AGAIN -> Any new orphans?
     |
-BEFORE ENDING -> deciduous remote status
+BEFORE PUSH -> deciduous sync
     |
 PUSH -> Live graph updates
     |
@@ -189,9 +185,16 @@ SESSION END -> Final audit
 
 ---
 
-## The Graph Server
+## Multi-User Sync
 
-This project has a `[remote]` in `.deciduous/config.toml`: teammates' and agents' decisions are on the server, not in a file git carries. `deciduous remote pull` brings them into your local cache; `deciduous remote status` lists what differs, each with the command that fixes it. There is no `.deciduous/graph.json` to commit and no `deciduous sync` step. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id.
+Teammates' decisions arrive in `.deciduous/graph.json`. After `git pull`, pull them into your database:
+
+```bash
+deciduous sync            # import their records, export yours
+deciduous sync --check    # just report what is pending
+```
+
+Every `add`, `link`, `status`, `delete` writes the file at once, so the only discipline needed is: `deciduous sync` after pull, commit `.deciduous/graph.json` before push. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id.
 
 ## Why This Matters
 
@@ -199,4 +202,4 @@ This project has a `[remote]` in `.deciduous/config.toml`: teammates' and agents
 - The graph survives - query it early, query it often
 - Retroactive logging misses details - log in the moment
 - The user sees the graph live - show your work
-- The graph server shares reasoning with every teammate and agent as it is written
+- `.deciduous/graph.json` shares reasoning with teammates through ordinary git
