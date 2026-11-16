@@ -2614,7 +2614,9 @@ export function App() {
   const [live, setLive] = useState(false);
 
   // Panel sizes in pixels - defaults for good initial layout
-  const [leftPanelWidth, setLeftPanelWidth] = useState(Math.max(500, Math.floor(window.innerWidth * 0.4)));
+  // 500px, unless the window is narrower than that: a panel wider than the
+  // window cuts its own rows off on a phone.
+  const [leftPanelWidth, setLeftPanelWidth] = useState(Math.max(Math.min(500, window.innerWidth), Math.floor(window.innerWidth * 0.4)));
   const [detailPanelHeight, setDetailPanelHeight] = useState(Math.max(400, Math.floor(window.innerHeight * 0.55)));
 
   // Fullscreen graph state
@@ -3185,10 +3187,16 @@ export function App() {
         </div>
       )}
 
+      {/* The panel and the graph pane are 800px between them at their
+          narrowest. In a narrower window the row scrolls sideways; with
+          `hidden` the graph pane was off the edge and nothing reached it
+          (#213). minHeight lets the row keep its height as a flex child. */}
       <div style={{
         display: 'flex',
         flex: 1,
-        overflow: 'hidden',
+        minHeight: 0,
+        overflowX: 'auto',
+        overflowY: 'hidden',
       }}>
         {/* Left Panel: Search Results, Narrative List, or Tree */}
         <div style={{
