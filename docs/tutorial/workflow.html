@@ -39,9 +39,10 @@
 </div><p>CLI (the branch is detected from git; <code>--prompt-stdin</code> takes a multi-line message from a heredoc):</p>
 <div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous add goal &quot;Bound retries for failed requests&quot; -c 90 -p &quot;Stop retrying forever when the upstream API is down.&quot;
 Warning: Prompt is only 52 chars. This looks like a summary, not a full prompt.
+         Capture the verbatim user message for better context recovery.
 Created node 1 (type: goal, title: Bound retries for failed requests) [confidence: 90%] [prompt: 52 chars] [branch: main]
 </code></pre>
-</div><p>The warning fires on any prompt under some length; it does not block the write. Nodes default to <code>pending</code>. <code>add_node</code> takes <code>status: &quot;active&quot;</code>; the CLI needs a second command, <code>deciduous status 1 active</code>.</p>
+</div><p>The warning fires on any prompt shorter than 200 characters; it does not block the write. Nodes default to <code>pending</code>. <code>add_node</code> takes <code>status: &quot;active&quot;</code>; the CLI needs a second command, <code>deciduous status 1 active</code>.</p>
 <p>Keep credentials out of prompts. Whoever holds the server token can read every prompt in every workspace (see <a href="architecture.html">Architecture</a>).</p>
 <h2 id="options-and-the-decision">Options and the decision</h2>
 <p>The decision is only written once an option is actually chosen. Its title should say what it beat.</p>
@@ -92,17 +93,21 @@ Created edge 4 (2 -&gt; 4 via rejected)
   rationale: &quot;Implement the selected boundary&quot;
 })
 </code></pre>
+</div><div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{ &quot;id&quot;: &quot;de6ccf4c-877b-406d-a41a-5474d8c764ec&quot;, &quot;change_id&quot;: &quot;be04811f-807f-452f-ae1b-873eb51304d5&quot;,
+  &quot;created&quot;: true, ... }
+</code></pre>
 </div><p>Do not send <code>add_node</code> and an <code>add_edge</code> that needs its id in the same batch. The id does not exist yet, and the server says so:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">from_node_id is not a node id: &quot;PLACEHOLDER&quot;. To link a node you are creating now, pass parent_id
 to add_node instead; an id must come from a previous answer, not be written ahead of it
 </code></pre>
-</div><p>A non-goal written without <code>parent_id</code> is accepted, and the reply carries <code>suggested_parents</code>: up to five ranked guesses with the signals behind each (same branch, type fit, text similarity, open status). Nothing is linked for you.</p>
+</div><p>A non-goal written without <code>parent_id</code> is accepted, and the reply carries <code>suggested_parents</code>: up to five ranked guesses with the signals behind each (type fit, text similarity, same branch, shared files, recency, open status), and <code>suggested_parents_hint</code> names the <code>add_edge</code> call that would link one. Nothing is linked for you.</p>
 <p>CLI:</p>
 <div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous add action &quot;Apply a 30s deadline to the retry loop&quot; -c 85 -f &quot;src/retry.rs,tests/retry.rs&quot;
 $ deciduous link 4 5 -r &quot;implement the chosen option&quot;
 </code></pre>
 </div><p><code>--commit</code> takes <code>HEAD</code>, a branch, a tag or a hash prefix and stores the full hash; a rev git cannot resolve is refused. The server cannot see your checkout, so over MCP pass the real hash in <code>commit</code>; it stores whatever string you send.</p>
 <h2 id="observations-what-changes-the-plan">Observations: what changes the plan</h2>
+<p>Here the tests agent records that it is reusing a decision from the API agent's branch. <code>183e9e9a-...</code> is that decision, &quot;Use RFC 7807 problem+json over an ad-hoc error object&quot;, written by the <code>capture_conversation_turn</code> call under <a href="#one-step-one-call">One step, one call</a>.</p>
 <div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">log_observation({
   workspace: &quot;my-app&quot;, branch: &quot;agent-tests&quot;,
   title: &quot;Reuse the RFC 7807 shape in fixtures&quot;,
@@ -113,6 +118,7 @@ $ deciduous link 4 5 -r &quot;implement the chosen option&quot;
 </code></pre>
 </div><p><code>related_to</code> and <code>took_from</code> take a server UUID or a full <code>change_id</code>. An 8-character prefix is refused over MCP (<code>took_from is not a node id: &quot;9ad1b0b7&quot;</code>), although the CLI accepts one. <code>took_from</code> draws a <code>took_from</code> edge from the source node to the new observation, with <code>why</code> as its rationale; <a href="teams.html#borrowing-across-branches-tookfrom">Teams</a> covers it.</p>
 <h2 id="the-outcome-the-number-or-the-error">The outcome: the number or the error</h2>
+<p>The parent is the action <code>add_node</code> created above (<code>de6ccf4c-...</code>).</p>
 <div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">close_thread({
   workspace: &quot;my-app&quot;, branch: &quot;agent-api&quot;,
   parent_node_id: &quot;de6ccf4c-877b-406d-a41a-5474d8c764ec&quot;,
@@ -122,13 +128,13 @@ $ deciduous link 4 5 -r &quot;implement the chosen option&quot;
   lessons_learned: [&quot;The router already parses JSON before handlers run&quot;]
 })
 </code></pre>
-</div><p><code>success: true</code> writes a <code>completed</code> outcome under the parent; <code>success: false</code> writes a <code>rejected</code> one. Each <code>lessons_learned</code> entry becomes an observation under the outcome; each <code>next_steps</code> entry becomes a new goal. <code>next_steps</code> entries must be objects (<code>{&quot;title&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot;}</code>); unlike <code>lessons_learned</code>, a plain string is refused with <code>next_steps[0] must be an object ... nothing was written</code>. <code>goal_node_id</code> marks that goal <code>completed</code>, so pass it only when the whole goal is done, not when your part is.</p>
+</div><p><code>success: true</code> writes a <code>completed</code> outcome under the parent; <code>success: false</code> writes a <code>rejected</code> one. Each <code>lessons_learned</code> entry becomes an observation under the outcome; each <code>next_steps</code> entry becomes a <code>pending</code> goal linked under the outcome. <code>next_steps</code> entries must be objects (<code>{&quot;title&quot;: &quot;...&quot;, &quot;description&quot;: &quot;...&quot;}</code>); unlike <code>lessons_learned</code>, a plain string is refused with <code>next_steps[0] must be an object ... nothing was written</code>. <code>goal_node_id</code> marks that goal <code>completed</code> unless <code>success</code> is <code>false</code>, so pass it only when the whole goal is done, not when your part is.</p>
 <p>CLI:</p>
 <div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous add outcome &quot;Retry loop stops at the deadline&quot; -c 90 -d &quot;cargo test retry: 4 passed&quot;
 $ deciduous link 5 6 -r &quot;test result&quot;
 $ deciduous status 6 completed
 </code></pre>
-</div><p><code>deciduous status</code> accepts <code>pending, active, completed, rejected, superseded, abandoned</code>. Its 1.1.0 <code>--help</code> lists only the first four.</p>
+</div><p><code>deciduous status</code> accepts <code>pending, active, completed, rejected, superseded, abandoned</code>. Its 1.1.0 <code>--help</code> lists only the first four; main's lists all six. Either way a wrong value is refused with the full list: <code>unknown status 'bogus'; expected one of: pending, active, completed, rejected, superseded, abandoned</code>.</p>
 <h2 id="one-step-one-call">One step, one call</h2>
 <p><code>capture_conversation_turn</code> writes a step's goal, observations, options, decision, action and outcome together, all or nothing, linked to each other and to <code>parent_node_id</code>:</p>
 <div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">capture_conversation_turn({

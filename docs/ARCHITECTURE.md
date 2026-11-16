@@ -27,9 +27,11 @@ The graph lives in PostgreSQL behind one server process. Agents reach that serve
 | `deciduous-mcp` | A VM behind a TLS proxy ([Run a server](content/run-a-server.md)), or this machine ([Without a shared server](content/local.md)) | Nothing durable. Speaks MCP at `/mcp`, applies CLI ops at `/ops`, serves exports, documents and the event socket. |
 | PostgreSQL | Next to the server, or managed | Every workspace: nodes, edges, document bytes, board messages, workspace claims, write activity. Back this up; it is the graph. |
 | `.deciduous/deciduous.db` | Each clone | A cache of one workspace, plus themes, tags and the local command log, which the server does not have. |
-| `.deciduous/remote-log.jsonl` | Each clone, next to the cache, ignored by git | CLI writes the server has not acknowledged. |
+| `.deciduous/remote-log.jsonl` | Each clone, next to the cache | CLI writes the server has not acknowledged. With it: `remote-delivered.jsonl` and `remote-log.lock`. |
 | `.deciduous/config.toml` | Each clone, committed | `[remote] url` and `workspace`. Never a token. |
 | `~/.config/deciduous/credentials` | Each machine | The one stored token. |
+
+The cache, the log and `.deciduous/documents/` (local copies of attached files, secrets included) are ignored by git only if `deciduous init` wrote the `.gitignore` block (`.deciduous/*`, with `config.toml` and `graph.json` let back in). A clone joined with `deciduous remote init <url>` alone gets no ignore rules, and `git status` then lists `deciduous.db`, `remote-log.jsonl`, `remote-delivered.jsonl` and `remote-log.lock` as untracked, ready for a careless `git add`. Add the block by hand in that case.
 
 The server's HTTP routes: `/health` (unauthenticated, process liveness), `/ready` (database and migrations), `/mcp`, `/ops`, `/export`, `/import`, `/claim`, `/locate`, `PUT /blob/:hash`, `/documents/:id`, `/messages`, `/events`. Everything except `/health` and `/ready` requires the token.
 
@@ -72,7 +74,7 @@ The server has exactly one token, `DECIDUOUS_MCP_TOKEN`. It refuses to start wit
 Workspaces separate graphs; they do not separate people.
 
 - `X-Deciduous-Workspace` routes. A connection that sends it is pinned: tool arguments cannot move its writes elsewhere, and `"*"` reads are confined to that workspace. But the header is chosen by the client. Any token holder can connect without it, or with another name.
-- Workspace claims stop accidents, not adversaries. The first repository to write to a workspace records its root commit ids, and an unrelated repository with the same directory name is refused (`belongs to another repository`). A client can still name the workspace explicitly to share it, and a client without git sends no roots and is not checked.
+- Workspace claims stop accidents, not adversaries. The first repository to write to a workspace records its root commit ids, and an unrelated repository with the same directory name is refused (`belongs to another repository`). A client can still name the workspace explicitly to share it, and a client without git sends no roots and is not checked. Claims are checked only on the CLI's paths (`/claim`, `/ops`, `/import`, and `/export` for a client that sends roots). MCP tool calls are never checked against them, so an agent registered with the wrong workspace name writes into that workspace unrefused. Pin each agent's registration with `X-Deciduous-Workspace`.
 
 So: one server per group of people who may see each other's graphs. Two teams that must not read each other need two servers (or at least two databases and two tokens), not two workspaces.
 

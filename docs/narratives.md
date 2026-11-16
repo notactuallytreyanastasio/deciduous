@@ -14,37 +14,51 @@ old decision --> observation (why it failed) --> revisit --> new decision
 `deciduous archaeology pivot` writes the observation, the revisit and the new decision, links them, and supersedes the old node. `--dry-run` shows it first:
 
 ```console
-$ deciduous archaeology pivot 0a4240dc \
+$ deciduous archaeology pivot 2465036d \
     "A fixed 30s deadline fails batch jobs that legitimately wait minutes" \
     "Per-caller deadline passed in the request context" \
     -r "One deadline cannot fit interactive and batch callers" -c 75
 === PIVOT CREATED ===
 
-  #27 [observation] "A fixed 30s deadline fails batch jobs that legitimately wait minutes"
-    └── linked from #4 "Use an overall deadline, not an attempt cap"
-  #28 [revisit] "Reconsidering: Use an overall deadline, not an attempt cap"
-    └── linked from #27 [observation]
-  #29 [decision] "Per-caller deadline passed in the request context"
-    └── linked from #28 [revisit]
+  #6 [observation] "A fixed 30s deadline fails batch jobs that legitimately wait minutes"
+    └── linked from #3 "Use an overall deadline, not an attempt cap"
+  #7 [revisit] "Reconsidering: Use an overall deadline, not an attempt cap"
+    └── linked from #6 [observation]
+  #8 [decision] "Per-caller deadline passed in the request context"
+    └── linked from #7 [revisit]
 
-  Superseded: #4 "Use an overall deadline, not an attempt cap" -> status: superseded
+  Superseded: #3 "Use an overall deadline, not an attempt cap" -> status: superseded
 
   Summary: 3 nodes created, 3 edges created, 1 node superseded
 ```
 
-The first argument takes a local id, `change_id` prefix or server UUID. All of it reached the server; `remote status` afterwards listed only nodes other writers had added.
+The first argument takes a local id, `change_id` prefix or server UUID. All of it reached the server; `remote status` afterwards said `In sync`. The new decision is `pending`, like any new node.
 
-The work done under the old decision is history too. `archaeology supersede --cascade` marks a node and everything below it:
+The work done under the old decision is history too. `archaeology supersede --cascade` marks a node and everything below it. Run it on the old decision's actions, never on the old decision itself once a pivot hangs under it: the observation, the revisit and the new decision are all below the old decision now, and the cascade follows them. On the old decision, `--dry-run` shows it would take the replacement with it:
 
 ```console
-$ deciduous archaeology supersede 29d960e4 --cascade
-Superseded node #5 "Apply a 30s deadline to the retry loop"
+$ deciduous archaeology supersede 2465036d --cascade --dry-run
+Would supersede node #3 "Use an overall deadline, not an attempt cap"
+  Would also supersede (cascade):
+    #4 "Apply a 30s deadline to the retry loop"
+    #6 "A fixed 30s deadline fails batch jobs that legitimately wait minutes"
+    #5 "Retry loop stops at the deadline"
+    #7 "Reconsidering: Use an overall deadline, not an attempt cap"
+    #8 "Per-caller deadline passed in the request context"
+  Total: 6 node(s) would be marked superseded
+```
+
+On the action under it, only the work is marked:
+
+```console
+$ deciduous archaeology supersede 04e9c57d --cascade
+Superseded node #4 "Apply a 30s deadline to the retry loop"
   Also superseded (cascade):
-    #6 "Retry loop stops at the deadline"
+    #5 "Retry loop stops at the deadline"
   Total: 2 node(s) marked superseded
 ```
 
-`--dry-run` lists what would change; read it before running the real thing.
+Always run `--dry-run` first and read the list before running the real thing.
 
 ## The same pivot over MCP
 
@@ -62,24 +76,29 @@ add_node({workspace: "my-app", branch: "agent-api", node_type: "decision",
 update_node({workspace: "my-app", branch: "agent-api", node_id: "<old decision id>", status: "superseded"})
 ```
 
-Each call needs the id the previous one returned, so they cannot go in one batch. The CLI reads it back as a pivot once pulled:
+Each call needs the id the previous one returned, so they cannot go in one batch. The CLI reads it back as a pivot once pulled (the six new nodes here are the `log_decision` that made the old decision and its two options, plus the three above):
 
 ```console
 $ deciduous remote pull
+Pulled: my-app <- https://deciduous.example.com
+  fetched 14 nodes, 12 edges, 0 deletion(s)
+  imported 6 new node(s), updated 0, removed 0; imported 5 edge(s), removed 0
 $ deciduous narratives pivots -b agent-api
 === PIVOTS === (1 found)
 
-Pivot #1: [revisit #40] "Reconsidering the error format"
-  Old approach: #8 [decision] "Use RFC 7807 problem+json over an ad-hoc error object" (superseded)
-  Triggered by: #39 [observation] "Mobile client cannot parse problem+json"
-  New approach: #38 [decision] "problem+json for v2 clients, legacy body for v1"
+Pivot #1: [revisit #9] "Reconsidering the error format"
+  Old approach: #13 [decision] "Use RFC 7807 problem+json over an ad-hoc error object" (superseded)
+  Triggered by: #11 [observation] "Mobile client cannot parse problem+json"
+  New approach: #14 [decision] "problem+json for v2 clients, legacy body for v1"
 ```
 
-`ask_graph` follows revisits and superseded nodes when the question asks about history or pivots, so "why did we change the retry deadline?" comes back with both the dead decision and its replacement ([Recovery](content/recovery.md#what-the-agent-is-told)).
+`ask_graph` follows revisits and superseded nodes when the question uses a history word (`changed`, `pivot`, `history`, `previously`, `replaced` and the like; `change` is not one). "How has the retry deadline changed?" takes that route and comes back with both the dead decision and its replacement. "Why did we change the retry deadline?" goes by the rationale route instead, because of `why` ([Recovery](content/recovery.md#what-the-agent-is-told)).
 
 ## Statuses
 
-`superseded` means replaced by a newer approach; `abandoned` means tried and dropped with nothing replacing it. `deciduous status <id> superseded` and `abandoned` work, although the 1.1.0 `status --help` lists only `pending, active, completed, rejected`. Over MCP, `update_node` takes all six. Query the current state with `query_nodes` and `status: "active"`, the history with no status filter, or `type: "revisit"` for the pivots.
+`superseded` means replaced by a newer approach; `abandoned` means tried and dropped with nothing replacing it. `deciduous status <id> superseded` and `abandoned` work. In 1.1.0, `add --help` leaves out `revisit` and `status --help` lists only four statuses; both are accepted. The next release lists them all. Over MCP, `update_node` takes all six.
+
+`active` is only set when someone sets it: new nodes are `pending`, and so is the new decision `archaeology pivot` writes. So `query_nodes` with `status: "active"` usually returns `{"count":0,"nodes":[]}`, even in a workspace with a current decision. For the current state, query with no status filter and drop `superseded`, `abandoned` and `rejected` nodes, or use `consolidation_report`, which treats any decision not in those three as current. For the history, use no filter; for the pivots, `type: "revisit"`.
 
 ## Reconstructing history from commits
 
@@ -97,7 +116,7 @@ The CLI can backdate a node and tie it to the commit:
 ```console
 $ deciduous add decision "Retry with exponential backoff (historical)" \
     -d "Reconstructed from commit message" --date 2024-03-01 --commit <sha>
-Created node 37 (type: decision, ...) [commit: 4c3ba126...] [branch: main] [date: 2024-03-01T00:00:00-05:00]
+Created node 9 (type: decision, ...) [commit: 64551157...] [branch: main] [date: 2024-03-01T00:00:00-05:00]
 ```
 
 The date reaches the server: `query_nodes` returned `"created_at": "2024-03-01T05:00:00.000000Z"` for it. `--date` takes `YYYY-MM-DD`, `YYYY-MM-DD HH:MM:SS` or RFC 3339, read in local time. MCP's `add_node` has no date argument; an agent reconstructing history puts the date and full hash in the description, or uses the CLI. (An older page said a backdated CLI node stays local. With a `[remote]` it does not.)
@@ -106,14 +125,15 @@ The date reaches the server: `query_nodes` returned `"created_at": "2024-03-01T0
 
 ```console
 $ deciduous archaeology timeline -b main
-=== TIMELINE === (11 nodes)
+=== TIMELINE === (9 nodes)
 
-  2024-03-01  #37  [decision]      Retry with exponential backoff (historical) pending
-  2026-11-08  #1   [goal]          Bound retries for failed requests        active        90%
-  2026-11-08  #4   [decision]      Use an overall deadline, not an attempt cap superseded    80%
-  2026-11-08  #27  [observation]   A fixed 30s deadline fails batch jobs that legitimately wait minutes pending
-  2026-11-08  #28  [revisit]       Reconsidering: Use an overall deadline, not an attempt cap pending
-  2026-11-08  #29  [decision]      Per-caller deadline passed in the request context pending  75%
+  2024-03-01  #9   [decision]      Retry with exponential backoff (historical) pending
+  2026-11-08  #1   [goal]          Bound retries for failed requests        pending       90%
+  2026-11-08  #3   [decision]      Use an overall deadline, not an attempt cap superseded    80%
+  2026-11-08  #4   [action]        Apply a 30s deadline to the retry loop   superseded
+  2026-11-08  #6   [observation]   A fixed 30s deadline fails batch jobs that legitimately wait minutes pending
+  2026-11-08  #7   [revisit]       Reconsidering: Use an overall deadline, not an attempt cap pending
+  2026-11-08  #8   [decision]      Per-caller deadline passed in the request context pending       75%
 ```
 
 It reads the local cache; `remote pull` first. `-t` filters by type, `-l` limits to the most recent N, `--json` for scripts.
@@ -124,12 +144,12 @@ A narrative is the prose version: how one part of the system got the way it is, 
 
 ```console
 $ deciduous narratives init
-Created .../.deciduous/narratives.md with 2 goal section(s)
+Created .../.deciduous/narratives.md with 1 goal section(s)
 $ deciduous narratives show
 # Narratives
 ...
 ## Bound retries for failed requests
-> Node #1 | Status: active
+> Node #1 | Status: pending
 
 **Current state:** [How it works today]
 
@@ -143,7 +163,7 @@ That file is local. It is not sent to the server, and the `.gitignore` that `dec
 
 ## The commands and skills init installs
 
-`deciduous init` writes `.claude/commands/decision-graph.md` (`/decision-graph`: build a graph from commit history, with narratives as the source of truth and commits as evidence) and three instruction files, `.claude/skills/pulse.md`, `narratives.md` and `archaeology.md`, for mapping the current design, writing narratives, and turning them into nodes. All of them drive the CLI (`deciduous add`, `link`, `status`, `--date`), so in a project with a `[remote]` what they write reaches the server. Review them before handing them to an agent: `/decision-graph` assumes the binary is at `~/.cargo/bin/deciduous`.
+`deciduous init` writes `.claude/commands/decision-graph.md` (`/decision-graph`: build a graph from commit history, with narratives as the source of truth and commits as evidence) and three instruction files, `.claude/skills/pulse.md`, `narratives.md` and `archaeology.md`, for mapping the current design, writing narratives, and turning them into nodes. Only `/decision-graph` is a slash command. Claude Code loads project skills from `.claude/skills/<name>/SKILL.md` ([Claude Code docs](https://code.claude.com/docs/en/skills)); init writes flat `.md` files with no frontmatter, so there is no `/pulse`, `/narratives` or `/archaeology`, although the generated `CLAUDE.md` lists them as skills. Point an agent at them by path: "read `.claude/skills/archaeology.md` and follow it". All of them drive the CLI (`deciduous add`, `link`, `status`, `--date`), so in a project with a `[remote]` what they write reaches the server. Review them before handing them to an agent: `/decision-graph` assumes the binary is at `~/.cargo/bin/deciduous`.
 
 ## Check the result
 

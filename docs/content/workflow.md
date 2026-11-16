@@ -34,10 +34,11 @@ CLI (the branch is detected from git; `--prompt-stdin` takes a multi-line messag
 ```console
 $ deciduous add goal "Bound retries for failed requests" -c 90 -p "Stop retrying forever when the upstream API is down."
 Warning: Prompt is only 52 chars. This looks like a summary, not a full prompt.
+         Capture the verbatim user message for better context recovery.
 Created node 1 (type: goal, title: Bound retries for failed requests) [confidence: 90%] [prompt: 52 chars] [branch: main]
 ```
 
-The warning fires on any prompt under some length; it does not block the write. Nodes default to `pending`. `add_node` takes `status: "active"`; the CLI needs a second command, `deciduous status 1 active`.
+The warning fires on any prompt shorter than 200 characters; it does not block the write. Nodes default to `pending`. `add_node` takes `status: "active"`; the CLI needs a second command, `deciduous status 1 active`.
 
 Keep credentials out of prompts. Whoever holds the server token can read every prompt in every workspace (see [Architecture](architecture.md)).
 
@@ -110,6 +111,11 @@ add_node({
 })
 ```
 
+```json
+{ "id": "de6ccf4c-877b-406d-a41a-5474d8c764ec", "change_id": "be04811f-807f-452f-ae1b-873eb51304d5",
+  "created": true, ... }
+```
+
 Do not send `add_node` and an `add_edge` that needs its id in the same batch. The id does not exist yet, and the server says so:
 
 ```text
@@ -117,7 +123,7 @@ from_node_id is not a node id: "PLACEHOLDER". To link a node you are creating no
 to add_node instead; an id must come from a previous answer, not be written ahead of it
 ```
 
-A non-goal written without `parent_id` is accepted, and the reply carries `suggested_parents`: up to five ranked guesses with the signals behind each (same branch, type fit, text similarity, open status). Nothing is linked for you.
+A non-goal written without `parent_id` is accepted, and the reply carries `suggested_parents`: up to five ranked guesses with the signals behind each (type fit, text similarity, same branch, shared files, recency, open status), and `suggested_parents_hint` names the `add_edge` call that would link one. Nothing is linked for you.
 
 CLI:
 
@@ -129,6 +135,8 @@ $ deciduous link 4 5 -r "implement the chosen option"
 `--commit` takes `HEAD`, a branch, a tag or a hash prefix and stores the full hash; a rev git cannot resolve is refused. The server cannot see your checkout, so over MCP pass the real hash in `commit`; it stores whatever string you send.
 
 ## Observations: what changes the plan
+
+Here the tests agent records that it is reusing a decision from the API agent's branch. `183e9e9a-...` is that decision, "Use RFC 7807 problem+json over an ad-hoc error object", written by the `capture_conversation_turn` call under [One step, one call](#one-step-one-call).
 
 ```javascript
 log_observation({
@@ -144,6 +152,8 @@ log_observation({
 
 ## The outcome: the number or the error
 
+The parent is the action `add_node` created above (`de6ccf4c-...`).
+
 ```javascript
 close_thread({
   workspace: "my-app", branch: "agent-api",
@@ -155,7 +165,7 @@ close_thread({
 })
 ```
 
-`success: true` writes a `completed` outcome under the parent; `success: false` writes a `rejected` one. Each `lessons_learned` entry becomes an observation under the outcome; each `next_steps` entry becomes a new goal. `next_steps` entries must be objects (`{"title": "...", "description": "..."}`); unlike `lessons_learned`, a plain string is refused with `next_steps[0] must be an object ... nothing was written`. `goal_node_id` marks that goal `completed`, so pass it only when the whole goal is done, not when your part is.
+`success: true` writes a `completed` outcome under the parent; `success: false` writes a `rejected` one. Each `lessons_learned` entry becomes an observation under the outcome; each `next_steps` entry becomes a `pending` goal linked under the outcome. `next_steps` entries must be objects (`{"title": "...", "description": "..."}`); unlike `lessons_learned`, a plain string is refused with `next_steps[0] must be an object ... nothing was written`. `goal_node_id` marks that goal `completed` unless `success` is `false`, so pass it only when the whole goal is done, not when your part is.
 
 CLI:
 
@@ -165,7 +175,7 @@ $ deciduous link 5 6 -r "test result"
 $ deciduous status 6 completed
 ```
 
-`deciduous status` accepts `pending, active, completed, rejected, superseded, abandoned`. Its 1.1.0 `--help` lists only the first four.
+`deciduous status` accepts `pending, active, completed, rejected, superseded, abandoned`. Its 1.1.0 `--help` lists only the first four; main's lists all six. Either way a wrong value is refused with the full list: `unknown status 'bogus'; expected one of: pending, active, completed, rejected, superseded, abandoned`.
 
 ## One step, one call
 

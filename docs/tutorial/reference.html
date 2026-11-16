@@ -20,9 +20,12 @@
 <main id="content"><div class="article-meta"><span>Reference</span><a href="../content/reference.md">Read as Markdown</a></div><article><h1 id="cli-reference">CLI reference</h1>
 <p>The <code>deciduous</code> commands people actually use, grouped by what you are trying to do, with flags as <code>deciduous &lt;command&gt; --help</code> prints them in 1.1.0. In a project with a <code>[remote]</code>, every write command writes the local database, queues an op in <code>.deciduous/remote-log.jsonl</code>, and sends it to the server before it exits; every read command reads the local database, which is a cache refreshed by <code>remote pull</code>. Commands marked <strong>server</strong> need a <code>[remote]</code>; commands marked <strong>no server</strong> only matter without one.</p>
 <p>Anywhere a command takes a node, it accepts a local number or a change_id prefix. In a project with a <code>[remote]</code> it also accepts a server UUID, once the node is in the local cache.</p>
+<p>Any deciduous command run where no <code>.deciduous</code> exists in the current directory or above it creates <code>.deciduous/deciduous.db</code> in the current directory and exits 0: <code>deciduous nodes</code> in an empty directory does this. From then on that directory is a project, and it captures every repository below it that has no <code>.deciduous</code> of its own, worktrees included: their writes go to that file, not to their own server. Delete a stray <code>.deciduous</code> when you find one.</p>
 <h2 id="connect-a-project-to-a-server">Connect a project to a server</h2>
 <h3 id="remote-setup-server"><code>remote setup</code> (server)</h3>
 <p>Connect this project to a shared graph server, step by step. In a terminal it asks; flags answer for scripts. Ends by writing <code>[remote]</code>, storing the token if needed, and registering Claude Code (only if Claude Code has no <code>deciduous</code> server yet).</p>
+<p>There is no <code>--workspace</code> flag: setup names the workspace after the project's directory and does not claim it for this repository until the first write sends something. If another repository with the same directory name runs <code>remote init</code> first, it takes the name, and every write from this project is refused with <code>belongs to another repository</code>. To choose the name, or to claim it at once, use <code>remote init &lt;URL&gt; --workspace my-app</code> (below).</p>
+<p>The Claude Code registration runs <code>claude mcp add --scope user --transport http deciduous &lt;URL&gt;/mcp --header &quot;Authorization: Bearer &lt;token&gt;&quot;</code>, so the token is stored in plain text in <code>~/.claude.json</code>. If a <code>deciduous</code> server is already registered, even one pointing at a different server, setup prints <code>Claude Code already has a deciduous MCP server</code> and leaves it; to switch servers, run <code>claude mcp remove deciduous -s user</code> first.</p>
 <table>
 <thead>
 <tr>
@@ -88,10 +91,19 @@ Written to .deciduous/config.toml. The token stays in ~/.config/deciduous/creden
 </code></pre>
 </div><p>The message names <code>~/.config</code> even when <code>XDG_CONFIG_HOME</code> has moved the file.</p>
 <h3 id="remote-adopt-root-url-server"><code>remote adopt [ROOT] --url &lt;URL&gt;</code> (server)</h3>
-<p>Walk a directory for projects that already have a <code>.deciduous</code> and point each at the server. Existing configuration is left alone. <code>-n, --dry-run</code> shows what would change, but in 1.1.0 it is not free of side effects: it leaves a <code>.deciduous/deciduous.db</code> in the directory it walks. That stray <code>.deciduous</code> then captures any repository below it that has no <code>.deciduous</code> of its own, including a worktree, which writes to that file instead of its main checkout's server. Delete it after a dry run.</p>
+<p>Walk a directory for projects that already have a <code>.deciduous</code> and point each at the server. Existing configuration is left alone. <code>-n, --dry-run</code> shows what would change, but in 1.1.0 it is not free of side effects: like any command run outside a project (see the top of this page), it creates <code>.deciduous/deciduous.db</code> in ROOT, and then lists ROOT itself as a project to configure, under workspace <code>scratch</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote adopt --url http://127.0.0.1:4000 -n
+Would configure: 2 projects under .
+
+  scratch  (.)                                 would configure
+  p1                                           would configure
+
+2 would be configured, 0 left alone
+</code></pre>
+</div><p>Delete <code>ROOT/.deciduous</code> after a dry run.</p>
 <h2 id="check-and-repair-the-connection">Check and repair the connection</h2>
 <h3 id="remote-status-server"><code>remote status</code> (server)</h3>
-<p>How far the local copy has drifted from the server: ops waiting and rejected, node and edge counts, and every row that differs, field by field. Exits 0 only on <code>In sync</code>.</p>
+<p>How far the local copy has drifted from the server: ops waiting and rejected, node and edge counts, and every row that differs, field by field. Exits 0 on <code>In sync</code>, and on <code>Local only: no remote configured for this project.</code>; anything waiting, rejected or different exits 1.</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Remote: http://127.0.0.1:4000
 Workspace: my-app
 Log: 0 write(s) waiting, 0 rejected  (/home/you/code/my-app/.deciduous/remote-log.jsonl)
@@ -143,9 +155,10 @@ Themes and tags are not sent to the server, so they are not compared.
 </tr>
 </tbody>
 </table>
-<p><code>DECIDUOUS_OPS_TIMEOUT=&lt;seconds&gt;</code> changes the 120-second limit per request.</p>
+<p><code>DECIDUOUS_OPS_TIMEOUT=&lt;seconds&gt;</code> changes the 120-second limit per request (see <a href="#environment">Environment</a>).</p>
 <h3 id="remote-pull-server"><code>remote pull</code> (server)</h3>
-<p>Refresh the local database from the server: takes the server's side of every difference. Run it before reading with <code>nodes</code>, <code>show</code> or <code>serve</code> if agents have been writing over MCP. No flags.</p>
+<p>Refresh the local database from the server. It first refuses a workspace claimed by an unrelated repository, then sends the writes still waiting in <code>.deciduous/remote-log.jsonl</code>; if they cannot be sent it stops with <code>Nothing was pulled.</code> Then it takes the server's side of every difference. Run it before reading with <code>nodes</code>, <code>show</code> or <code>serve</code> if agents have been writing over MCP. No flags.</p>
+<p>It also writes <code>.deciduous/graph.json</code>, <code>graph.json.lock</code> and <code>graph.json.follow.lock</code>, even in a project with a <code>[remote]</code>, where they show up as untracked files. Keep them out of git in a server project.</p>
 <h3 id="remote-watch-server"><code>remote watch</code> (server)</h3>
 <p>Stream this workspace's writes, one line per node event, reconnecting with backoff.</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote watch
@@ -182,13 +195,13 @@ Watching: my-app
 </tr>
 <tr>
 <td><code>--claude-code</code></td>
-<td>Print the URL plus a ready-to-paste Monitor tool call for Claude Code, and exit. Also carries the token.</td>
+<td>Print the URL plus a ready-to-paste Monitor tool call for Claude Code, and exit. Also carries the token. The printed call sets no <code>timeout_ms</code>, and a Claude Code monitor ends after its <code>timeout_ms</code> (default 5 minutes, at most 30), so the watch has to be started again.</td>
 </tr>
 </tbody>
 </table>
 <h2 id="record-decisions">Record decisions</h2>
 <h3 id="add"><code>add &lt;TYPE&gt; &lt;TITLE&gt;</code></h3>
-<p>Types: <code>goal</code>, <code>option</code>, <code>decision</code>, <code>action</code>, <code>outcome</code>, <code>observation</code>, <code>revisit</code> (<code>--help</code> omits <code>revisit</code>; it works).</p>
+<p>Types: <code>goal</code>, <code>option</code>, <code>decision</code>, <code>action</code>, <code>outcome</code>, <code>observation</code>, <code>revisit</code>. 1.1.0's <code>--help</code> omits <code>revisit</code>, which works; main's <code>--help</code> lists it.</p>
 <table>
 <thead>
 <tr>
@@ -207,7 +220,7 @@ Watching: my-app
 </tr>
 <tr>
 <td><code>-p, --prompt &lt;TEXT&gt;</code></td>
-<td>The user's request, verbatim. Warns when it looks like a summary.</td>
+<td>The user's request, verbatim. Any prompt under 200 characters gets a warning that it &quot;looks like a summary&quot;; the test is length only, and the node is created anyway.</td>
 </tr>
 <tr>
 <td><code>--prompt-stdin</code></td>
@@ -231,14 +244,18 @@ Watching: my-app
 </tr>
 </tbody>
 </table>
-<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous add goal &quot;Bound the retry delay&quot; -c 90 --prompt-stdin &lt;&lt;'EOF'
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous add goal &quot;Bound the retry delay&quot; -c 90 --prompt-stdin &lt;&lt;'EOF'
 Retries should stop after a bounded delay; right now a 429 without Retry-After loops forever.
 EOF
+Warning: Prompt is only 93 chars. This looks like a summary, not a full prompt.
+         Capture the verbatim user message for better context recovery.
+Created node 3 (type: goal, title: Bound the retry delay) [confidence: 90%] [prompt: 93 chars] [branch: main]
 </code></pre>
-</div><h3 id="link-unlink"><code>link &lt;FROM&gt; &lt;TO&gt;</code> / <code>unlink &lt;FROM&gt; &lt;TO&gt;</code></h3>
+</div><p>That prompt is verbatim; the warning fires because it is short.</p>
+<h3 id="link-unlink"><code>link &lt;FROM&gt; &lt;TO&gt;</code> / <code>unlink &lt;FROM&gt; &lt;TO&gt;</code></h3>
 <p><code>link -r, --rationale &lt;TEXT&gt;</code>, <code>-t, --edge-type &lt;TYPE&gt;</code> (default <code>leads_to</code>; also <code>requires</code>, <code>chosen</code>, <code>rejected</code>, <code>blocks</code>, <code>enables</code>, <code>took_from</code>). <code>unlink -t, --type &lt;TYPE&gt;</code> removes only the edge of that type, required when two nodes are joined by more than one.</p>
 <h3 id="status"><code>status &lt;ID&gt; &lt;STATUS&gt;</code></h3>
-<p><code>pending</code>, <code>active</code>, <code>completed</code>, <code>rejected</code>, <code>superseded</code>, <code>abandoned</code>. (<code>--help</code> lists the first four.)</p>
+<p><code>pending</code>, <code>active</code>, <code>completed</code>, <code>rejected</code>, <code>superseded</code>, <code>abandoned</code>. 1.1.0's <code>--help</code> lists only the first four; all six work, and main's <code>--help</code> lists all six.</p>
 <h3 id="prompt-prompt"><code>prompt &lt;ID&gt; [PROMPT]</code></h3>
 <p>Set or replace a node's prompt; reads stdin when the text is omitted.</p>
 <h3 id="delete"><code>delete &lt;ID&gt;</code></h3>
@@ -278,7 +295,7 @@ EOF
 </tr>
 <tr>
 <td><code>commands</code></td>
-<td><code>-l, --limit</code> (default 20). Recent CLI writes with exit status.</td>
+<td><code>-l, --limit</code> (default 20). In 1.1.0 it always prints <code>No commands logged.</code>: nothing writes the log. Main records each write as it starts and marks it <code>(exit 0)</code> when it finishes; a command that fails stays <code>(unfinished)</code>, with no exit code.</td>
 </tr>
 </tbody>
 </table>
@@ -306,7 +323,7 @@ EOF
 </tr>
 <tr>
 <td><code>narratives init</code> / <code>show</code> / <code>pivots</code></td>
-<td><code>.deciduous/narratives.md</code>: seed it from active goals (<code>-o</code>, <code>--force</code>), print it (<code>-p</code>), list revisit chains (<code>-b</code>, <code>--json</code>).</td>
+<td><code>.deciduous/narratives.md</code>: seed it with a section per goal that is not superseded or abandoned (<code>-o</code>, <code>--force</code>), print it (<code>-p</code>), list revisit chains (<code>-b</code>, <code>--json</code>).</td>
 </tr>
 </tbody>
 </table>
@@ -415,11 +432,11 @@ EOF
 </tr>
 <tr>
 <td><code>update</code></td>
-<td>Refresh the assistant integration files deciduous wrote, keeping yours (backups in <code>.deciduous/update-backups/&lt;time&gt;/</code>). Leaves <code>.deciduous/config.toml</code> alone. In a project on this machine's native server, upgrades that server too. <code>--all &lt;DIR&gt;</code> for every project under a directory.</td>
+<td>Refresh the assistant integration files deciduous wrote, keeping yours (backups in <code>.deciduous/update-backups/&lt;time&gt;/</code>). Leaves <code>.deciduous/config.toml</code> alone. In a project on this machine's native server, upgrades that server too. <code>--all &lt;DIR&gt;</code> for DIR and each project one level below it (not recursive).</td>
 </tr>
 <tr>
 <td><code>check-update</code></td>
-<td>Exit 1 if this project's files are older than the binary.</td>
+<td>Exit 1 when <code>.deciduous/.version</code>, relative to the current directory, is missing or older than the binary. Run it from the project root: in a subdirectory it says <code>Update needed: No version file found</code>. A project only joined with <code>remote init</code> or <code>remote setup</code> has no <code>.version</code> until <code>init</code> or <code>update</code> writes the assistant files.</td>
 </tr>
 <tr>
 <td><code>auto-update on|off</code></td>
@@ -431,7 +448,7 @@ EOF
 </tr>
 <tr>
 <td><code>hooks install|status|uninstall</code></td>
-<td>Claude Code hooks from <code>.deciduous/config.toml</code>.</td>
+<td>Claude Code hooks from the <code>[hooks]</code> lists in <code>.deciduous/config.toml</code>, which are empty by default. See the warning below.</td>
 </tr>
 <tr>
 <td><code>opencode install|status|uninstall</code></td>
@@ -443,6 +460,7 @@ EOF
 </tr>
 </tbody>
 </table>
+<p>Do not run <code>hooks install</code> or <code>hooks uninstall</code> unless you have listed hooks in <code>config.toml</code>. Both rewrite the hooks in <code>.claude/settings.json</code> from those lists. In a project set up by <code>init</code>, <code>hooks install</code> left <code>{&quot;PostToolUse&quot;: [], &quot;PreToolUse&quot;: []}</code>, removing the version-check and board-mentions hooks <code>init</code> installed and any hooks of your own; <code>uninstall</code> also deletes <code>.claude/hooks/</code>. <code>deciduous update</code> puts the board-mentions hooks back, but not the version-check entry (1.1.0 and main). 1.1.0's <code>hooks --help</code> still says &quot;pre-edit blocks, post-commit reminders&quot;; deciduous has shipped no such hooks since 1.0.3, and main's help says so.</p>
 <h2 id="other-commands">Other commands</h2>
 <p><code>mcp</code> runs the stdio MCP server on the local database (<a href="mcp.html">MCP tools</a>). <code>serve --api</code> runs a separate multi-graph JSON daemon (<code>--data-dir</code>, <code>--token</code>, <code>--bind</code>, default <code>127.0.0.1</code>); it is not the graph server. <code>audit --associate-commits</code> matches commits to nodes by title (<code>--min-score</code>, <code>--dry-run</code>, <code>--yes</code>). <code>roadmap init|refresh|sync|list|link|unlink|conflicts|status|check</code> keeps <code>ROADMAP.md</code> in step with GitHub issues; <code>sync</code> is a dry run unless <code>--execute</code>.</p>
 <h2 id="environment">Environment</h2>
@@ -480,7 +498,7 @@ EOF
 </tr>
 <tr>
 <td><code>DECIDUOUS_OPS_TIMEOUT</code></td>
-<td>Seconds per <code>remote push</code> request (default 120).</td>
+<td>Seconds per <code>POST /ops</code> request in <code>remote push</code>, <code>pull</code> and <code>init</code> (default 120). Anything but a positive integer makes those commands fail: <code>DECIDUOUS_OPS_TIMEOUT=&quot;abc&quot; is not a number of seconds above zero</code>. The send after an ordinary write has a fixed 10-second budget this does not change.</td>
 </tr>
 <tr>
 <td><code>DECIDUOUS_AGENT_LABEL</code></td>

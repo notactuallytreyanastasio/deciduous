@@ -14,19 +14,23 @@ A deciduous graph is typed nodes joined by typed, directed edges, kept per works
 | `observation` | A fact learned along the way that matters to the plan. Attaches anywhere. |
 | `revisit` | An earlier choice being reconsidered: links the old decision, the observation that undid it, and the new decision. |
 
-The intended flow is `goal -> option -> decision -> action -> outcome`, with observations attached where they were learned. The graph does not enforce that order; `find_orphans` (MCP) reports any non-goal node with no incoming edge, which is the usual sign of a missing link.
+The flow has two shapes, depending on how the decision was written. Built node by node (`deciduous add`, `add_node`), it is `goal -> option -> decision -> action -> outcome` with `leads_to` edges. Built with MCP's `log_decision`, the decision comes first and its options hang under it: `goal -> decision -> option`, with a `chosen` or `rejected` edge from the decision to each option. Do not then link the options back to the decision; the server refuses an edge that reverses an existing one (see [Edge types](#edge-types)). Observations attach where they were learned. The graph does not enforce either order; `find_orphans` (MCP) reports any non-goal node with no incoming edge, which is the usual sign of a missing link.
 
-`deciduous add --help` lists six types and leaves out `revisit`; `deciduous add revisit "..."` works. Anything else is refused:
+In 1.1.0, `add --help` leaves out `revisit` and `status --help` lists only four statuses; both are accepted. The next release lists them all. Anything outside the lists is refused:
 
 ```text
 Error: unknown node type 'bogus'; expected one of: goal, decision, option, action, outcome, observation, revisit
 ```
 
-The server's `query_nodes` also accepts `feedback`, a legacy type kept so old imported graphs stay readable. New nodes cannot be created with it.
+The server's `query_nodes` also accepts `feedback`, a legacy type kept so old imported graphs stay readable. New nodes cannot be created with it. Likewise the status `done`: old graphs carry it, so imports and `query_nodes` accept it, but no write sets it (`add_node` with `status: "done"` answers `status must be one of pending, active, completed, rejected, superseded, abandoned; got "done"; nothing was written`). Read it as `completed`.
 
 ## Edge types
 
-An edge runs from one node to another in the same workspace. The two may be on different branches.
+An edge runs from one node to another in the same workspace. The two may be on different branches. The server refuses an edge that already exists, and an edge whose reverse exists, because two nodes cannot be each other's parent; `took_from` is exempt from both. After `log_decision`, linking the chosen option back to its decision gets:
+
+```text
+bb3060b2-... -> 45a3019e-... (chosen) already exists; 45a3019e-... -> bb3060b2-... would make the two nodes each other's parent, and nothing was written. A decision's options hang under it with chosen/rejected edges (decision -> option); to put a decision under its goal, link goal -> decision.
+```
 
 | Type | From -> to |
 | --- | --- |
@@ -42,7 +46,7 @@ An edge runs from one node to another in the same workspace. The two may be on d
 
 ## Status
 
-`pending` (the default), `active`, `completed`, `rejected`, `superseded`, `abandoned`. `deciduous status --help` lists only the first four; all six are accepted:
+`pending` (the default), `active`, `completed`, `rejected`, `superseded`, `abandoned`. In 1.1.0, `add --help` leaves out `revisit` and `status --help` lists only four statuses; both are accepted. The next release lists them all. Nothing sets `active` on its own: new nodes are `pending` until someone changes them. Anything else is refused:
 
 ```text
 $ deciduous status 1 done
@@ -81,7 +85,7 @@ A workspace is one repository's graph on a server. Its name comes from `workspac
 
 The first repository to write to a workspace claims it by its root commit ids. Clones and worktrees of that repository share the root commit and are let in; an unrelated repository with the same directory name is refused until it picks another name or names this one explicitly (see [Troubleshooting](troubleshooting.md#belongs-to-another-repository)).
 
-Over MCP, the workspace for a call is decided in this order: the `X-Deciduous-Workspace` header if the client sends one, then the call's `workspace` argument, then `scratch`. Read tools also accept `workspace: "*"` for every workspace at once; writes refuse it. A workspace is a name for routing, not a permission: anyone holding the server's token can read and write all of them. See [Architecture](architecture.md#the-trust-boundary).
+Over MCP, the workspace for a call is decided in this order: the `X-Deciduous-Workspace` header if the client sends one, then the call's `workspace` argument, then `scratch`. Tools that name a node by id (`update_node`, `delete_node`, `delete_edge`) act in that node's workspace instead; a header that pins a different workspace makes them refuse. Read tools also accept `workspace: "*"` for every workspace at once; writes refuse it. A workspace is a name for routing, not a permission: anyone holding the server's token can read and write all of them. See [Architecture](architecture.md#the-trust-boundary).
 
 ## Branch
 

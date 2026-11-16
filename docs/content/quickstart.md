@@ -8,7 +8,7 @@ Everything below was run against deciduous 1.1.0. The examples use `https://deci
 
 ```sh
 brew install notactuallytreyanastasio/tap/deciduous   # macOS, Linux
-cargo install deciduous --locked                      # anywhere with Rust
+cargo install deciduous --locked                      # Rust 1.89 or newer
 ```
 
 Or download a binary from the [v1.1.0 release](https://github.com/notactuallytreyanastasio/deciduous/releases/tag/v1.1.0): `deciduous-darwin-arm64`, `-darwin-amd64`, `-linux-arm64`, `-linux-amd64`, `deciduous-windows-amd64.exe`, and `checksums.txt` to check them against.
@@ -20,7 +20,7 @@ $ deciduous --version
 deciduous 1.1.0
 ```
 
-If `which -a` lists two paths, the first one runs. Remove the stale one rather than installing a third.
+If `which -a` lists two different paths, the first one runs. Remove the stale one rather than installing a third. The same path listed twice, as above, is a directory that appears twice in `PATH`, not a second install; delete nothing.
 
 ## 2. Get the token
 
@@ -73,7 +73,7 @@ url = "https://deciduous.example.com"
 workspace = "my-app"
 ```
 
-The workspace is the repository directory's name. Every clone and worktree of the repository should use the same one, so commit this file. To choose a different name, `deciduous remote init https://deciduous.example.com --workspace <name>`. `remote setup` has no `--workspace` flag.
+The workspace is the repository directory's name, lowercased (a repository in `MyApp/` gets `myapp`; a linked worktree uses its main checkout's name). Every clone and worktree of the repository should use the same one, so commit this file. To choose a different name, run `deciduous remote init https://deciduous.example.com --workspace <name>` first. `remote init` only writes `[remote]` and claims the workspace; it does not register Claude Code. Then run `remote setup --url` as above: it keeps that workspace and does the Claude Code registration. `remote setup` has no `--workspace` flag.
 
 Without a stored token it stops before writing anything: ``Error: no token: set DECIDUOUS_MCP_TOKEN or run `deciduous remote login --url https://deciduous.example.com` first``. A token given only through `DECIDUOUS_MCP_TOKEN` works for setup but is not stored by it.
 
@@ -105,9 +105,14 @@ Where should this project's graph live?
      (any host, port, user, password)
   3) This machine, in Docker: a new PostgreSQL and the server in containers
   4) A server someone else runs: you need its URL and token
+
+  1 and 2 install the release's server executable in /Users/you/.config/deciduous/server
+  and start it at login. --docker runs that server in Docker instead.
+
+Choose 1-4 [1]:
 ```
 
-Type 4 to join your team's server; it asks for the URL and then the token. **Do not just press Enter.** The default is 1: it downloads the server executable, creates and migrates a `deciduous` database on localhost:5432, and installs a background service on your machine, which is not what someone joining a team wants. End-of-input picks the default too, so do not pipe `init` an empty answer. The choices are the same as these flags: 1 is `remote setup --local`, 2 is `--database-url <url>`, 3 is `--docker-postgres`, 4 is `--url <url>`. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.
+Type 4 to join your team's server; it asks for the URL, then whether to use the token already stored on this machine (step 2), or for the token if none is stored. **Do not just press Enter.** The default is 1: it downloads the server executable, creates and migrates a `deciduous` database on localhost:5432, and installs a background service on your machine, which is not what someone joining a team wants. On Linux, 1.1.0's systemd unit for choices 1 and 2 does not even start: systemd rejects its quoted `WorkingDirectory=`. The fix is [#330](https://github.com/notactuallytreyanastasio/deciduous/pull/330), not yet merged or released; until then use choice 3 or run the server by hand. Pressing Ctrl-D at the menu picks 1 as well. Piping input into `init` does not: without a terminal it stops and lists the flags, below. The choices are the same as these flags: 1 is `remote setup --local`, 2 is `--database-url <url>`, 3 is `--docker-postgres`, 4 is `--url <url>`. If this machine already has a server installed, the menu shows two choices instead: 1) that server, 2) a server someone else runs.
 
 Without a terminal (a script, CI, an agent's shell), `init` writes its files and then stops:
 
@@ -145,15 +150,17 @@ deciduous:
 To remove this server, run: claude mcp remove deciduous -s user
 ```
 
+Where this page shows `<token>`, the real output prints the whole token. To check without putting it on screen, `claude mcp get deciduous | grep -E 'Status|URL'`.
+
 This is the mismatch the step exists for, and it happened while this page was being written: the project pointed at one server and Claude Code at another. The `URL` must be your `[remote] url` followed by `/mcp`. If it is not, replace the registration:
 
 ```sh
 claude mcp remove deciduous -s user
 claude mcp add --scope user --transport http deciduous https://deciduous.example.com/mcp \
-  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
+  --header "Authorization: Bearer $(cat ~/.config/deciduous/credentials)"
 ```
 
-The shell expands `$DECIDUOUS_MCP_TOKEN` when the command runs, so the token is stored in `~/.claude.json`, outside every repository. A user-scope registration serves every repository on the machine; each tool call names its workspace. To pin one repository to its workspace instead, use a project `.mcp.json` ([Clients](clients.md#claude-code)).
+`$(cat ...)` reads the token `remote login` stored in step 2; the shell substitutes it when the command runs, and Claude Code stores it in `~/.claude.json`, outside every repository. Do not write `$DECIDUOUS_MCP_TOKEN` here unless you exported that variable: `remote login` does not set it, and with it empty `claude mcp add` still succeeds, registers `Authorization: Bearer` with no token, and `claude mcp get` then reports `✘ Failed to connect ... (HTTP 401)`. A user-scope registration serves every repository on the machine; each tool call names its workspace. To pin one repository to its workspace instead, use a project `.mcp.json` ([Clients](clients.md#claude-code)).
 
 Restart Claude Code after any change. The tools appear as `mcp__deciduous__add_node` and so on.
 
@@ -234,6 +241,6 @@ With the `graph.json` line gone from `.gitignore` (step 4), CLI writes no longer
 
 `init` also wrote `.github/workflows/cleanup-decision-graphs.yml`, which deletes the graph images `deciduous dot --auto` puts in PRs; commit it only if you use that. Stage files by name, never `git add -A`.
 
-A teammate who clones the repository runs steps 1, 2 and 5, then `deciduous remote pull` to fill their local copy. The committed `[remote]` already names the server and workspace, and the committed integration files mean they do not need `init`.
+A teammate who clones the repository runs steps 1 and 2, then `deciduous remote setup --url https://deciduous.example.com`: it keeps the workspace in the committed `[remote]` and registers Claude Code if nothing called `deciduous` is registered yet. (Skipping it leaves Claude Code with no registration at all, and `claude mcp get deciduous` prints `No MCP server named "deciduous"`.) Then step 5, then `deciduous remote pull` to fill their local copy. The committed integration files mean they do not need `init`.
 
 Next: [the workflow](workflow.md) for how a piece of work becomes goal, options, decision, actions and outcomes, and [teams](teams.md) for several agents on one workspace. When something here does not match what you see, [troubleshooting](troubleshooting.md).

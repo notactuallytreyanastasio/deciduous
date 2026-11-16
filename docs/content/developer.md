@@ -12,12 +12,14 @@ $ cargo build
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.36s
 ```
 
-(an incremental build; a clean one takes minutes). Before committing, the repository's own rules ask for all three:
+(an incremental build; a clean one takes minutes). Before committing, run what CI runs (`.github/workflows/type-check.yml`); the repository's `CLAUDE.md` lists only the last three, and a branch that passes those can still fail CI on formatting or on a clippy warning:
 
 ```bash
+cargo fmt --check
 cargo test
-cargo clippy --all-targets
+cargo clippy --all-targets -- -D warnings
 cargo build --release
+./scripts/validate-types.sh   # needs jq
 ```
 
 Use `./target/debug/deciduous` or `./target/release/deciduous` when checking a change. The `deciduous` on your PATH is whatever you installed, and it will happily answer instead.
@@ -59,21 +61,23 @@ Tests that run `deciduous init` in a temporary directory need `DECIDUOUS_NO_SERV
 cd deciduous_mcp
 export MIX_ENV=test PGHOST=localhost PGUSER=postgres PGPASSWORD=postgres
 export DECIDUOUS_MCP_TOKEN=mix-test-token-not-a-secret-0000000000000000
+mix local.hex --force
+mix local.rebar --force
 mix deps.get
 mix test
 ```
 
-against a `postgres:17-alpine` service. Development (`config/dev.exs`) uses `deciduous_mcp_dev` with the same credentials. Neither was run for this page.
+against a `postgres:17-alpine` service. Without the two `local.*` lines, `mix deps.get` on a fresh Elixir install stops to ask before installing Hex. Development (`config/dev.exs`) uses `deciduous_mcp_dev` with the same credentials. Neither was run for this page.
 
 Things that are easy to get wrong here:
 
 - A new tool lives in `lib/deciduous_mcp/mcp/tools/` and has to be registered with the server to appear in `tools/list`. Check the live list after a rebuild; the CLI's tools are a different list.
 - Every tool's `workspace` argument is merged in by `DeciduousMcp.MCP.Scope`; resolve reads and writes through it so the `X-Deciduous-Workspace` pin is honoured.
 - Unknown arguments are refused by name. A new argument has to be in the schema or clients get `has no argument`.
-- A migration needs `STRUCTURE.sql` regenerated with it (`scripts/dump_structure.sh` against a disposable PostgreSQL 17). CI's `structure` job fails when they disagree.
+- A migration needs `STRUCTURE.sql` regenerated with it (from `deciduous_mcp/`, against a fully migrated, disposable PostgreSQL 17: `DATABASE_URL=ecto://postgres:postgres@localhost/deciduous_schema_check ./scripts/dump_structure.sh`, or `PGHOST` plus `PGDATABASE`; it exits without one of them). CI's `structure` job fails when they disagree.
 - Server dependencies are audited at release: `mix hex.audit` must be clean or the self-contained server build fails.
 
-Release executables are built with Burrito (`Dockerfile.burrito`, `BURRITO_TARGET=darwin_arm64 mix release`, output in `burrito_out/`). To try an unreleased server through the CLI's own installer, point `DECIDUOUS_SERVER_BINARY` at that file (or `DECIDUOUS_SERVER_BUNDLE` at a Docker bundle) before `remote setup --local`. That installs a service on your machine; do it on a machine where that is what you want. `deciduous_mcp/DEPLOY.md` documents every server setting.
+Release executables are built with Burrito, which needs Zig 0.16.0 on PATH. `cd deciduous_mcp && MIX_ENV=prod BURRITO_TARGET=darwin_arm64 mix release deciduous_mcp` writes `burrito_out/deciduous_mcp_darwin_arm64`; without `BURRITO_TARGET`, `mix release` makes an ordinary release and no executable. `docker build -f deciduous_mcp/Dockerfile.burrito deciduous_mcp` builds only the Linux executable for the build machine's architecture. Neither was run for this page. To try an unreleased server through the CLI's own installer, point `DECIDUOUS_SERVER_BINARY` at that file (or `DECIDUOUS_SERVER_BUNDLE` at a Docker bundle) before `remote setup --local`. That installs a service on your machine; do it on a machine where that is what you want. `deciduous_mcp/DEPLOY.md` documents every server setting.
 
 ## The web viewer
 

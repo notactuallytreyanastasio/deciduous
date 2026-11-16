@@ -58,12 +58,13 @@
 <p>Agents never need database credentials. One token opens every workspace on a server; see <a href="../architecture.html">Architecture</a>.</p>
 <h2 id="claude-code">Claude Code</h2>
 <h3 id="user-scope-one-registration-for-every-repository">User scope: one registration for every repository</h3>
-<p>This is what <code>deciduous remote setup</code> and <code>deciduous init</code> create when Claude Code has no <code>deciduous</code> server yet:</p>
+<p>This is the <code>claude mcp add</code> that <code>deciduous remote setup --url https://deciduous.example.com</code> runs (so do the interactive <code>remote setup</code> and a <code>deciduous init</code> that falls into it in a repository with no server yet), when Claude Code has no <code>deciduous</code> server:</p>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">claude mcp add --scope user --transport http deciduous https://deciduous.example.com/mcp \
   --header &quot;Authorization: Bearer $DECIDUOUS_MCP_TOKEN&quot;
 </code></pre>
-</div><p>No workspace header: each tool call carries <code>workspace</code>, and the server's instructions tell the agent to take it from <code>[remote]</code> in <code>.deciduous/config.toml</code>, or else the repository root's directory name. The shell expands <code>$DECIDUOUS_MCP_TOKEN</code> when the command runs, so the token is written into <code>~/.claude.json</code>, outside every repository, in plain text.</p>
-<p>If a <code>deciduous</code> server is already registered, setup leaves it as it is and prints <code>Unchanged Claude Code already has a deciduous MCP server</code>, whatever URL it points at. Check it every time you join a new server:</p>
+</div><p><code>deciduous init</code> in a repository that already has <code>[remote]</code> does not run it: it checks the server, prints <code>Connected ... holds N nodes</code>, and registers nothing. So a teammate who clones a repository with <code>[remote]</code> in it runs <code>deciduous remote setup --url https://deciduous.example.com</code>, or the <code>claude mcp add</code> line above, themselves. <code>remote setup</code> with no flags and no terminal registers nothing either; it exits with an error listing the flags.</p>
+<p>No workspace header: each tool call carries <code>workspace</code>, and the server's instructions tell the agent to take it from <code>[remote]</code> in <code>.deciduous/config.toml</code>, or else the repository root's directory name. The shell expands <code>$DECIDUOUS_MCP_TOKEN</code> when the command runs, so the token is written into <code>~/.claude.json</code>, outside every repository, in plain text.</p>
+<p>If a <code>deciduous</code> server is already registered, setup leaves it as it is and prints <code>Unchanged Claude Code already has a deciduous MCP server</code>. It decides that from the exit status of <code>claude mcp get deciduous</code> alone, which is 0 for a registration in any scope, whatever URL it points at, including a project <code>.mcp.json</code> still waiting for approval and a server that rejects its token. Read the <code>Status:</code> line every time you join a new server:</p>
 <div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">$ claude mcp get deciduous
 deciduous:
   Scope: User config (available in all your projects)
@@ -72,9 +73,25 @@ deciduous:
   URL: https://deciduous.example.com/mcp
   Headers:
     Authorization: Bearer &lt;token&gt;
+
+To remove this server, run: claude mcp remove deciduous -s user
 </code></pre>
-</div><p>If <code>URL</code> is not your <code>[remote] url</code> + <code>/mcp</code>, <code>claude mcp remove deciduous -s user</code> and add it again as above. <code>No MCP server named &quot;deciduous&quot;</code> (exit 1) means nothing is registered; <code>remote setup</code> adds it, or run the <code>add</code> line yourself.</p>
-<p>Because there is one user-scope registration per machine, every repository on the machine talks to the same server through it. A developer whose repositories live on two different servers needs project registrations for at least one of them.</p>
+</div><p>A wrong or stale token looks like this (Claude Code 2.1.319, trimmed), and <code>get</code> still exits 0:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>  Status: ✘ Failed to connect
+  Issue: Server rejected the configured Authorization header (HTTP 401). ... Error detail: {&quot;error&quot;:&quot;unauthorized&quot;}
+</code></pre>
+</div><p><code>get</code> prints the token in clear text; do not paste its output anywhere. If <code>URL</code> is not your <code>[remote] url</code> + <code>/mcp</code>, or the status is <code>✘ Failed to connect</code>, <code>claude mcp remove deciduous -s user</code> and add it again as above. <code>No MCP server named &quot;deciduous&quot;</code> (exit 1) means nothing is registered; <code>remote setup --url</code> adds it, or run the <code>add</code> line yourself.</p>
+<h3 id="without-the-token-in-claudejson">Without the token in <code>~/.claude.json</code></h3>
+<p>Claude Code's <code>headersHelper</code> runs a command when it connects and sends the headers it prints. This one reads the file <code>deciduous remote login</code> writes, so the token stays out of <code>~/.claude.json</code> and a new <code>remote login</code> reaches the agent too:</p>
+<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">claude mcp add-json --scope user deciduous '{&quot;type&quot;:&quot;http&quot;,&quot;url&quot;:&quot;https://deciduous.example.com/mcp&quot;,&quot;headersHelper&quot;:&quot;printf '&quot;'&quot;'{\&quot;Authorization\&quot;:\&quot;Bearer %s\&quot;}'&quot;'&quot;' \&quot;$(cat ~/.config/deciduous/credentials)\&quot;&quot;}'
+</code></pre>
+</div><p>Tested against a server with Claude Code 2.1.319: <code>claude mcp get deciduous</code> shows <code>Status: ✔ Connected</code> and no <code>Headers</code> lines, and <code>~/.claude.json</code> holds the helper command, not the token. If <code>XDG_CONFIG_HOME</code> is set, the credentials file is under it instead of <code>~/.config</code>.</p>
+<h3 id="local-scope-a-second-server-with-no-file-in-the-repository">Local scope: a second server, with no file in the repository</h3>
+<p>Because there is one user-scope registration per machine, every repository on the machine talks to the same server through it. For a repository on a different server, register it in local scope, which is private to you, applies to that one project, and is also stored in <code>~/.claude.json</code>. Run this inside that repository:</p>
+<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">claude mcp add --scope local --transport http deciduous https://other.example.com/mcp \
+  --header &quot;Authorization: Bearer $DECIDUOUS_MCP_TOKEN&quot;
+</code></pre>
+</div><p><code>claude mcp get deciduous</code> there then shows <code>Scope: Local config (private to you in this project)</code>. <code>remote setup</code> in that repository sees it and says <code>Unchanged</code>.</p>
 <h3 id="project-scope-mcpjson-pinned-to-one-workspace">Project scope: <code>.mcp.json</code>, pinned to one workspace</h3>
 <p>A <code>.mcp.json</code> in the repository root is shared with everyone who clones it, holds no secret, and pins the workspace:</p>
 <div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{
@@ -90,33 +107,98 @@ deciduous:
   }
 }
 </code></pre>
-</div><p>Claude Code expands <code>${DECIDUOUS_MCP_TOKEN}</code> from its own environment when it starts, so the variable must be set in the shell that launches <code>claude</code>; it does not read <code>~/.config/deciduous/credentials</code>. Claude Code asks you to approve a project server the first time, and when a project server and a user server share a name, project scope takes precedence. (The expansion, the approval and the precedence are Claude Code behaviour, taken from its documentation; this page did not test them.)</p>
+</div><p>Claude Code expands <code>${DECIDUOUS_MCP_TOKEN}</code> from its own environment, so the variable must be set in the shell that launches <code>claude</code>; it does not read <code>~/.config/deciduous/credentials</code>. If the variable is unset, the server still loads with the literal text <code>${DECIDUOUS_MCP_TOKEN}</code>, and <code>claude mcp list</code> warns <code>Missing environment variables: DECIDUOUS_MCP_TOKEN</code>.</p>
+<p>Until you approve it, the project server is not used. With no other <code>deciduous</code> registration, <code>claude mcp get deciduous</code> shows <code>Status: ⏸ Pending approval (run `claude` to approve)</code>; with a user-scope one, <code>get</code> shows the user registration, and that is the one in use. When the same name is registered in several scopes, Claude Code uses one, in the order local, project, user (<a href="https://code.claude.com/docs/en/mcp">its documentation</a>); checked here, a local registration was the one <code>get</code> showed in a repository that also had <code>.mcp.json</code> and a user server.</p>
 <p><code>X-Deciduous-Workspace</code> wins over the <code>workspace</code> argument of every call. Checked against a server: with the header set to <code>my-app</code>, <code>query_nodes({workspace: &quot;some-other-repo&quot;})</code> returned <code>my-app</code>'s nodes. That protects against an agent guessing the wrong workspace. It is not access control: the same token, without the header, reaches every workspace.</p>
-<p>After either change, restart Claude Code. The tools appear as <code>mcp__deciduous__add_node</code>, <code>mcp__deciduous__query_nodes</code> and so on, 21 of them (<a href="../mcp.html">MCP tools</a>).</p>
-<h2 id="opencode">OpenCode</h2>
-<p><code>deciduous init --opencode</code> writes <code>AGENTS.md</code>, <code>opencode.json</code> (which only adds <code>AGENTS.md</code> to the instructions), <code>.opencode/commands/</code>, <code>.opencode/skills/</code>, an update-check plugin, and a custom tool, <code>.opencode/tools/deciduous.ts</code>. That tool runs the <code>deciduous</code> CLI (<code>deciduous add goal ...</code>, <code>deciduous link ...</code>), and in a project with <code>[remote]</code> every CLI write goes to the server before the command exits. So OpenCode writes to the shared graph with no MCP registration at all, as long as <code>remote setup</code> has been run in the repository.</p>
-<p>To give OpenCode the server's MCP tools as well, register the endpoint as a remote MCP server in its config. OpenCode's documentation (2026-11, its V2 config) shows this shape; it was not run for this page:</p>
+<p>After any of these changes, restart Claude Code. The tools appear as <code>mcp__deciduous__add_node</code>, <code>mcp__deciduous__query_nodes</code> and so on, 21 of them (<a href="../mcp.html">MCP tools</a>).</p>
+<h2 id="clients-deciduous-writes-no-mcp-config-for">Clients deciduous writes no MCP config for</h2>
+<p><code>deciduous init</code> takes <code>--claude</code>, <code>--opencode</code>, <code>--windsurf</code> and <code>--both</code>, and only the Claude Code path registers an MCP server. For every client below, nothing is connected until you add the entry yourself. <code>init</code> ends with <code>Restart your assistant so it connects to the server; it sends the logging instructions</code> for OpenCode and Windsurf too; for them that line does not apply.</p>
+<p>The snippets below follow each client's current documentation (fetched 2026-11-08, cited per section). None of them was run against a server for this page.</p>
+<h3 id="opencode">OpenCode</h3>
+<p><code>deciduous init --opencode</code> writes <code>AGENTS.md</code>, <code>opencode.json</code> (which only adds <code>AGENTS.md</code> to the instructions), <code>.opencode/agents/deciduous.md</code>, <code>.opencode/commands/</code>, <code>.opencode/skills/</code>, an update-check plugin (<code>.opencode/plugins/version-check.ts</code>) and a custom tool, <code>.opencode/tools/deciduous.ts</code>.</p>
+<p>None of these files knows about a server. In a project with <code>[remote]</code>, <code>.opencode/commands/sync.md</code> and <code>recover.md</code> still teach <code>deciduous sync</code> and <code>git add .deciduous/graph.json</code>, and with <code>--opencode</code> alone <code>AGENTS.md</code> says <code>deciduous sync    # Reconcile .deciduous/graph.json with teammates</code>. Ignore <code>/sync</code>'s git steps there; <code>deciduous remote status</code> and <code>deciduous remote pull</code> are the steps. (Under <code>--both</code>, <code>AGENTS.md</code> is converted from the server-aware <code>CLAUDE.md</code>; the <code>.opencode/</code> files are the same either way.)</p>
+<p>The plugin and the custom tool were written for OpenCode 1.x. <a href="https://opencode.ai/v2/migrate-v1.md">OpenCode 2's migration guide</a> says &quot;V1 plugin implementations do not run in V2&quot;, so the update check does nothing there, and <a href="https://opencode.ai/v2/build/plugins/migrate-v1.md">its plugin guide</a> does not say whether a V1 <code>tool()</code> file still loads. In OpenCode 1.x the tool runs the <code>deciduous</code> CLI (<code>deciduous add goal ...</code>, <code>deciduous link ...</code>), and in a project with <code>[remote]</code> every CLI write goes to the server before the command exits. Without the tool, the agent reaches the server the same way by running <code>deciduous</code> in its shell. Either way that needs <code>remote setup</code> run in the repository and at least one commit in it: in a repository with no commit, a CLI write is kept in <code>.deciduous/remote-log.jsonl</code> with <code>Nothing is sent until the first commit</code>, and sent by the next write after that commit or by <code>deciduous remote push</code> (a read such as <code>deciduous nodes</code> sends nothing, whatever the message says).</p>
+<p>To give OpenCode the server's MCP tools as well, register the endpoint as a remote MCP server. This is the <a href="https://docs.opencode.ai/docs/mcp-servers/">V1 shape</a>, servers directly under <code>mcp</code>; <a href="https://opencode.ai/v2/migrate-v1.md">OpenCode 2 still reads it</a> (&quot;The V1 config format remains supported&quot;), so it works in both:</p>
 <div class="code-block"><div class="code-toolbar"><span>jsonc</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-jsonc">{
   &quot;$schema&quot;: &quot;https://opencode.ai/config.json&quot;,
   &quot;instructions&quot;: [&quot;AGENTS.md&quot;],
   &quot;mcp&quot;: {
-    &quot;servers&quot;: {
-      &quot;deciduous&quot;: {
-        &quot;type&quot;: &quot;remote&quot;,
-        &quot;url&quot;: &quot;https://deciduous.example.com/mcp&quot;,
-        &quot;oauth&quot;: false,
-        &quot;headers&quot;: {
-          &quot;Authorization&quot;: &quot;Bearer {env:DECIDUOUS_MCP_TOKEN}&quot;,
-          &quot;X-Deciduous-Workspace&quot;: &quot;my-app&quot;
-        }
+    &quot;deciduous&quot;: {
+      &quot;type&quot;: &quot;remote&quot;,
+      &quot;url&quot;: &quot;https://deciduous.example.com/mcp&quot;,
+      &quot;enabled&quot;: true,
+      &quot;oauth&quot;: false,
+      &quot;headers&quot;: {
+        &quot;Authorization&quot;: &quot;Bearer {env:DECIDUOUS_MCP_TOKEN}&quot;,
+        &quot;X-Deciduous-Workspace&quot;: &quot;my-app&quot;
       }
     }
   }
 }
 </code></pre>
-</div><p>OpenCode's syntax for an environment variable is <code>{env:NAME}</code>, not Claude Code's <code>${NAME}</code>. <code>&quot;oauth&quot;: false</code> stops it trying an OAuth login; deciduous only takes the bearer token.</p>
-<h2 id="windsurf">Windsurf</h2>
-<p><code>deciduous init --windsurf</code> writes <code>.windsurf/rules/deciduous.md</code> (the workflow rules), <code>.windsurf/hooks.json</code> with a version-check hook, and, in 1.1.0, the Claude Code files too (<code>CLAUDE.md</code>, <code>.claude/</code>). It does not register an MCP server. Add <code>https://deciduous.example.com/mcp</code> in Windsurf's MCP settings as an HTTP server with the <code>Authorization: Bearer &lt;token&gt;</code> header, in whatever form your Windsurf version takes; Windsurf's MCP documentation now redirects to Devin's, and this page has not tested a Windsurf configuration. Without MCP, the agent can still write through the CLI from its terminal, which reaches the server.</p>
+</div><p>The <a href="https://opencode.ai/docs/mcp-servers/">native V2 form</a> puts the server under <code>mcp.servers</code> (<code>&quot;mcp&quot;: {&quot;servers&quot;: {&quot;deciduous&quot;: {...}}}</code>, without <code>enabled</code>). OpenCode's docs warn not to point V1 at a file converted to V2-only shapes, so use it only if everyone on the repository runs OpenCode 2.</p>
+<p>OpenCode's syntax for an environment variable is <code>{env:NAME}</code>, not Claude Code's <code>${NAME}</code>. <a href="https://opencode.ai/docs/config/">An unset variable becomes an empty string</a>, so a missing <code>DECIDUOUS_MCP_TOKEN</code> shows up as a 401 from the server, not as a config error. <code>&quot;oauth&quot;: false</code> stops OpenCode trying an OAuth login; deciduous only takes the bearer token. OpenCode also has <code>{file:~/...}</code> substitution, but the credentials file ends in a newline and OpenCode's docs do not say whether <code>{file:}</code> trims it, so it is not suggested here.</p>
+<h3 id="windsurf-devin-local">Windsurf (Devin Local)</h3>
+<p><code>deciduous init --windsurf</code> writes <code>.windsurf/rules/deciduous.md</code> (the workflow rules), <code>.windsurf/hooks.json</code> and <code>.windsurf/hooks/version-check.sh</code> (a version check on <code>pre_write_code</code>), and the Claude Code files (<code>CLAUDE.md</code>, <code>.claude/</code>): <code>--windsurf</code> without <code>--opencode</code> means Claude Code plus Windsurf. <code>deciduous init --opencode --windsurf</code> writes the Windsurf and OpenCode files and no Claude Code files.</p>
+<p>The rules file does not know about a server: in a project with <code>[remote]</code> it still says <code>deciduous sync    # Reconcile .deciduous/graph.json with teammates</code>. Use <code>deciduous remote status</code> and <code>deciduous remote pull</code> instead.</p>
+<p>Windsurf's documentation now redirects to <a href="https://docs.devin.ai/desktop/cascade/mcp">Devin Local's</a>. It still loads <code>.windsurf/rules/*.md</code> (&quot;The legacy <code>.windsurf/rules/*.md</code> ... files are imported by default&quot;), but it documents hooks only in <code>.devin/hooks.v1.json</code>, so whether <code>.windsurf/hooks.json</code> still runs is unconfirmed.</p>
+<p>Devin Local reads MCP servers from <code>~/.config/devin/mcp_config.json</code> (user), <code>.devin/mcp_config.json</code> (project, committed) or <code>.devin/mcp_config.local.json</code> (project, gitignored). Its pages give no remote-server example; <a href="https://docs.devin.ai/cli/extensibility/mcp/configuration.md">the Devin CLI's configuration reference</a> names the keys <code>url</code>, <code>transport</code> and <code>headers</code> under <code>mcpServers</code>, which gives this shape:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;deciduous&quot;: {
+      &quot;url&quot;: &quot;https://deciduous.example.com/mcp&quot;,
+      &quot;transport&quot;: &quot;http&quot;,
+      &quot;headers&quot;: {
+        &quot;Authorization&quot;: &quot;Bearer &lt;token&gt;&quot;,
+        &quot;X-Deciduous-Workspace&quot;: &quot;my-app&quot;
+      }
+    }
+  }
+}
+</code></pre>
+</div><p>It holds the token itself, so put it in the user file or <code>.devin/mcp_config.local.json</code>, never in <code>.devin/mcp_config.json</code>. Devin documents <code>${env:VAR}</code> only for OAuth fields. Older Windsurf builds read <code>~/.codeium/windsurf/mcp_config.json</code> with <code>serverUrl</code> instead of <code>url</code>, according to third-party guides, not Windsurf's own pages. Without MCP, the agent can still write through the CLI from its terminal, which reaches the server.</p>
+<h3 id="cursor">Cursor</h3>
+<p><a href="https://cursor.com/docs/context/mcp">Cursor</a> reads <code>.cursor/mcp.json</code> in the project or <code>~/.cursor/mcp.json</code>, and resolves <code>${env:NAME}</code> in <code>url</code> and <code>headers</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;deciduous&quot;: {
+      &quot;url&quot;: &quot;https://deciduous.example.com/mcp&quot;,
+      &quot;headers&quot;: {
+        &quot;Authorization&quot;: &quot;Bearer ${env:DECIDUOUS_MCP_TOKEN}&quot;,
+        &quot;X-Deciduous-Workspace&quot;: &quot;my-app&quot;
+      }
+    }
+  }
+}
+</code></pre>
+</div><h3 id="codex-cli">Codex CLI</h3>
+<p><a href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli">Codex</a> reads <code>~/.codex/config.toml</code>, or <code>.codex/config.toml</code> in a project it trusts. <code>bearer_token_env_var</code> names the variable it sends as <code>Authorization: Bearer</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>toml</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-toml">[mcp_servers.deciduous]
+url = &quot;https://deciduous.example.com/mcp&quot;
+bearer_token_env_var = &quot;DECIDUOUS_MCP_TOKEN&quot;
+http_headers = { &quot;X-Deciduous-Workspace&quot; = &quot;my-app&quot; }
+</code></pre>
+</div><h3 id="vs-code">VS Code</h3>
+<p><a href="https://code.visualstudio.com/docs/agents/reference/mcp-configuration">VS Code</a> reads <code>.vscode/mcp.json</code>, with servers under <code>servers</code> and a token it prompts for once through an input:</p>
+<div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">{
+  &quot;inputs&quot;: [
+    { &quot;type&quot;: &quot;promptString&quot;, &quot;id&quot;: &quot;deciduous-token&quot;, &quot;description&quot;: &quot;deciduous token&quot;, &quot;password&quot;: true }
+  ],
+  &quot;servers&quot;: {
+    &quot;deciduous&quot;: {
+      &quot;type&quot;: &quot;http&quot;,
+      &quot;url&quot;: &quot;https://deciduous.example.com/mcp&quot;,
+      &quot;headers&quot;: {
+        &quot;Authorization&quot;: &quot;Bearer ${input:deciduous-token}&quot;,
+        &quot;X-Deciduous-Workspace&quot;: &quot;my-app&quot;
+      }
+    }
+  }
+}
+</code></pre>
+</div><p>The same page describes a portable format, <code>mcpServers</code> in a workspace-root <code>.mcp.json</code>, read by Copilot harness sessions, so a repository with the Claude Code <code>.mcp.json</code> above may already show up there.</p>
+<h3 id="claude-desktop-and-claudeai">Claude Desktop and <a href="http://claude.ai">claude.ai</a></h3>
+<p>These take the server as a <a href="https://claude.com/docs/connectors/custom/add-unlisted">custom connector</a> added by URL under Customize &gt; Connectors, not as a local file. The URL must be an HTTPS address reachable from the internet; a server inside a private network needs Anthropic's MCP tunnels. Choose Authentication <strong>No sign-in</strong> and add <code>Authorization</code> with the value <code>Bearer &lt;token&gt;</code> under <strong>Request headers</strong>, which that page says is &quot;in beta and available to a limited set of organizations&quot;. <code>authorization</code> is on the standard list, but a custom name such as <code>X-Deciduous-Workspace</code> needs Anthropic's approval, so name the workspace in the conversation instead.</p>
 <h2 id="any-other-mcp-client">Any other MCP client</h2>
 <p>The server speaks Streamable HTTP. A client must:</p>
 <ul>
@@ -136,7 +218,7 @@ mcp-session-id: session_GOYlpWIM6imVxCMqh0M=
 ...
 </code></pre>
 </div><p>The result's <code>serverInfo</code> is <code>{&quot;name&quot;: &quot;deciduous-mcp&quot;, &quot;version&quot;: &quot;1.1.0&quot;}</code>, and its <code>instructions</code> field carries the logging rules the agent should follow (quoted on <a href="../for-agents.html">For agents</a>). A client that shows the instructions to its model gets the workflow without any project file.</p>
-<p>Codex, Cursor and others take the same URL and headers in their own config format. Their syntax for referencing an environment variable differs per client; keep the token out of any file you commit.</p>
+<p>Any other client takes the same URL and headers in its own config format. Keep the token out of any file you commit.</p>
 <h3 id="not-the-same-thing-deciduous-mcp">Not the same thing: <code>deciduous mcp</code></h3>
 <p><code>deciduous mcp</code> is a different MCP server: it runs on stdin/stdout, on the machine, against the local database, with 34 tools under different names (<code>link_nodes</code>, <code>search_nodes</code>, <code>trace_chain</code>, <code>list_nodes</code>, ...). If your agent's tool list has those names, it is talking to this one, not to <code>&lt;base&gt;/mcp</code>.</p>
 <p>In a project with <code>[remote]</code> its writes do reach the server, the same way CLI writes do (an <code>add_node</code> through it showed up as In sync in <code>remote status</code>). But it sends no <code>instructions</code> on connect, and its tools take local integer ids. Prefer the HTTP endpoint; use <code>deciduous mcp</code> only for a client that cannot speak HTTP, or for the no-server mode on <a href="../local.html">Local</a>.</p>
@@ -152,6 +234,6 @@ mcp-session-id: session_GOYlpWIM6imVxCMqh0M=
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code>parent_id is not a node id: &quot;b1710c03&quot;
 </code></pre>
 </div></article><nav class="page-turn" aria-label="Previous and next guide"><a href="../run-a-server.html"><span>Previous</span>Run a server</a><a href="../for-agents.html"><span>Next</span>For agents</a></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
-<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#claude-code">Claude Code</a></li><li><a href="#opencode">OpenCode</a></li><li><a href="#windsurf">Windsurf</a></li><li><a href="#any-other-mcp-client">Any other MCP client</a></li><li><a href="#making-the-cli-and-the-agent-agree">Making the CLI and the agent agree</a></li></ul></nav></aside></div>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#claude-code">Claude Code</a></li><li><a href="#clients-deciduous-writes-no-mcp-config-for">Clients deciduous writes no MCP config for</a></li><li><a href="#any-other-mcp-client">Any other MCP client</a></li><li><a href="#making-the-cli-and-the-agent-agree">Making the CLI and the agent agree</a></li></ul></nav></aside></div>
 <dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
 </body></html>

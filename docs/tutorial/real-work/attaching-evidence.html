@@ -42,7 +42,7 @@ Themes and tags are not sent to the server, so they are not compared.
 </div><p>The node can be named by local id, <code>change_id</code> prefix, or server UUID (<code>deciduous doc attach de6ccf4c-877b-... file</code>). The bytes are uploaded to the server, which checks them against their SHA-256, and the attachment is recorded on the node. An agent then sees it in <code>show_node</code>:</p>
 <div class="code-block"><div class="code-toolbar"><span>json</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-json">&quot;documents&quot;: [{ &quot;id&quot;: &quot;38c69819-818d-4a4f-906c-1e8c6101b889&quot;, &quot;filename&quot;: &quot;test-output.txt&quot;, &quot;mime_type&quot;: &quot;text/plain&quot; }]
 </code></pre>
-</div><p>and anyone with the token can download it:</p>
+</div><p>and anyone with the token can download it from <code>&lt;url&gt;/documents/&lt;id&gt;</code>, where <code>&lt;url&gt;</code> is <code>url</code> under <code>[remote]</code> in <code>.deciduous/config.toml</code>, including any path such as <code>/deciduous-mcp</code> on a Docker-bundle install:</p>
 <div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ curl -s -i -H &quot;Authorization: Bearer &lt;token&gt;&quot; https://deciduous.example.com/documents/38c69819-818d-4a4f-906c-1e8c6101b889
 HTTP/1.1 200 OK
 cache-control: no-store, private, max-age=0
@@ -51,7 +51,7 @@ content-type: text/plain
 test retry ... ok
 4 passed; 0 failed
 </code></pre>
-</div><p>Without the token: 401. An unknown id: 404. <code>get_graph</code> lists the workspace's documents with size, description and node.</p>
+</div><p>Without the token: 401. An unknown id: 404. Behind the Docker bundle's Caddy, leaving out the path prefix gets an empty <code>200</code> from Caddy, not an error. One file can be at most 64 MiB; the server refuses a larger upload with 413. <code>get_graph</code> lists the workspace's documents with size, description and node.</p>
 <p>Older pages said <code>doc attach</code> was local only and that configuring a remote did not upload. That stopped being true; in 1.1.0 the upload happens before the command exits, like every other CLI write.</p>
 <p>What does not work in 1.1.0:</p>
 <ul>
@@ -59,7 +59,7 @@ test retry ... ok
 <li><strong>A detached document is still served.</strong> <code>deciduous doc detach 3</code> reached the server: the document disappeared from <code>get_graph</code>. But <code>show_node</code> on its node still listed it, and <code>GET /documents/&lt;id&gt;</code> still returned its bytes with 200. If you attached a secret, detaching it does not take it off the server. Whoever runs the server has to delete it from the database: <a href="../operating.html#remove-a-document-that-should-never-have-been-attached">Remove a document that should never have been attached</a>.</li>
 </ul>
 <p>The token grants access to every workspace on the server, documents included (<a href="../architecture.html">Architecture</a>). Do not attach <code>.env</code> files, credential stores, connection strings, or output you have not read.</p>
-<p><code>deciduous doc list</code>, <code>doc show</code>, <code>doc describe</code>, <code>doc open</code> and <code>doc gc</code> operate on this checkout's copy in <code>.deciduous/documents/</code>.</p>
+<p><code>deciduous doc describe</code> reaches the server, like <code>attach</code> and <code>detach</code>: after <code>doc describe 1 &quot;second description&quot;</code>, <code>get_graph</code> showed the new description. <code>doc list</code>, <code>doc show</code>, <code>doc open</code> and <code>doc gc</code> operate on this checkout's copy in <code>.deciduous/documents/</code>.</p>
 <h2 id="deriving-the-graph-from-a-transcript">Deriving the graph from a transcript</h2>
 <p>Claude Code writes every prompt, edit, command and result of a session to a JSONL file under <code>~/.claude/projects/&lt;project&gt;/</code>. <code>deciduous transcript import</code> derives nodes from it: a goal per prompt with the prompt verbatim, actions from edit runs and commits, outcomes from test and build runs with their exit status, and an outcome from the assistant's closing report. Each node carries <code>metadata.evidence.kind</code>: <code>proven</code> (a tool call and its result) or <code>inferred</code> (the assistant said so).</p>
 <p>What it cannot derive is an option or a decision. Whether one approach was chosen over another is a judgement about prose, so those still have to be logged as they happen.</p>
@@ -74,8 +74,8 @@ Would import &lt;session title&gt; (6494dc2d, 2 prompts)
   goals 2 · actions 11 · outcomes 4 proven, 1 inferred · observations 0 · edges 17
   10 files hashed · 3 subagent runs skipped (their transcripts are separate files) · 15 deciduous MCP writes skipped (already in the graph)
 </code></pre>
-</div><p>It takes a session id (looked up in this project's directory) or a path to a <code>.jsonl</code>. Calls the session already made to deciduous's MCP tools are skipped rather than duplicated. Subagents' transcripts are separate files and are not followed. Actions record a hash of each file they touched; <code>--no-hash</code> skips that.</p>
-<p>In a directory Claude Code has never run in, <code>transcript list</code> fails with the raw <code>No such file or directory (os error 2)</code> for the directory it expected; pass <code>--dir</code>, or import by path.</p>
+</div><p>It takes a session id (looked up in this project's directory) or a path to a <code>.jsonl</code>. The import leaves out every deciduous MCP call the session made, reads such as <code>query_nodes</code> included, and every shell command that runs <code>deciduous</code>, on the assumption that they already wrote to the graph. It does not check. Imported into a different workspace or server than the session wrote to, or after a write that failed, those records are simply missing; the count still says &quot;already in the graph&quot;. Subagents' transcripts are separate files and are not followed. Actions record a hash of each file they touched; <code>--no-hash</code> skips that.</p>
+<p>In a directory Claude Code has never run in, 1.1.0's <code>transcript list</code> fails with the raw <code>No such file or directory (os error 2)</code> for the directory it expected (the next release says Claude Code has not run there). Pass <code>--dir</code> to <code>list</code>; <code>import</code> has no <code>--dir</code>, so give it the <code>.jsonl</code> path.</p>
 <p>A real import, into a workspace on the server:</p>
 <div class="code-block"><div class="code-toolbar"><span>console</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-console">$ deciduous transcript import ~/.claude/projects/&lt;project&gt;/305de803-....jsonl
 Imported &lt;session title&gt; (305de803, 1 prompts)

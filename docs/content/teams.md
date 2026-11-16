@@ -12,7 +12,7 @@ url = "https://deciduous.example.com"
 workspace = "my-app"
 ```
 
-`deciduous init` adds a `.gitignore` that keeps `.deciduous/config.toml` tracked and ignores the rest of `.deciduous/` (the local cache, the write log).
+`deciduous init` writes a `.gitignore` that ignores `.deciduous/*` except `config.toml` and `graph.json`. `remote init` on its own writes none: after it, `git status` shows all of `.deciduous/` untracked, cache and write log included. If you joined with `remote init` only, stage `.deciduous/config.toml` by name and ignore the rest of `.deciduous/` yourself.
 
 The server ties a workspace to the root commit of the first repository that connects to it, at `remote init` or `remote setup`, before anything is written. A clone shares that root, so it is let in:
 
@@ -102,7 +102,7 @@ What the fields mean, as observed:
 - The CLI's session is named after the repository's root commit (`cli:` plus its first characters), so every clone and worktree of one repository shows as one CLI session. `link` and `status` writes record `branch: null`.
 - `branches` lists the latest node on each branch, newest first, writers included, whether or not anyone is writing now. `branches` (the argument) sets how many, default 20; `branches_total` says how many exist.
 
-Nothing in it is a lock. Until 1.0.8 the server took a ten-second lease per (workspace, branch) and refused a second writer; it stopped one-shot clients from writing after themselves and could not stop the CLI, so it was removed. Two sessions writing `agent-api` at the same moment both got `"Node created and linked"`. Every write is atomic on its own; `log_decision`, `capture_conversation_turn` and `close_thread` are each one transaction. A server-side `lock_scope` setting is still accepted and has no effect.
+Nothing in it is a lock. Until 1.0.8 the server took a ten-second lease per (workspace, branch) and refused a second writer; it stopped one-shot clients from writing after themselves and could not stop the CLI, so it was removed. Two sessions writing `agent-api` at the same moment both got `"Node created and linked"`. Every write is atomic on its own; `log_decision`, `capture_conversation_turn` and `close_thread` are each one transaction.
 
 Locks never protected source files either. File ownership is the coordinator's job; an action's `files` list is how one agent shows another what it is about to touch, and `query_nodes` with `file` finds what was decided about a path.
 
@@ -149,13 +149,13 @@ $ deciduous board read --unanswered tests
 The rules that make this work:
 
 - `@label` anywhere in the subject or body addresses a message. Labels are whatever the agents call themselves; agree on them up front.
-- A reply (`reply_to` / `--reply-to`) is what takes a question off the asker's unanswered list. A new post that answers it in prose does not.
+- A reply (`reply_to` / `--reply-to`) from the addressed label takes the message off that label's unanswered list. A reply from anyone else, or a new post that answers it in prose, does not. A reply that mentions the asker lands on the asker's unanswered list in turn, as #223 does here.
 - `board post` needs a label: `--as`, or `DECIDUOUS_AGENT_LABEL` in the environment. Without either: `Error: who is posting? Pass --as LABEL (or set DECIDUOUS_AGENT_LABEL).`
 - `--branch` defaults to the current git branch.
 - Message ids are numbered across the whole server, so they jump. `since_id` / `--since` with the last `latest_id` you saw returns only what is new.
 - Messages are not graph nodes. They are not in `get_graph`, not exported, not pulled into the cache.
 
-`deciduous init` installs `.claude/hooks/board-mentions.sh` as a SessionStart and UserPromptSubmit hook. When `DECIDUOUS_AGENT_LABEL` is set for the session, it shows that label's unanswered messages at start and anything new on each prompt; without the variable it does nothing.
+`deciduous init` installs `.claude/hooks/board-mentions.sh` as a SessionStart and UserPromptSubmit hook. When `DECIDUOUS_AGENT_LABEL` is set for the session, it shows that label's unanswered messages at start and anything new on each prompt; without the variable it does nothing. Start each agent from its worktree root with the label set, `DECIDUOUS_AGENT_LABEL=api claude`. The hook looks for `.deciduous/` in the session's current directory and exits silently when it is not there.
 
 ```console
 $ DECIDUOUS_AGENT_LABEL=api .claude/hooks/board-mentions.sh start
@@ -208,7 +208,7 @@ Watching: my-app
 13:37:11  main      outcome     "Watch probe outcome"
 ```
 
-It prints one line per node write from every writer, MCP and CLI alike; the action written in between was filtered out by `--types`. `--branch` (repeatable) narrows it, `--edges` adds edge events, `--json` prints raw frames. It reconnects with backoff when the connection drops and does not replay what it missed; after a gap, query the graph. `--url` prints a WebSocket URL with the token in its query string, so keep it out of screenshots and logs.
+It prints one line per node write from every writer, MCP and CLI alike; the action written in between was filtered out by `--types`. `--branch` (repeatable) narrows it, `--edges` adds edge events, `--json` prints raw frames. When the connection drops it reconnects with a backoff that starts at one second and doubles to thirty, and asks the server for every event after the last one it saw. Up to 5,000 missed events are replayed; past that the server reports a gap, and you should query the graph. A newly started `remote watch` shows only new writes. `--url` prints a WebSocket URL with the token in its query string, and `--claude-code` prints that URL inside a ready-to-paste Monitor tool call for Claude Code, so keep the output of both out of screenshots and logs.
 
 ## What a coordinator still does
 

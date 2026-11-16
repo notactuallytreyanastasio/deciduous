@@ -38,9 +38,9 @@ it sends the logging instructions when it connects.
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: this machine's server is already set up to run as a background service (/Users/you/.config/deciduous/server/.env), and it is kept that way. To replace it, stop it and move that file away first; its database is not touched.
 </code></pre>
 </div><p>and <code>--database-url</code> against the same native server is accepted but ignored, with one line saying so: <code>Using the server already set up in ~/.config/deciduous/server/.env; its database and port stand</code>.</p>
-<p>The <code>Unchanged Claude Code already has a deciduous MCP server</code> line deserves a second look. <code>remote setup</code> registers its server with Claude Code at user scope only when no <code>deciduous</code> server is registered there. If one is, it is left alone even when it points somewhere else, and the &quot;Restart Claude Code&quot; advice below it will not fix that. Check with <code>claude mcp get deciduous</code>; the <a href="clients.html">Claude Code section of Connect your agents</a> has the fix.</p>
+<p>The <code>Unchanged Claude Code already has a deciduous MCP server</code> line deserves a second look. <code>remote setup</code> registers its server with Claude Code at user scope only when <code>claude mcp get deciduous</code>, run in the project, finds no <code>deciduous</code> server in any scope: user, the project's <code>.mcp.json</code> (even one still waiting for approval), or local. If one is found, it is left alone even when it points somewhere else, and the &quot;Restart Claude Code&quot; advice below it will not fix that. Check with <code>claude mcp get deciduous</code>; the <a href="clients.html">Claude Code section of Connect your agents</a> has the fix.</p>
 <h3 id="what-a-fresh-install-does">What a fresh install does</h3>
-<p>The output above was observed on a machine that already had a server. The steps below are what <code>src/server.rs</code>, <code>src/local_server.rs</code> and <code>deciduous_mcp/DEPLOY.md</code> say happens on a machine without one; they were read, not run.</p>
+<p>The output above was observed on a machine that already had a server. The steps below were run on Linux (debian:12 with systemd 252 and PostgreSQL 15 from apt, deciduous 1.1.0) and checked against <code>src/server.rs</code> and <code>src/local_server.rs</code>; the macOS service step was read, not run.</p>
 <table>
 <thead>
 <tr>
@@ -53,7 +53,7 @@ it sends the logging instructions when it connects.
 <tr>
 <td><code>--local</code> (nothing else)</td>
 <td>the release's single-file <code>deciduous-mcp</code> executable, as a user service</td>
-<td>PostgreSQL on <code>localhost:5432</code> as <code>$USER</code>, no password, database <code>deciduous</code></td>
+<td>PostgreSQL on <code>localhost:5432</code> as <code>$USER</code>, no password, database <code>deciduous</code>. Works with Homebrew's PostgreSQL, which trusts localhost. Not with apt's: see below</td>
 </tr>
 <tr>
 <td><code>--database-url &lt;url&gt;</code></td>
@@ -63,7 +63,7 @@ it sends the logging instructions when it connects.
 <tr>
 <td><code>--docker</code></td>
 <td>a container from the release's <code>deciduous-mcp-docker.tar.gz</code></td>
-<td>the PostgreSQL from the first two rows; <code>localhost</code> is rewritten to <code>host.docker.internal</code></td>
+<td>the PostgreSQL from the first two rows; <code>localhost</code> is rewritten to <code>host.docker.internal</code>. On Linux that is the Docker gateway, where PostgreSQL does not listen out of the box: set <code>listen_addresses</code> and add a <code>pg_hba.conf</code> line for <code>172.16.0.0/12</code>, or use <code>--docker-postgres</code></td>
 </tr>
 <tr>
 <td><code>--docker-postgres</code></td>
@@ -78,6 +78,16 @@ it sends the logging instructions when it connects.
 </tbody>
 </table>
 <p>With no flags and a terminal, <code>remote setup</code> asks the same questions as a menu. Without a terminal and without <code>--local</code> or <code>--url</code>, it stops and prints the four scripted forms.</p>
+<p><strong>Debian and Ubuntu: <code>--local</code> alone fails.</strong> The CLI's hint for a machine without PostgreSQL is <code>sudo apt install postgresql</code>, but that package's <code>pg_hba.conf</code> requires a password for TCP to <code>127.0.0.1</code> (<code>host all all 127.0.0.1/32 scram-sha-256</code>), the CLI connects over TCP with no password, and nothing creates a <code>$USER</code> role. Even with the role, the failure is the client's, not PostgreSQL's:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Preparing postgres://you@localhost:5432/deciduous ...
+Error: cannot connect to you@localhost:5432/deciduous: key :password not found in: [ parameters: [], ... username: &quot;you&quot;, database: &quot;deciduous&quot;, port: 5432, sync_connect: true ]
+</code></pre>
+</div><p>Give the role a password and name it in the URL:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">sudo -u postgres createuser --createdb --pwprompt $USER
+deciduous remote setup --database-url postgres://$USER:&lt;password&gt;@localhost:5432/deciduous
+</code></pre>
+</div><p>On debian:12 that created the database and got as far as the service step, which fails in 1.1.0 for the reason below.</p>
+<p>Before any of the steps, setup checks for a service manager. On Linux without a <code>systemctl --user</code> session (a container, WSL without systemd, a login without a user bus) it prints <code>Note systemd user services are not available here ...</code>, offers Docker if there is a terminal, and otherwise still installs the executable, prepares the database and writes <code>.env</code>, then stops with the command to run the server in the foreground and rerun setup.</p>
 <p>The native install, in order:</p>
 <ol>
 <li>
@@ -87,7 +97,7 @@ it sends the logging instructions when it connects.
 <p>Picks the bearer token. If the machine already has one (<code>DECIDUOUS_MCP_TOKEN</code>, else <code>~/.config/deciduous/credentials</code>) of at least 32 bytes, that becomes the server's token; otherwise 64 random hex digits.</p>
 </li>
 <li>
-<p>Runs the executable once with <code>DECIDUOUS_MCP_COMMAND=prepare-database</code>: it connects, creates the database if missing (the role needs <code>CREATEDB</code>), migrates, and exits. A refusal comes back in PostgreSQL's words (<code>role &quot;x&quot; does not exist</code>, <code>password authentication failed</code>). If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> / <code>sudo apt install postgresql</code>.</p>
+<p>Runs the executable once with <code>DECIDUOUS_MCP_COMMAND=prepare-database</code>: it connects, creates the database if missing (the role needs <code>CREATEDB</code>), migrates, and exits. A refusal usually comes back in PostgreSQL's words (<code>role &quot;x&quot; does not exist</code>, <code>password authentication failed</code>). Two exceptions were seen on Linux: no password in the URL against a server that wants one gives the <code>key :password not found</code> keyword list above; and on a machine where another user ran the server executable first, it prints only <code>Error: error: AccessDenied</code>, because the executable unpacks <code>/tmp/libc-musl-&lt;hash&gt;.so</code> owned by that user and a second user cannot replace it (moving the file away fixed it). If nothing listens on 5432 at all, setup finds that out before step 1, before downloading anything, and says so, printing <code>brew install postgresql@17 &amp;&amp; brew services start postgresql@17</code> / <code>sudo apt install postgresql</code>.</p>
 </li>
 <li>
 <p>Writes <code>~/.config/deciduous/server/.env</code>, mode 600. This machine's file has these keys (values other than the secrets shown):</p>
@@ -108,19 +118,24 @@ DECIDUOUS_PREPARE_DATABASE=true
 <p>Installs a user service that starts at login and restarts on exit (<strong>on Linux this fails in 1.1.0</strong>; see below): a LaunchAgent <code>dev.deciduous.server</code> at <code>~/Library/LaunchAgents/dev.deciduous.server.plist</code> on macOS, a systemd user unit <code>deciduous-server.service</code> on Linux. The service definition carries only paths; the token and database URL stay in <code>.env</code>, which the server reads itself through <code>DECIDUOUS_ENV_FILE</code>. Output goes to <code>~/.config/deciduous/server/logs/server.log</code>. On Linux, user services stop at logout unless you run <code>loginctl enable-linger $USER</code>.</p>
 </li>
 <li>
-<p>Waits for <code>/ready</code>, then stores the token in <code>~/.config/deciduous/credentials</code> if it differs from the one there, writes <code>[remote]</code>, and registers with Claude Code as above.</p>
+<p>Waits for <code>/ready</code>, then stores the token in <code>~/.config/deciduous/credentials</code> if it differs from the one there, writes <code>[remote]</code>, and registers with Claude Code as above. Without Claude Code on <code>PATH</code> it prints <code>Note Claude Code not found; register the server in your client: http://127.0.0.1:&lt;port&gt;/mcp</code> instead.</p>
 </li>
 </ol>
-<p><strong>Linux: the service does not start in 1.1.0.</strong> The unit file the CLI writes puts <code>WorkingDirectory</code> in double quotes, and systemd refuses the whole unit (checked with <code>systemd-analyze verify</code> on systemd 252):</p>
+<p><strong>Linux: the service does not start in 1.1.0, or on main.</strong> The unit file the CLI writes puts <code>WorkingDirectory</code> in double quotes, and systemd refuses the whole unit. Fixed by <a href="https://github.com/notactuallytreyanastasio/deciduous/pull/330" rel="noopener">PR #330</a>, not yet merged or released as of 2026-11-08. Setup stops after writing <code>.env</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Error: `systemctl --user restart deciduous-server.service` failed: Failed to restart deciduous-server.service: Unit deciduous-server.service has a bad unit file setting.
+</code></pre>
+</div><p><code>systemd-analyze verify</code> (systemd 252) says why:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">/home/you/.config/systemd/user/deciduous-server.service:8: WorkingDirectory= path is not absolute: &quot;/home/you/.config/deciduous/server&quot;
 deciduous-server.service: Unit configuration has fatal error, unit will not be started.
 Unit deciduous-server.service has a bad unit file setting.
 </code></pre>
-</div><p>Until that is fixed, remove the quotes from that one line, then start the service:</p>
+</div><p>Until that is fixed, remove the quotes from that one line, start the service, and run setup again to finish connecting the project:</p>
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">sed -i 's/^WorkingDirectory=&quot;\(.*\)&quot;$/WorkingDirectory=\1/' ~/.config/systemd/user/deciduous-server.service
 systemctl --user daemon-reload &amp;&amp; systemctl --user restart deciduous-server.service
+deciduous remote setup --local
 </code></pre>
-</div><p>Checked on debian:12: before the edit <code>systemd-analyze verify</code> refuses the unit, after it the unit verifies clean. The quoted <code>ExecStart=</code> and <code>Environment=</code> lines are fine. macOS (launchd) is not affected.</p>
+</div><p>Setup stopped before step 6, so without the last line the project has no <code>[remote]</code>, no stored token and no Claude Code entry. Run again, it finds the running server (<code>Found local server at http://127.0.0.1:&lt;port&gt;</code>), stores the token and writes <code>[remote]</code>. Checked on debian:12: before the edit <code>systemd-analyze verify</code> refuses the unit, after it the unit verifies clean. The quoted <code>ExecStart=</code> and <code>Environment=</code> lines are fine. macOS (launchd) is not affected.</p>
+<p>The edit does not last. Whenever the server is not answering (after a logout without linger, or <code>systemctl --user stop</code>), the next <code>remote setup --local</code> in any project prints <code>Starting the server at ..., which is not answering</code>, rewrites the unit with the quotes, and fails the same way. Repeat the <code>sed</code> and the restart.</p>
 <p>The server binds <code>127.0.0.1</code> because <code>DECIDUOUS_BIND_ADDRESS</code> says so; a server started by hand without that setting listens on every interface. Every start re-runs the migrations (<code>DECIDUOUS_PREPARE_DATABASE=true</code>), and <code>deciduous update</code> in a project that writes to this server replaces an older executable and restarts the service. Docker installs are not upgraded by <code>update</code>.</p>
 <p>A database URL may carry <code>?sslmode=</code>. The CLI maps it onto the server's TLS settings: <code>require</code> → <code>DB_SSL=true DB_SSL_VERIFY=none</code>, <code>verify-ca</code> → <code>ca</code>, <code>verify-full</code> → <code>full</code>. <code>disable</code>, <code>allow</code> and <code>prefer</code> all turn TLS off; <code>prefer</code> does not mean &quot;try TLS&quot; here. Any other query parameter is refused rather than dropped. The meaning of each mode is on <a href="architecture.html#tls-to-postgresql">Architecture</a>.</p>
 <p>The first log lines after a start say what the server is doing. From this machine's <code>server.log</code>:</p>
@@ -132,9 +147,11 @@ systemctl --user daemon-reload &amp;&amp; systemctl --user restart deciduous-ser
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">launchctl bootout gui/$(id -u)/dev.deciduous.server      # macOS
 rm ~/Library/LaunchAgents/dev.deciduous.server.plist
 systemctl --user disable --now deciduous-server.service  # Linux
+rm ~/.config/systemd/user/deciduous-server.service &amp;&amp; systemctl --user daemon-reload
 rm -r ~/.config/deciduous/server
 </code></pre>
-</div><h3 id="one-token-per-machine">One token per machine</h3>
+</div><p><code>DEPLOY.md</code> leaves out the unit file; <code>disable</code> only removes its <code>WantedBy</code> link, and <code>systemctl --user</code> keeps listing the unit until the file is gone. The stored token in <code>~/.config/deciduous/credentials</code> and each project's <code>[remote]</code> also stay behind.</p>
+<h3 id="one-token-per-machine">One token per machine</h3>
 <p>The CLI keeps exactly one stored token, in <code>~/.config/deciduous/credentials</code>, not one per server URL. If you write to a local server for some projects and to a team server for others, only one of them can use the stored token. Two things replace it without asking:</p>
 <ul>
 <li><code>deciduous remote login --url https://deciduous.example.com</code> stores the team token over the local one.</li>
@@ -198,9 +215,26 @@ deciduous sync          # takes in what the pull brought, registers the driver i
 deciduous sync --check  # before pushing: reports what sync would change, writes nothing
 git add .deciduous/graph.json
 </code></pre>
-</div><p><code>sync --help</code> says <code>--check</code> exits 1 when anything is pending. In the one pending case provoked here (the database edited behind the file), it printed <code>Changes would: 1 nodes set back to graph.json's version</code> and exited 0, so read its output rather than relying on the exit status in a hook. Ordinary writes are mirrored into the file as they happen, so in day-to-day use there is rarely anything pending.</p>
+</div><p><code>sync --help</code> says <code>--check</code> exits 1 when anything is pending, and the <code>CLAUDE.md</code> that init writes tells agents the same (<code>deciduous sync --check    # what is pending? (exit 1 if anything)</code>). It exits 0 with changes pending, on 1.1.0 and on main. With the database edited behind the file it printed <code>Changes would: 1 nodes updated from records</code> or <code>Changes would: 1 nodes set back to graph.json's version</code>, depending on how the row was edited, and exited 0 both times. Read its output rather than relying on the exit status in a hook. Ordinary writes are mirrored into the file as they happen, so in day-to-day use there is rarely anything pending.</p>
 <p>Numeric ids are per clone (<code>b</code> numbered &quot;Option from B&quot; 2, <code>a</code> numbered &quot;Option from A&quot; 2). Refer to nodes across machines by change_id prefix: <code>deciduous link 94e4b9f7 01ed84dd</code>.</p>
-<p>What this mode does not have: agents writing over MCP (there is no HTTP server; <code>deciduous mcp</code> over stdio works against the local database, see <a href="mcp.html">MCP tools</a>), <code>check_activity</code>, live <code>remote watch</code>, and anything faster than a git push. <code>graph.json</code> also carries every prompt and description you write, so treat it like any other committed file.</p>
+<p>What this mode does not have: an MCP server over HTTP, <code>check_activity</code>, live <code>remote watch</code>, and anything faster than a git push. Agents can write through <code>deciduous mcp</code>, the stdio server, against the local database, but init registers it with no client (it writes no <code>.mcp.json</code>). For Claude Code, in the project:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ claude mcp add --transport stdio --scope project deciduous -- deciduous mcp
+Added stdio MCP server deciduous with command: deciduous mcp to project config
+$ cat .mcp.json
+{
+  &quot;mcpServers&quot;: {
+    &quot;deciduous&quot;: {
+      &quot;type&quot;: &quot;stdio&quot;,
+      &quot;command&quot;: &quot;deciduous&quot;,
+      &quot;args&quot;: [
+        &quot;mcp&quot;
+      ],
+      &quot;env&quot;: {}
+    }
+  }
+}
+</code></pre>
+</div><p>(Claude Code 2.1.319; the format is on <a href="https://code.claude.com/docs/en/mcp">Claude Code's MCP page</a>.) The stdio tools are not the server's. They take local ids, link with <code>link_nodes</code>, and <code>add_node</code> has no <code>parent_id</code>, although the generated <code>CLAUDE.md</code> says &quot;create and link in one call: <code>add_node</code> with <code>parent_id</code>&quot;. The stdio server answers that with <code>add_node has no argument &quot;parent_id&quot;. Its arguments are: branch, commit, confidence, description, files, node_type, prompt, title</code>. See <a href="mcp.html">MCP tools</a>. <code>graph.json</code> also carries every prompt and description you write, so treat it like any other committed file.</p>
 <h3 id="moving-to-a-server-later">Moving to a server later</h3>
 <p>Point the project at a server with <code>deciduous remote init https://deciduous.example.com --workspace my-app</code> (or <code>remote setup --url</code>, or <code>--local</code>). The history written before the project had a remote goes up with it. From a clone of the two-clone repository above, pointed at an empty workspace:</p>
 <div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">$ deciduous remote init http://127.0.0.1:4000 --workspace docsref-seed2
@@ -211,6 +245,15 @@ Remote: http://127.0.0.1:4000
   sent 2 local node(s), 1 edge(s) the server lacked
 </code></pre>
 </div><p><code>deciduous remote status</code> then says In sync. If it ever lists rows as &quot;only here&quot; that no op covers, <code>deciduous remote push --seed</code> sends them; it adds what the server lacks and never changes a row the server already has. <a href="operating.html">Operating a server</a> covers the other push flags. Once a project has a <code>[remote]</code>, <code>deciduous sync</code> is no longer the step that shares anything.</p>
+<p><code>graph.json</code> does not go away. Every write is still mirrored into it, the ignore rules still track it, and <code>deciduous sync</code> still syncs it. Commit <code>.deciduous/config.toml</code> so teammates' clones pick up the <code>[remote]</code>. A teammate who wrote nodes before pulling it has rows the server never got and no op to send them; <code>remote push</code> says <code>Nothing to push</code>, and <code>remote status</code> names the fix:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">Only here (1)
+  action b4b791a1 &quot;A wrote before pulling&quot;  (no op covers it: `deciduous remote push --seed`)
+$ deciduous remote push --seed
+Seeded: my-app -&gt; http://127.0.0.1:4000
+  nodes 1 of 1
+  edges 0 of 0
+</code></pre>
+</div><p>Once every clone has the <code>[remote]</code>, the server is the shared copy and committing <code>graph.json</code> only duplicates it. To stop, drop <code>!.deciduous/graph.json</code> from <code>.gitignore</code> and <code>git rm --cached .deciduous/graph.json</code>.</p>
 </article><nav class="page-turn" aria-label="Previous and next guide"><a href="operating.html"><span>Previous</span>Backups, upgrades, tokens</a><a href="troubleshooting.html"><span>Next</span>Troubleshooting</a></nav><footer class="article-footer"><a href="../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
 <aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#a-server-on-this-machine">A server on this machine</a></li><li><a href="#no-server-at-all">No server at all</a></li></ul></nav></aside></div>
 <dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>

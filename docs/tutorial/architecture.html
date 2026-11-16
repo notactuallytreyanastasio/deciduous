@@ -60,8 +60,8 @@
 </tr>
 <tr>
 <td><code>.deciduous/remote-log.jsonl</code></td>
-<td>Each clone, next to the cache, ignored by git</td>
-<td>CLI writes the server has not acknowledged.</td>
+<td>Each clone, next to the cache</td>
+<td>CLI writes the server has not acknowledged. With it: <code>remote-delivered.jsonl</code> and <code>remote-log.lock</code>.</td>
 </tr>
 <tr>
 <td><code>.deciduous/config.toml</code></td>
@@ -75,6 +75,7 @@
 </tr>
 </tbody>
 </table>
+<p>The cache, the log and <code>.deciduous/documents/</code> (local copies of attached files, secrets included) are ignored by git only if <code>deciduous init</code> wrote the <code>.gitignore</code> block (<code>.deciduous/*</code>, with <code>config.toml</code> and <code>graph.json</code> let back in). A clone joined with <code>deciduous remote init &lt;url&gt;</code> alone gets no ignore rules, and <code>git status</code> then lists <code>deciduous.db</code>, <code>remote-log.jsonl</code>, <code>remote-delivered.jsonl</code> and <code>remote-log.lock</code> as untracked, ready for a careless <code>git add</code>. Add the block by hand in that case.</p>
 <p>The server's HTTP routes: <code>/health</code> (unauthenticated, process liveness), <code>/ready</code> (database and migrations), <code>/mcp</code>, <code>/ops</code>, <code>/export</code>, <code>/import</code>, <code>/claim</code>, <code>/locate</code>, <code>PUT /blob/:hash</code>, <code>/documents/:id</code>, <code>/messages</code>, <code>/events</code>. Everything except <code>/health</code> and <code>/ready</code> requires the token.</p>
 <h2 id="two-write-paths-one-store">Two write paths, one store</h2>
 <p>An agent's MCP write is a transaction in PostgreSQL. When the tool returns, every other agent can read it.</p>
@@ -103,7 +104,7 @@ Differs: `deciduous remote pull` takes the server's side.
 <p>Workspaces separate graphs; they do not separate people.</p>
 <ul>
 <li><code>X-Deciduous-Workspace</code> routes. A connection that sends it is pinned: tool arguments cannot move its writes elsewhere, and <code>&quot;*&quot;</code> reads are confined to that workspace. But the header is chosen by the client. Any token holder can connect without it, or with another name.</li>
-<li>Workspace claims stop accidents, not adversaries. The first repository to write to a workspace records its root commit ids, and an unrelated repository with the same directory name is refused (<code>belongs to another repository</code>). A client can still name the workspace explicitly to share it, and a client without git sends no roots and is not checked.</li>
+<li>Workspace claims stop accidents, not adversaries. The first repository to write to a workspace records its root commit ids, and an unrelated repository with the same directory name is refused (<code>belongs to another repository</code>). A client can still name the workspace explicitly to share it, and a client without git sends no roots and is not checked. Claims are checked only on the CLI's paths (<code>/claim</code>, <code>/ops</code>, <code>/import</code>, and <code>/export</code> for a client that sends roots). MCP tool calls are never checked against them, so an agent registered with the wrong workspace name writes into that workspace unrefused. Pin each agent's registration with <code>X-Deciduous-Workspace</code>.</li>
 </ul>
 <p>So: one server per group of people who may see each other's graphs. Two teams that must not read each other need two servers (or at least two databases and two tokens), not two workspaces.</p>
 <p>Inside that boundary:</p>

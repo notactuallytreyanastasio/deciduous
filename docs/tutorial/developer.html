@@ -25,10 +25,12 @@
    Compiling deciduous v1.1.0 (/Users/you/code/deciduous)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.36s
 </code></pre>
-</div><p>(an incremental build; a clean one takes minutes). Before committing, the repository's own rules ask for all three:</p>
-<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">cargo test
-cargo clippy --all-targets
+</div><p>(an incremental build; a clean one takes minutes). Before committing, run what CI runs (<code>.github/workflows/type-check.yml</code>); the repository's <code>CLAUDE.md</code> lists only the last three, and a branch that passes those can still fail CI on formatting or on a clippy warning:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">cargo fmt --check
+cargo test
+cargo clippy --all-targets -- -D warnings
 cargo build --release
+./scripts/validate-types.sh   # needs jq
 </code></pre>
 </div><p>Use <code>./target/debug/deciduous</code> or <code>./target/release/deciduous</code> when checking a change. The <code>deciduous</code> on your PATH is whatever you installed, and it will happily answer instead.</p>
 <h3 id="cargo-test-on-a-mac-with-homebrew"><code>cargo test</code> on a Mac with Homebrew</h3>
@@ -52,19 +54,21 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; fin
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">cd deciduous_mcp
 export MIX_ENV=test PGHOST=localhost PGUSER=postgres PGPASSWORD=postgres
 export DECIDUOUS_MCP_TOKEN=mix-test-token-not-a-secret-0000000000000000
+mix local.hex --force
+mix local.rebar --force
 mix deps.get
 mix test
 </code></pre>
-</div><p>against a <code>postgres:17-alpine</code> service. Development (<code>config/dev.exs</code>) uses <code>deciduous_mcp_dev</code> with the same credentials. Neither was run for this page.</p>
+</div><p>against a <code>postgres:17-alpine</code> service. Without the two <code>local.*</code> lines, <code>mix deps.get</code> on a fresh Elixir install stops to ask before installing Hex. Development (<code>config/dev.exs</code>) uses <code>deciduous_mcp_dev</code> with the same credentials. Neither was run for this page.</p>
 <p>Things that are easy to get wrong here:</p>
 <ul>
 <li>A new tool lives in <code>lib/deciduous_mcp/mcp/tools/</code> and has to be registered with the server to appear in <code>tools/list</code>. Check the live list after a rebuild; the CLI's tools are a different list.</li>
 <li>Every tool's <code>workspace</code> argument is merged in by <code>DeciduousMcp.MCP.Scope</code>; resolve reads and writes through it so the <code>X-Deciduous-Workspace</code> pin is honoured.</li>
 <li>Unknown arguments are refused by name. A new argument has to be in the schema or clients get <code>has no argument</code>.</li>
-<li>A migration needs <code>STRUCTURE.sql</code> regenerated with it (<code>scripts/dump_structure.sh</code> against a disposable PostgreSQL 17). CI's <code>structure</code> job fails when they disagree.</li>
+<li>A migration needs <code>STRUCTURE.sql</code> regenerated with it (from <code>deciduous_mcp/</code>, against a fully migrated, disposable PostgreSQL 17: <code>DATABASE_URL=ecto://postgres:postgres@localhost/deciduous_schema_check ./scripts/dump_structure.sh</code>, or <code>PGHOST</code> plus <code>PGDATABASE</code>; it exits without one of them). CI's <code>structure</code> job fails when they disagree.</li>
 <li>Server dependencies are audited at release: <code>mix hex.audit</code> must be clean or the self-contained server build fails.</li>
 </ul>
-<p>Release executables are built with Burrito (<code>Dockerfile.burrito</code>, <code>BURRITO_TARGET=darwin_arm64 mix release</code>, output in <code>burrito_out/</code>). To try an unreleased server through the CLI's own installer, point <code>DECIDUOUS_SERVER_BINARY</code> at that file (or <code>DECIDUOUS_SERVER_BUNDLE</code> at a Docker bundle) before <code>remote setup --local</code>. That installs a service on your machine; do it on a machine where that is what you want. <code>deciduous_mcp/DEPLOY.md</code> documents every server setting.</p>
+<p>Release executables are built with Burrito, which needs Zig 0.16.0 on PATH. <code>cd deciduous_mcp &amp;&amp; MIX_ENV=prod BURRITO_TARGET=darwin_arm64 mix release deciduous_mcp</code> writes <code>burrito_out/deciduous_mcp_darwin_arm64</code>; without <code>BURRITO_TARGET</code>, <code>mix release</code> makes an ordinary release and no executable. <code>docker build -f deciduous_mcp/Dockerfile.burrito deciduous_mcp</code> builds only the Linux executable for the build machine's architecture. Neither was run for this page. To try an unreleased server through the CLI's own installer, point <code>DECIDUOUS_SERVER_BINARY</code> at that file (or <code>DECIDUOUS_SERVER_BUNDLE</code> at a Docker bundle) before <code>remote setup --local</code>. That installs a service on your machine; do it on a machine where that is what you want. <code>deciduous_mcp/DEPLOY.md</code> documents every server setting.</p>
 <h2 id="the-web-viewer">The web viewer</h2>
 <p><code>web/</code> is React and TypeScript in one <code>App.tsx</code>, built by Vite into a single HTML file that the CLI embeds. After changing anything under <code>web/src/</code>:</p>
 <div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">cd web &amp;&amp; npm run build &amp;&amp; cd ..

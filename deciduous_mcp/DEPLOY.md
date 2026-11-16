@@ -1,20 +1,26 @@
 # Run a shared Deciduous server
 
 The server needs a PostgreSQL. It keeps graphs and document content there and
-exposes an authenticated HTTP MCP endpoint. Use the PostgreSQL you already have
-on localhost:5432, or any other you can name by URL; if you have none, Docker
-can run one for you. There are two ways to run the server itself:
+exposes an authenticated HTTP MCP endpoint.
 
-- **The native executable**, a single file with Erlang/OTP and Elixir inside,
-  against a PostgreSQL you already have. This is what `deciduous init` and
-  `deciduous remote setup` install on a developer machine by default, as a
-  launchd or systemd user service. It is the recommended path and is
-  described first below.
+A team runs one server: the Docker bundle on a VM, behind an HTTPS proxy,
+which every developer and agent joins with a URL and a token. That is
+[Run a server for your team](../docs/content/run-a-server.md); the Docker
+section below is the same install with more detail. There are two ways to
+run the server itself:
+
 - **Docker with Compose.** Erlang, Elixir, Mix, and PostgreSQL tools run inside
-  the containers, and setup can create the PostgreSQL too. `deciduous remote
-  setup --docker-postgres` runs this path for you; `--docker` runs only the
-  server container, against your database. Before 1.0.11 this was the only
-  way, and existing Docker installs stay as they are.
+  the containers, and setup can create the PostgreSQL too. This is the path
+  for a team server on a VM. On a developer machine, `deciduous remote setup
+  --docker-postgres` runs it for you; `--docker` runs only the server
+  container, against your database.
+- **The native executable**, a single file with Erlang/OTP and Elixir inside,
+  against a PostgreSQL you already have (localhost:5432 or any you can name
+  by URL). This is what `deciduous init` and `deciduous remote setup`
+  install by default on one developer machine, as a launchd or systemd *user* service
+  bound to loopback. This document gives no system unit for a VM. On Linux,
+  the user unit 1.1.0 writes does not start (see step 6 below); the fix is in
+  the next release.
 
 No PostgreSQL on this machine? `brew install postgresql@17 && brew services
 start postgresql@17` on macOS (Postgres.app works too), `sudo apt install
@@ -38,9 +44,10 @@ would do by hand:
    against the release's `checksums.txt`. Install it as
    `~/.config/deciduous/server/bin/deciduous-mcp`, mode 755.
 2. Choose a bearer token of at least 32 bytes (`openssl rand -hex 32`). The CLI
-   reuses the token in `~/.config/deciduous/credentials` if there is one, so a
-   machine never has two; otherwise it draws 64 hex digits from the OS random
-   source.
+   reuses the token this machine already has, `DECIDUOUS_MCP_TOKEN` if set,
+   else `~/.config/deciduous/credentials`, when it is at least 32 bytes long
+   (`machine_token()` in `src/server.rs`); otherwise it generates 64 random
+   hex digits.
 3. Test the database and prepare it. With `DECIDUOUS_MCP_COMMAND=prepare-database`
    the executable connects, creates the database if PostgreSQL says it does
    not exist (the role needs `CREATEDB` for that), runs every pending
@@ -61,8 +68,13 @@ would do by hand:
 
    The default database is `deciduous` on localhost:5432 as the OS user with
    no password: Homebrew and Postgres.app create a superuser named after the
-   OS user and trust local connections, and Debian-style packages
-   authenticate local users by name.
+   OS user and trust local connections. Debian's and Ubuntu's `postgresql`
+   package does not work this way: it creates no role for you, and its
+   `pg_hba.conf` requires a password for TCP to 127.0.0.1, which is how the
+   server connects. There, create a role with a password and pass
+   `--database-url postgres://USER:PASSWORD@localhost:5432/deciduous`
+   ([Without a shared server](../docs/content/local.md#a-server-on-this-machine)
+   shows the error you get otherwise).
 4. Pick a port on 127.0.0.1. The CLI asks, suggesting a free one from the same
    20000-32767 range the Docker setup draws from (see [First install](#first-install)
    for why), and refuses a port that is already bound. Port 0 is refused too:
@@ -149,7 +161,8 @@ would do by hand:
    password and token in the plist would copy them into a second file, so
    the service passes only the path and the server reads the file itself.
    On Linux it is a systemd user unit at
-   `~/.config/systemd/user/deciduous-server.service`:
+   `~/.config/systemd/user/deciduous-server.service`. This is the unit 1.1.0
+   writes, character for character:
 
    ```ini
    [Unit]
@@ -159,7 +172,7 @@ would do by hand:
    [Service]
    Environment="DECIDUOUS_ENV_FILE=/home/you/.config/deciduous/server/.env"
    Environment="DECIDUOUS_MCP_INSTALL_DIR=/home/you/.config/deciduous/server/runtime"
-   WorkingDirectory=/home/you/.config/deciduous/server
+   WorkingDirectory="/home/you/.config/deciduous/server"
    ExecStart="/home/you/.config/deciduous/server/bin/deciduous-mcp"
    Restart=always
    RestartSec=5
@@ -174,6 +187,27 @@ would do by hand:
    deciduous-server.service && systemctl --user restart deciduous-server.service`.
    User services stop at logout unless lingering is on:
    `loginctl enable-linger $USER`.
+
+   **systemd refuses this unit, so a native server that 1.1.0 installs on
+   Linux does not start.** systemd does not accept quotes around
+   `WorkingDirectory`. `systemd-analyze verify` (systemd 252, Debian 12) on a
+   unit with a quoted `WorkingDirectory` prints:
+
+   ```
+   WorkingDirectory= path is not absolute: "/home/you/srv"
+   Unit configuration has fatal error, unit will not be started.
+   ```
+
+   The same unit with the quotes removed verifies clean. The fix, PR #330,
+   is not in 1.1.0 or yet in main; it ships in the next release. Until then,
+   edit the unit to remove the quotes from the `WorkingDirectory` line, run
+   `systemctl --user daemon-reload && systemctl --user restart
+   deciduous-server.service`, then run `deciduous remote setup --local` again:
+   setup stopped at the failed restart, before step 7, so the project has no
+   `[remote]`, no stored token and no Claude Code entry until it is rerun.
+   Only the unit file was checked, with `systemd-analyze`; the workaround was
+   not run in a real Linux login session. The `sed` line is on
+   [Without a shared server](../docs/content/local.md#a-server-on-this-machine).
 7. Wait for `http://127.0.0.1:<port>/ready` to answer 200. It checks the
    database and migrations; the first start unpacks the embedded runtime, so
    allow two minutes. The CLI then stores the token in
@@ -200,6 +234,7 @@ install:
 launchctl bootout gui/$(id -u)/dev.deciduous.server      # macOS
 rm ~/Library/LaunchAgents/dev.deciduous.server.plist
 systemctl --user disable --now deciduous-server.service  # Linux
+rm ~/.config/systemd/user/deciduous-server.service && systemctl --user daemon-reload
 rm -r ~/.config/deciduous/server                          # settings and executable; the database stays
 ```
 
@@ -364,13 +399,25 @@ passed as environment variables on the first setup run. The project name and
 port are saved in that installation's settings file; use the same
 `DECIDUOUS_ENV_FILE` for later runs.
 
+Both installs also build and run the same image tag, `deciduous-mcp:local`
+(`image: ${DECIDUOUS_IMAGE:-deciduous-mcp:local}` in compose.yaml). Rerunning
+setup for one, for example to upgrade it, retags the image the other runs,
+and the other silently picks up that build the next time its container is
+recreated. If the two may run different releases, give each its own tag.
+Setup neither writes `DECIDUOUS_IMAGE` to the settings file nor unsets it, so
+either export it on every setup and Compose run for that install, or add a
+line such as `DECIDUOUS_IMAGE=deciduous-mcp:team-b` to that install's settings
+file, which Compose reads through `--env-file`.
+
 ## Connect your client
 
-`deciduous init` and `deciduous remote setup` do this for you: they store the
-token in `~/.config/deciduous/credentials`, write `[remote] url` to the
-project's `.deciduous/config.toml`, and register the server with Claude Code
-at user scope, which is the by-hand line below. An existing `deciduous`
-registration in Claude Code is left as it is.
+`deciduous remote setup` does this for you (so does `deciduous init` in a
+project with no `[remote]` yet, which falls into it; `init` in a project that
+already has one registers nothing): it stores the token in
+`~/.config/deciduous/credentials`, writes `[remote] url` to the project's
+`.deciduous/config.toml`, and registers the server with Claude Code at user
+scope, which is the by-hand line below. An existing `deciduous` registration
+in Claude Code, in any scope and pointing anywhere, is left as it is.
 
 ```bash
 claude mcp add --scope user --transport http deciduous http://127.0.0.1:<DECIDUOUS_PORT>/mcp \
@@ -548,16 +595,20 @@ example, a host-installed Caddy can proxy a domain:
 
 ```caddy
 deciduous.example.com {
-    reverse_proxy 127.0.0.1:24871 {
-        flush_interval -1
-    }
+    reverse_proxy 127.0.0.1:24871
 }
 ```
 
 If Caddy is another container, put both services on the same Docker network and
 proxy to `server:4000` (4000 is the port inside the container; the host port
-from `.env` does not apply on the Docker network). Leave PostgreSQL unexposed. `flush_interval -1` is a
-precaution: the 1.1.0 server answers MCP with plain JSON and does not stream, but
-`/events` is a WebSocket the proxy must pass through. `/health` checks process
+from `.env` does not apply on the Docker network). The network is
+`<COMPOSE_PROJECT_NAME>_default` (`deciduous_default` by default): `docker
+network connect deciduous_default <caddy-container>`, or declare it under
+`networks:` with `external: true` in Caddy's compose file. Leave PostgreSQL
+unexposed. `flush_interval -1` is not needed: the 1.1.0 server answers MCP
+with plain JSON and does not stream, and Caddy already flushes Server-Sent
+Events and responses of unknown length immediately
+([reverse_proxy docs](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)).
+`/events` is a WebSocket, which Caddy passes through by default. `/health` checks process
 liveness; `/ready` also checks the database and is appropriate for deployment
 readiness.

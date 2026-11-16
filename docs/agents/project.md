@@ -14,8 +14,10 @@ Run these from the repository root and read the results before doing anything el
 deciduous --version                      # deciduous 1.1.0
 git rev-parse --show-toplevel
 cat .deciduous/config.toml 2>/dev/null   # look for a [remote] table
-claude mcp get deciduous                 # Claude Code only; read-only
+claude mcp get deciduous | grep -E 'Status|URL'   # Claude Code only; read-only
 ```
+
+Filter `claude mcp get`: unfiltered, it prints the registration's `Authorization: Bearer` header with the whole token, which would put the token in your context and the session transcript. `claude mcp list` shows the URL and status of every server without headers.
 
 - **`[remote]` with `url` and `workspace` is present:** the repository is connected. Skip to [Verify](#verify-the-connection).
 - **No `.deciduous/`, or no `[remote]`:** it needs setting up. Ask the user first (next section).
@@ -25,7 +27,7 @@ claude mcp get deciduous                 # Claude Code only; read-only
 
 Before any setup command, ask:
 
-1. **Which server?** Its base URL, for example `https://deciduous.example.com`. Do not make one up, do not assume `http://127.0.0.1:4000`, and do not pick `remote setup --local` because it needs no answer. `--local` installs a server and a background service on this machine; that is the user's decision, covered on [Local](content/local.md).
+1. **Which server?** Its base URL, for example `https://deciduous.example.com`. Do not make one up, do not assume `http://127.0.0.1:4000`, and do not pick `remote setup --local` because it needs no answer. `--local` installs a server and a background service on this machine; that is the user's decision, covered on [Local](content/local.md). (On Linux, 1.1.0's systemd unit for `--local` and `--database-url` does not start: systemd rejects its quoted `WorkingDirectory=`. The fix, [#330](https://github.com/notactuallytreyanastasio/deciduous/pull/330), is not yet released.)
 2. **Is the token already on this machine?** It is if `~/.config/deciduous/credentials` exists or `DECIDUOUS_MCP_TOKEN` is set. If not, the user gets it from whoever runs the server and stores it themselves:
    ```sh
    deciduous remote login --url https://deciduous.example.com
@@ -70,15 +72,17 @@ What can go wrong at this step, by message:
 
 ### Claude Code's registration may point elsewhere
 
-`remote setup` registers the server with Claude Code only if no server called `deciduous` is registered. If one is, it prints `Unchanged Claude Code already has a deciduous MCP server` and leaves it alone, even when it points at a different server. Compare the `URL` from `claude mcp get deciduous` with `[remote] url` + `/mcp`. If they differ, your MCP writes and the CLI's go to two different graphs.
+`remote setup` registers the server with Claude Code only if no server called `deciduous` is registered. If one is, it prints `Unchanged Claude Code already has a deciduous MCP server` and leaves it alone, even when it points at a different server. Compare the `URL` from `claude mcp get deciduous | grep -E 'Status|URL'` with `[remote] url` + `/mcp`. If they differ, your MCP writes and the CLI's go to two different graphs.
 
 Do not change the registration yourself; it is the user's machine-wide configuration. Tell them, and give them the fix:
 
 ```sh
 claude mcp remove deciduous -s user
 claude mcp add --scope user --transport http deciduous https://deciduous.example.com/mcp \
-  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
+  --header "Authorization: Bearer $(cat ~/.config/deciduous/credentials)"
 ```
+
+`$(cat ...)` reads the token `remote login` stored. Do not hand them `$DECIDUOUS_MCP_TOKEN` unless they exported it: `remote login` does not set it, and with it empty the registration is `Authorization: Bearer` with no token, which the server answers with 401.
 
 Claude Code loads MCP servers at start. A new or changed registration reaches you only after the user restarts it, so until then you cannot see the tools; say so instead of looking for them.
 
@@ -100,8 +104,8 @@ Report each check to the user as pass or fail, with its output. A setup that wri
    In sync: no writes waiting, and every node, edge and document matches field by field.
    ```
    Exit 0 is In sync, exit 1 is anything else.
-2. **Your MCP connection reaches the same server.** `claude mcp get deciduous` shows `[remote] url` + `/mcp`, `Status: ✔ Connected`.
-3. **Your writes land in this workspace.** Write a node with `add_node` (the goal you are working under as `parent_id`, if any), then run `deciduous remote status`. Your node appears under `Only on the server`:
+2. **Your MCP connection reaches the same server.** `claude mcp get deciduous | grep -E 'Status|URL'` shows `[remote] url` + `/mcp`, `Status: ✔ Connected`.
+3. **Your writes land in this workspace.** Write a node the user's request actually needs, usually the goal for their request with their message verbatim in `prompt`, or an option under it, with `add_node`, then run `deciduous remote status`. Your node appears under `Only on the server`:
    ```
    Only on the server (1)
      option cad0b58d "Token bucket per API token in Redis"
@@ -110,7 +114,7 @@ Report each check to the user as pass or fail, with its output. A setup that wri
    ```
    `deciduous remote pull` brings it into the local copy, and status is In sync again. If your node is not listed, it went to another workspace or another server: `list_workspaces` shows where.
 
-Leave the node; it records that the connection was checked.
+Do not write a probe node such as "connection checked": it is your process, not a project decision, and with no parent it is an orphan `find_orphans` reports. If you wrote one anyway, remove it with `delete_node` once `remote status` has shown it.
 
 ## While you work
 
@@ -125,7 +129,7 @@ The server sends you these rules when you connect. They are the rules; the rest 
 
 **Every write carries `workspace` and `branch`.** The workspace is `workspace` under `[remote]` in `.deciduous/config.toml`; without one, the repository root's directory name, also from a worktree (a worktree under `.claude/worktrees/fix-x` belongs to the repository, not to a workspace called `fix-x`). The branch is the current git branch. If the client sends an `X-Deciduous-Workspace` header, that wins over your argument.
 
-**Create and link in one call.** `add_node` with `parent_id` makes the node and its edge together. `parent_id` is the server's UUID for the parent, as `query_nodes` returns it in `id`; a CLI change_id is refused (`parent_id is not a node id: "b1710c03"`). Never send `add_edge` in the same batch as the `add_node` whose id it needs: the id does not exist yet. To make a retried `add_node` safe, give it a `change_id` of your choosing; sending it again returns the node already made.
+**Create and link in one call.** `add_node` with `parent_id` makes the node and its edge together. `parent_id` is the server's UUID for the parent, as `query_nodes` returns it in `id`; a CLI change_id is refused (`parent_id is not a node id: "b1710c03"`). Never send `add_edge` in the same batch as the `add_node` whose id it needs: the id does not exist yet. To make a retried `add_node` safe, give it a `change_id` (a UUID you generate); sending it again returns the node already made.
 
 **One step, one call.** `capture_conversation_turn` writes a step's goal, observations, decision, action and outcome together, all or nothing; `parent_node_id` puts it under the goal you are working on.
 
