@@ -213,6 +213,7 @@ Open is `pending` or `active`. Everything else is closed.
 deciduous nodes --open    # what is still open (--status <s>, --json)
 deciduous pulse           # open goals, each with its open work
 deciduous audit           # what drifted: records left open, committed actions never closed, orphans
+deciduous why src/db.rs   # the decisions behind a file (or src/db.rs:120-180): what was chosen, what was rejected
 ```
 
 Edge types say what a link means; `leads_to` is the fallback, not the answer to everything:
@@ -546,6 +547,7 @@ src/
 ├── transcript.rs        # deciduous transcript: the graph derived from a Claude Code transcript
 ├── archaeology.rs       # pivot, timeline, supersede
 ├── pulse.rs, narratives.rs
+├── why.rs               # deciduous why: a file's commits -> their nodes -> the decisions above
 ├── board.rs             # The message board (deciduous board)
 ├── mcp/                 # deciduous mcp: the local stdio MCP server (34 tools)
 ├── api.rs               # deciduous serve --api: the multi-graph JSON daemon
@@ -644,6 +646,7 @@ The viewer does not yet show `metadata.evidence` or `file_hashes` on transcript-
 | `deciduous archaeology pivot\|supersede\|timeline` | Revisit a decision that turned out wrong |
 | `deciduous themes`, `deciduous tag` | Themes and tags |
 | `deciduous audit` | Associate commits with nodes |
+| `deciduous why <file>[:lines]` | The decisions behind a file, through the commits that touched it |
 
 ## DOT Export Options
 

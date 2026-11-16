@@ -650,6 +650,16 @@
       "to_change_id": "4e7c17aa-ba8e-45c1-86c8-6e3e44e99774",
       "weight": 1.0
     },
+    "0cc5fc43df29d37905bb": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:41.973254-05:00",
+      "edge_id": "0cc5fc43df29d37905bb",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "possible approach",
+      "to_change_id": "5eca14be-39eb-4918-9f64-81934b098929",
+      "weight": 1.0
+    },
     "0cf483323497da836ae7": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-10T13:54:37.424685-05:00",
@@ -4082,6 +4092,16 @@
       "to_change_id": "089ba452-abb1-470b-b120-fe8246b17124",
       "weight": 1.0
     },
+    "4f7373c42b0301af288a": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:39:02.487604-05:00",
+      "edge_id": "4f7373c42b0301af288a",
+      "edge_type": "leads_to",
+      "from_change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
+      "rationale": "implementation",
+      "to_change_id": "02a723d4-d31f-4e55-b959-d76c5b26eed0",
+      "weight": 1.0
+    },
     "4f8b61fd0531f6f34b2f": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:30:56.082515-05:00",
@@ -5370,6 +5390,16 @@
       "from_change_id": "bfc37ff9-dfc6-4ab3-9f78-b7eb409ee7bf",
       "rationale": "fix for discovered issue",
       "to_change_id": "6812cca9-5644-4ffe-9590-06e114266c6b",
+      "weight": 1.0
+    },
+    "67a154d36f6deb68f740": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:46.645044-05:00",
+      "edge_id": "67a154d36f6deb68f740",
+      "edge_type": "chosen",
+      "from_change_id": "5eca14be-39eb-4918-9f64-81934b098929",
+      "rationale": "362 nodes carry commits; decisions are reached by climbing",
+      "to_change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
       "weight": 1.0
     },
     "67a454b92e295a574136": {
@@ -6908,6 +6938,16 @@
       "to_change_id": "1db1b0a9-1f5d-4805-bbd9-08d8871eb8a9",
       "weight": 1.0
     },
+    "83ba2ba00b9ced32f9db": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:41.858704-05:00",
+      "edge_id": "83ba2ba00b9ced32f9db",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "what the real graph holds",
+      "to_change_id": "8b2c61f1-e714-408b-a961-fabe8d8b4ddb",
+      "weight": 1.0
+    },
     "83df696ede50de6e5a3d": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-19T15:24:06.480534-05:00",
@@ -7055,6 +7095,16 @@
       "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
       "rationale": "Goal drove split-view design",
       "to_change_id": "39b0e2c5-1c92-4d8a-83e0-d873f565b269",
+      "weight": 1.0
+    },
+    "8636a67ec35e554ea826": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:46.587359-05:00",
+      "edge_id": "8636a67ec35e554ea826",
+      "edge_type": "rejected",
+      "from_change_id": "5db990a7-7b8a-4b50-bffa-058f10a8594e",
+      "rationale": "one of 127 decisions names a file",
+      "to_change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
       "weight": 1.0
     },
     "8648b110a1e164b73613": {
@@ -11946,6 +11996,16 @@
       "to_change_id": "085c9b02-c2a9-48ec-9e10-179df2579d92",
       "weight": 1.0
     },
+    "e6320259f6d6c582070e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:39:02.661794-05:00",
+      "edge_id": "e6320259f6d6c582070e",
+      "edge_type": "leads_to",
+      "from_change_id": "02a723d4-d31f-4e55-b959-d76c5b26eed0",
+      "rationale": "result",
+      "to_change_id": "dec51edc-1bdd-4f11-81d1-4f0f1c205509",
+      "weight": 1.0
+    },
     "e6586cd997c8f94493d4": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-05T20:18:19.408356-05:00",
@@ -12023,6 +12083,16 @@
       "from_change_id": "6812cca9-5644-4ffe-9590-06e114266c6b",
       "rationale": "verified working",
       "to_change_id": "b81345f7-58e5-4d5a-b06d-117a84388ac5",
+      "weight": 1.0
+    },
+    "e797742288573ee58406": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T19:31:41.916972-05:00",
+      "edge_id": "e797742288573ee58406",
+      "edge_type": "leads_to",
+      "from_change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "rationale": "possible approach",
+      "to_change_id": "5db990a7-7b8a-4b50-bffa-058f10a8594e",
       "weight": 1.0
     },
     "e7a8b7ffe7014a4876ad": {
@@ -13667,6 +13737,19 @@
       "status": "pending",
       "title": "Roadmap view unified across TUI/Web: Active/Completed toggle, o opens issues, c toggles checkbox, API endpoint for updates",
       "updated_at": "2025-12-14T11:27:00.884013-05:00"
+    },
+    "02a723d4-d31f-4e55-b959-d76c5b26eed0": {
+      "author": "Bobby Grayson",
+      "change_id": "02a723d4-d31f-4e55-b959-d76c5b26eed0",
+      "created_at": "2026-11-14T19:31:46.922779-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 85
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "deciduous why <file>[:lines]: src/why.rs, CLI command, pre-edit hook",
+      "updated_at": "2026-11-14T19:39:02.543568-05:00"
     },
     "02b2da48-f6c1-429b-a48c-f1353e2c1745": {
       "author": "Bobby Grayson",
@@ -21076,6 +21159,19 @@
       "title": "Implementing git-guard Phase 1: Core Rust module",
       "updated_at": "2025-12-18T21:21:16.069262-05:00"
     },
+    "5db990a7-7b8a-4b50-bffa-058f10a8594e": {
+      "author": "Bobby Grayson",
+      "change_id": "5db990a7-7b8a-4b50-bffa-058f10a8594e",
+      "created_at": "2026-11-14T19:29:32.677635-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 40
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "why: match nodes by metadata.files only",
+      "updated_at": "2026-11-14T19:31:46.700364-05:00"
+    },
     "5dc0252a-406f-4fe8-b2eb-38b6746ee777": {
       "author": "Bobby Grayson",
       "change_id": "5dc0252a-406f-4fe8-b2eb-38b6746ee777",
@@ -21184,6 +21280,19 @@
       "status": "pending",
       "title": "Committed Phase 1: removed diff.rs + git_guard/, added 24 regression tests",
       "updated_at": "2026-03-18T07:39:15.384890-04:00"
+    },
+    "5eca14be-39eb-4918-9f64-81934b098929": {
+      "author": "Bobby Grayson",
+      "change_id": "5eca14be-39eb-4918-9f64-81934b098929",
+      "created_at": "2026-11-14T19:29:32.736827-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "why: follow the commits that touched the file to their nodes, then climb to the decision and goal; files and file_hashes as a second source",
+      "updated_at": "2026-11-14T19:31:46.754941-05:00"
     },
     "5f03f1d8-1c44-4280-9957-9ef8b2648480": {
       "author": "Bobby Grayson",
@@ -24702,6 +24811,19 @@
       "status": "pending",
       "title": "Standard keys (pr_body, issue_body, notes) provide consistent naming across projects",
       "updated_at": "2025-12-18T21:03:58.342556-05:00"
+    },
+    "8b2c61f1-e714-408b-a961-fabe8d8b4ddb": {
+      "author": "Bobby Grayson",
+      "change_id": "8b2c61f1-e714-408b-a961-fabe8d8b4ddb",
+      "created_at": "2026-11-14T19:29:32.616825-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 95
+      },
+      "node_type": "observation",
+      "status": "completed",
+      "title": "Only 166 of 1,491 nodes name files (1 of 127 decisions); 362 carry a commit. Options hang from decisions (decision->option 129 edges) more often than the documented option->decision (39)",
+      "updated_at": "2026-11-14T19:29:32.616825-05:00"
     },
     "8b9ed44a-304a-4455-a206-0e70a93131c0": {
       "author": "Bobby Grayson",
@@ -31141,6 +31263,19 @@
       "title": "Git Guard: Runtime-enforced git safety rules",
       "updated_at": "2025-12-18T12:48:54.756360-05:00"
     },
+    "dec51edc-1bdd-4f11-81d1-4f0f1c205509": {
+      "author": "Bobby Grayson",
+      "change_id": "dec51edc-1bdd-4f11-81d1-4f0f1c205509",
+      "created_at": "2026-11-14T19:39:02.602612-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 95
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "A real Claude Code 2.1.325 session asked to switch a limiter to per-IP made the edit and reported, unprompted, that it reverses decision 2 and why per-IP was rejected; 728 tests pass",
+      "updated_at": "2026-11-14T19:39:02.759467-05:00"
+    },
     "dedc3a0e-e61b-4378-be3c-a43de9ce9a95": {
       "author": "Bobby Grayson",
       "change_id": "dedc3a0e-e61b-4378-be3c-a43de9ce9a95",
@@ -32161,6 +32296,20 @@
       "title": "Releasing deciduous v0.4.0 with editor-specific init flags",
       "updated_at": "2025-12-12T09:22:08.056864-05:00"
     },
+    "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75": {
+      "author": "Bobby Grayson",
+      "change_id": "ea2dcf27-1e9b-4a7c-9c6b-1361eee51e75",
+      "created_at": "2026-11-14T19:28:11.423420-05:00",
+      "metadata": {
+        "branch": "89-a-session-imports-itself",
+        "confidence": 85,
+        "prompt": "1, 4, 2, 5, 7 in that order"
+      },
+      "node_type": "goal",
+      "status": "active",
+      "title": "Make the graph get read: why, a benchmark, derived decisions, viewer, team-server basics",
+      "updated_at": "2026-11-14T19:31:46.865209-05:00"
+    },
     "ea3876a6-5d51-4201-8f91-e2441854c09e": {
       "author": "Bobby Grayson",
       "change_id": "ea3876a6-5d51-4201-8f91-e2441854c09e",
@@ -32936,6 +33085,19 @@
       "status": "pending",
       "title": "Create pre-publish validation script",
       "updated_at": "2025-12-12T00:16:09.180137-05:00"
+    },
+    "f3cfd345-0939-4b99-8210-1ebc0ccb5630": {
+      "author": "Bobby Grayson",
+      "change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
+      "created_at": "2026-11-14T19:31:42.031573-05:00",
+      "metadata": {
+        "branch": "90-a-file-can-be-asked-why",
+        "confidence": 90
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "why joins through commits and climbs, not through metadata.files alone",
+      "updated_at": "2026-11-14T19:31:46.809683-05:00"
     },
     "f3e643b7-e225-43b5-b2fc-2a0d0f8d517d": {
       "author": "Bobby Grayson",

@@ -65,6 +65,7 @@ pub mod serve;
 pub mod server;
 pub mod transcript;
 pub mod watch;
+pub mod why;
 
 pub use config::Config;
 pub use db::{
