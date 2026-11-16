@@ -40,6 +40,16 @@
       "to_change_id": "1fbbe75a-c5eb-41aa-9e10-c6779ef4e98b",
       "weight": 1.0
     },
+    "0129d3c786d7f597166e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.153864-05:00",
+      "edge_id": "0129d3c786d7f597166e",
+      "edge_type": "chosen",
+      "from_change_id": "6f18a692-6cac-4fd8-9807-054e89d15f9c",
+      "rationale": "the import is the backstop",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
+      "weight": 1.0
+    },
     "01663d3958b7a492fa00": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-18T18:37:07.961958-05:00",
@@ -1408,6 +1418,16 @@
       "to_change_id": "40a5e3ae-4c6f-49d9-aba4-91d69ea3a545",
       "weight": 1.0
     },
+    "1ab204d22eed5ac50145": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.748067-05:00",
+      "edge_id": "1ab204d22eed5ac50145",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "4d909db3-d02c-4ae5-8b7c-3babb900b28a",
+      "weight": 1.0
+    },
     "1ac3ef707044e3d491a9": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-12T22:44:18.843729-05:00",
@@ -1576,6 +1596,16 @@
       "from_change_id": "8073c66c-f192-49bb-af44-77b843e6b8ba",
       "rationale": "implementation",
       "to_change_id": "18619e93-ba37-4f83-bd0a-932116c31519",
+      "weight": 1.0
+    },
+    "1e281eebda56bd6b9d9e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.384540-05:00",
+      "edge_id": "1e281eebda56bd6b9d9e",
+      "edge_type": "leads_to",
+      "from_change_id": "97d398bc-1323-461c-b8c4-7d56559dfb6d",
+      "rationale": "result",
+      "to_change_id": "5d92fee6-7c14-4458-9244-48f82a3d84e7",
       "weight": 1.0
     },
     "1e2b0f412a37e94db8b0": {
@@ -2758,6 +2788,16 @@
       "from_change_id": "a3fa3194-7bb9-4aa0-887b-0de099baa3e2",
       "rationale": "UI polish iteration",
       "to_change_id": "90004c23-aaf9-4eba-984b-3c63cc36bd84",
+      "weight": 1.0
+    },
+    "3632bea406eaa89b4a8e": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.039495-05:00",
+      "edge_id": "3632bea406eaa89b4a8e",
+      "edge_type": "chosen",
+      "from_change_id": "4d909db3-d02c-4ae5-8b7c-3babb900b28a",
+      "rationale": "the transcript proves who logged it",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
       "weight": 1.0
     },
     "366bf7d8c99fb7a0f709": {
@@ -5069,6 +5109,16 @@
       "to_change_id": "a78700fc-d955-47ca-aca1-1a76f5b3b07d",
       "weight": 1.0
     },
+    "5de63ff5da20290af843": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.267906-05:00",
+      "edge_id": "5de63ff5da20290af843",
+      "edge_type": "rejected",
+      "from_change_id": "d990986f-e43a-4a38-89f2-b6f80aaf4319",
+      "rationale": "short prompts can be goals",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
+      "weight": 1.0
+    },
     "5e1bc507a5a4f6029081": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T17:44:31.936436-05:00",
@@ -5586,6 +5636,16 @@
       "from_change_id": "5eca14be-39eb-4918-9f64-81934b098929",
       "rationale": "362 nodes carry commits; decisions are reached by climbing",
       "to_change_id": "f3cfd345-0939-4b99-8210-1ebc0ccb5630",
+      "weight": 1.0
+    },
+    "67a37607769768f9e9b6": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.096359-05:00",
+      "edge_id": "67a37607769768f9e9b6",
+      "edge_type": "rejected",
+      "from_change_id": "2d2566c5-d2a2-4cf8-ac08-a15b93ab3d96",
+      "rationale": "depends on import order",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
       "weight": 1.0
     },
     "67a454b92e295a574136": {
@@ -6625,6 +6685,16 @@
       "to_change_id": "2fbd9119-aa28-4c0b-8b8c-6dd26dde2ae8",
       "weight": 1.0
     },
+    "7af3d75254e9a1caefac": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.325432-05:00",
+      "edge_id": "7af3d75254e9a1caefac",
+      "edge_type": "leads_to",
+      "from_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
+      "rationale": "implementation",
+      "to_change_id": "97d398bc-1323-461c-b8c4-7d56559dfb6d",
+      "weight": 1.0
+    },
     "7b24dc4c502ca17804a4": {
       "author": "Bobby Grayson",
       "created_at": "2026-09-02T18:32:49.415677-04:00",
@@ -6923,6 +6993,16 @@
       "from_change_id": "f557fa61-bedf-4341-8286-85f9416f8b22",
       "rationale": "Phase 1 issue",
       "to_change_id": "c03182f5-d8e8-44f5-b6e4-867a56140726",
+      "weight": 1.0
+    },
+    "7fcbaca5d9265a885838": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:15.211031-05:00",
+      "edge_id": "7fcbaca5d9265a885838",
+      "edge_type": "chosen",
+      "from_change_id": "ed90f2b3-dc96-4bdf-9603-cf7add96500b",
+      "rationale": "precise",
+      "to_change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
       "weight": 1.0
     },
     "7fce1dadd4d625c7b964": {
@@ -8261,6 +8341,16 @@
       "from_change_id": "8040b5e5-68fc-42b2-b103-85d74aaa0968",
       "rationale": "Need to decide between two approaches",
       "to_change_id": "97588e66-ff74-4464-b9ab-1dc6e25b69f5",
+      "weight": 1.0
+    },
+    "972847b85d5115779e92": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.982813-05:00",
+      "edge_id": "972847b85d5115779e92",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "d990986f-e43a-4a38-89f2-b6f80aaf4319",
       "weight": 1.0
     },
     "9747b55ccd63c9a49868": {
@@ -10133,6 +10223,16 @@
       "to_change_id": "ef27a69c-aed8-46e3-aa09-d79ad5f40335",
       "weight": 1.0
     },
+    "bb9e091922d63bac9598": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.926226-05:00",
+      "edge_id": "bb9e091922d63bac9598",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "ed90f2b3-dc96-4bdf-9603-cf7add96500b",
+      "weight": 1.0
+    },
     "bbc354a10eaad5015e6f": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T03:41:55.530054-05:00",
@@ -10651,6 +10751,16 @@
       "from_change_id": "40f49e6f-b94d-4a7c-90f1-6f6f2aaf124c",
       "rationale": "initial_option",
       "to_change_id": "87ea8175-a4a0-4593-85be-ea3b9cf77644",
+      "weight": 1.0
+    },
+    "c4357784e2446b799fdc": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.811038-05:00",
+      "edge_id": "c4357784e2446b799fdc",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "2d2566c5-d2a2-4cf8-ac08-a15b93ab3d96",
       "weight": 1.0
     },
     "c548aa91f9833d1a58fb": {
@@ -12160,6 +12270,16 @@
       "from_change_id": "9d209620-f4ec-405c-aa5a-f0cf379fd44a",
       "rationale": "user chose Ecto",
       "to_change_id": "dd3a88d4-b67f-4298-aeb3-c4583ad96a94",
+      "weight": 1.0
+    },
+    "e3a770dc9f1f01b77ffa": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-15T20:29:14.869171-05:00",
+      "edge_id": "e3a770dc9f1f01b77ffa",
+      "edge_type": "leads_to",
+      "from_change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "rationale": "possible approach",
+      "to_change_id": "6f18a692-6cac-4fd8-9807-054e89d15f9c",
       "weight": 1.0
     },
     "e3b7057740a045cb7a7c": {
@@ -17945,6 +18065,20 @@
       "title": "Commit created: feat(web): add search functionality to DAG viewer",
       "updated_at": "2025-12-15T12:16:42.410647-05:00"
     },
+    "2d2566c5-d2a2-4cf8-ac08-a15b93ab3d96": {
+      "author": "Bobby Grayson",
+      "change_id": "2d2566c5-d2a2-4cf8-ac08-a15b93ab3d96",
+      "created_at": "2026-11-15T20:28:56.566858-05:00",
+      "description": "Order-dependent: whichever session imports first keeps the goal, right or wrong.",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 50
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Record the claiming session on the goal and refuse a second claim",
+      "updated_at": "2026-11-15T20:29:15.791281-05:00"
+    },
     "2d3a535f-3200-4bd2-80c0-16573a51b0e9": {
       "author": "Bobby Grayson",
       "change_id": "2d3a535f-3200-4bd2-80c0-16573a51b0e9",
@@ -20593,6 +20727,19 @@
       "title": "Skills have cleaner names and DAG shows chronological order",
       "updated_at": "2026-01-06T12:26:07.632410-05:00"
     },
+    "4d909db3-d02c-4ae5-8b7c-3babb900b28a": {
+      "author": "Bobby Grayson",
+      "change_id": "4d909db3-d02c-4ae5-8b7c-3babb900b28a",
+      "created_at": "2026-11-15T20:28:56.481112-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Claim a logged goal only when the session's own transcript shows the logging, by printed id then by words",
+      "updated_at": "2026-11-15T20:29:15.441692-05:00"
+    },
     "4da8eb10-b429-4934-834e-3947e0ddb432": {
       "author": "Bobby Grayson",
       "change_id": "4da8eb10-b429-4934-834e-3947e0ddb432",
@@ -20885,6 +21032,19 @@
       "status": "pending",
       "title": "Unused imports warnings in test",
       "updated_at": "2025-12-12T17:29:34.789996-05:00"
+    },
+    "501ca0d7-115d-44ea-9d96-645fb9f3610d": {
+      "author": "Bobby Grayson",
+      "change_id": "501ca0d7-115d-44ea-9d96-645fb9f3610d",
+      "created_at": "2026-11-15T20:28:56.904465-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "Read what the agent logged from the transcript, over matching on words and time or marking claims on the goal; go-aheads by word list, over a length limit",
+      "updated_at": "2026-11-15T20:29:15.613505-05:00"
     },
     "503b74af-6db2-4b42-b646-237330675a2f": {
       "author": "Bobby Grayson",
@@ -21667,6 +21827,19 @@
       "status": "pending",
       "title": "Implementing git-guard Phase 1: Core Rust module",
       "updated_at": "2025-12-18T21:21:16.069262-05:00"
+    },
+    "5d92fee6-7c14-4458-9244-48f82a3d84e7": {
+      "author": "Bobby Grayson",
+      "change_id": "5d92fee6-7c14-4458-9244-48f82a3d84e7",
+      "created_at": "2026-11-15T20:28:57.077896-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 90
+      },
+      "node_type": "outcome",
+      "status": "completed",
+      "title": "This session: 4 prompts attach to logged goals, 3 go-aheads joined, 70 doubles not derived; 745 tests pass, clippy clean",
+      "updated_at": "2026-11-15T20:28:57.077896-05:00"
     },
     "5db990a7-7b8a-4b50-bffa-058f10a8594e": {
       "author": "Bobby Grayson",
@@ -23187,6 +23360,19 @@
       "status": "pending",
       "title": "Windsurf rules have 4 trigger modes: manual, always, model, glob",
       "updated_at": "2025-12-10T13:54:30.802422-05:00"
+    },
+    "6f18a692-6cac-4fd8-9807-054e89d15f9c": {
+      "author": "Bobby Grayson",
+      "change_id": "6f18a692-6cac-4fd8-9807-054e89d15f9c",
+      "created_at": "2026-11-15T20:28:56.650928-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 75
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Per kind, per turn: derive no action where the agent logged one, no outcome where it logged one",
+      "updated_at": "2026-11-15T20:29:15.498882-05:00"
     },
     "6f28cdcf-cb94-45df-9f84-f6f262e5d070": {
       "author": "Bobby Grayson",
@@ -26615,6 +26801,24 @@
       "title": "Updated landing page with story page blurb",
       "updated_at": "2025-12-15T09:50:41.407507-05:00"
     },
+    "97d398bc-1323-461c-b8c4-7d56559dfb6d": {
+      "author": "Bobby Grayson",
+      "change_id": "97d398bc-1323-461c-b8c4-7d56559dfb6d",
+      "created_at": "2026-11-15T20:28:56.993350-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "commit": "28bc16b48f68ef4989e6b786bc6494f05341a39d",
+        "confidence": 90,
+        "files": [
+          "src/transcript.rs",
+          "tests/transcript_import.rs"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Import: logged goals claimed by transcript proof, logged kinds not derived again, go-aheads joined",
+      "updated_at": "2026-11-15T20:29:15.672402-05:00"
+    },
     "97dfddf3-94ea-48db-89c7-cf643fbecc82": {
       "author": "Bobby Grayson",
       "change_id": "97dfddf3-94ea-48db-89c7-cf643fbecc82",
@@ -28356,6 +28560,20 @@
       "status": "pending",
       "title": "Dual build strategy for React viewer",
       "updated_at": "2025-12-09T22:09:58.262524-05:00"
+    },
+    "ac4f8528-732e-4bc1-b0fd-afa35ea65e94": {
+      "author": "Bobby Grayson",
+      "change_id": "ac4f8528-732e-4bc1-b0fd-afa35ea65e94",
+      "created_at": "2026-11-15T20:20:36.893768-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 85,
+        "prompt": "1. that sounds off\n2. lets get rid of that?\n3. ok do it?\n4. ok"
+      },
+      "node_type": "goal",
+      "status": "completed",
+      "title": "Import: no cross-claimed goals, no doubled actions/outcomes, a go-ahead continues the goal before it",
+      "updated_at": "2026-11-15T20:29:15.730628-05:00"
     },
     "ac5139e0-7575-401a-b4c8-faec848e5735": {
       "author": "Bobby Grayson",
@@ -31682,6 +31900,20 @@
       "title": "Rebase: Allow with interactive confirmation",
       "updated_at": "2025-12-18T18:36:45.591474-05:00"
     },
+    "d990986f-e43a-4a38-89f2-b6f80aaf4319": {
+      "author": "Bobby Grayson",
+      "change_id": "d990986f-e43a-4a38-89f2-b6f80aaf4319",
+      "created_at": "2026-11-15T20:28:56.820021-05:00",
+      "description": "'add dark mode' is three words and a goal.",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 30
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Join short prompts by a word-count limit",
+      "updated_at": "2026-11-15T20:29:15.848196-05:00"
+    },
     "d9a6a8c8-fcc7-4c02-a918-5f65a34d946f": {
       "author": "Bobby Grayson",
       "change_id": "d9a6a8c8-fcc7-4c02-a918-5f65a34d946f",
@@ -33423,6 +33655,19 @@
       "status": "pending",
       "title": "Initial beads-style hierarchical list view",
       "updated_at": "2026-02-04T22:10:16.021342-05:00"
+    },
+    "ed90f2b3-dc96-4bdf-9603-cf7add96500b": {
+      "author": "Bobby Grayson",
+      "change_id": "ed90f2b3-dc96-4bdf-9603-cf7add96500b",
+      "created_at": "2026-11-15T20:28:56.735153-05:00",
+      "metadata": {
+        "branch": "98-the-import-defers-to-what-the-agent-logged",
+        "confidence": 75
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "Join a go-ahead to the prompt before it by a closed word list",
+      "updated_at": "2026-11-15T20:29:15.556837-05:00"
     },
     "edb61d96-b974-4ac9-acc1-fbd15f87948d": {
       "author": "Bobby Grayson",
