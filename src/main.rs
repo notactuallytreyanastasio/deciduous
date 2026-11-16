@@ -203,13 +203,25 @@ enum Command {
         #[arg(short, long)]
         branch: Option<String>,
 
-        /// Filter by node type (goal, decision, action, etc.)
-        #[arg(short = 't', long)]
+        /// Filter by node type (goal, decision, option, action, outcome, observation, revisit)
+        #[arg(short = 't', long, alias = "type")]
         node_type: Option<String>,
 
         /// Filter by theme name
         #[arg(long)]
         theme: Option<String>,
+
+        /// Filter by status (pending, active, completed, rejected, superseded, abandoned)
+        #[arg(short, long, conflicts_with = "open")]
+        status: Option<String>,
+
+        /// Only what is still open: pending or active
+        #[arg(long)]
+        open: bool,
+
+        /// Output a JSON array, one object per node, with metadata as an object
+        #[arg(long)]
+        json: bool,
     },
 
     /// List all edges
@@ -377,11 +389,23 @@ enum Command {
         action: EventsAction,
     },
 
-    /// Audit and maintain graph data quality
+    /// Audit the graph: with no action, report what in it contradicts itself
     Audit {
         /// Associate commits with nodes by matching titles to commit messages
         #[arg(long)]
         associate_commits: bool,
+
+        /// Mark every outcome and observation still pending or active as completed
+        #[arg(long)]
+        close_records: bool,
+
+        /// Mark every open action that carries a commit as completed
+        #[arg(long)]
+        close_committed: bool,
+
+        /// Print the report as JSON
+        #[arg(long)]
+        json: bool,
 
         /// Minimum keyword match score (0-100, default 50)
         #[arg(long, default_value = "50")]
@@ -413,6 +437,18 @@ enum Command {
         /// Show only the summary section
         #[arg(long)]
         summary: bool,
+
+        /// Open goals to list, most recently touched first
+        #[arg(long, default_value = "10")]
+        goals: usize,
+
+        /// Open descendants to list under each goal
+        #[arg(long, default_value = "8")]
+        children: usize,
+
+        /// List every open goal, descendant, orphan and gap
+        #[arg(long)]
+        all: bool,
     },
 
     /// Manage evolution narratives (.deciduous/narratives.md)
@@ -2249,7 +2285,33 @@ fn main() {
             branch,
             node_type,
             theme,
+            status,
+            open,
+            json,
         } => {
+            // A filter value nothing can match is a typo, not an empty result.
+            if let Some(t) = &node_type {
+                if !deciduous::db::IMPORTABLE_NODE_TYPES.contains(&t.as_str()) {
+                    eprintln!(
+                        "{} unknown node type '{}'; expected one of: {}",
+                        "Error:".red(),
+                        t,
+                        deciduous::db::NODE_TYPES.join(", ")
+                    );
+                    exit(1);
+                }
+            }
+            if let Some(s) = &status {
+                if !deciduous::db::IMPORTABLE_STATUSES.contains(&s.as_str()) {
+                    eprintln!(
+                        "{} unknown status '{}'; expected one of: {}",
+                        "Error:".red(),
+                        s,
+                        deciduous::db::NODE_STATUSES.join(", ")
+                    );
+                    exit(1);
+                }
+            }
             // Pre-compute theme node IDs if filtering by theme
             let theme_node_ids: Option<std::collections::HashSet<i32>> = theme.as_ref().map(|t| {
                 db.get_nodes_by_theme(t)
@@ -2289,12 +2351,37 @@ fn main() {
                                 Some(ids) => ids.contains(&n.id),
                                 None => true,
                             };
-                            branch_match && type_match && theme_match
+                            let status_match = match &status {
+                                Some(s) => n.status == *s,
+                                None => {
+                                    !open
+                                        || deciduous::db::OPEN_STATUSES.contains(&n.status.as_str())
+                                }
+                            };
+                            branch_match && type_match && theme_match && status_match
                         })
                         .collect();
 
+                    if json {
+                        let rows: Vec<serde_json::Value> =
+                            filtered.iter().map(node_json_row).collect();
+                        match serde_json::to_string_pretty(&rows) {
+                            Ok(j) => println!("{}", j),
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                        return;
+                    }
+
                     if filtered.is_empty() {
-                        if branch.is_some() || node_type.is_some() {
+                        if branch.is_some()
+                            || node_type.is_some()
+                            || theme.is_some()
+                            || status.is_some()
+                            || open
+                        {
                             println!("No nodes found matching filters.");
                         } else {
                             println!(
@@ -5164,13 +5251,13 @@ fn main() {
             min_score,
             dry_run,
             yes,
+            close_records,
+            close_committed,
+            json,
         } => {
             if !associate_commits {
-                eprintln!(
-                    "{} No audit action specified. Use --associate-commits",
-                    "Error:".red()
-                );
-                exit(1);
+                run_audit(&db, close_records, close_committed, json, dry_run, yes);
+                return;
             }
 
             // Get all nodes
@@ -5356,6 +5443,9 @@ fn main() {
             recent,
             json,
             summary,
+            goals,
+            children,
+            all,
         } => match deciduous::pulse::generate_pulse(&db, branch.as_deref(), recent) {
             Ok(report) => {
                 if json {
@@ -5367,7 +5457,16 @@ fn main() {
                         }
                     }
                 } else {
-                    deciduous::pulse::print_pulse(&report, summary);
+                    let limits = if all {
+                        deciduous::pulse::PulseLimits::unlimited()
+                    } else {
+                        deciduous::pulse::PulseLimits {
+                            goals,
+                            children,
+                            ..Default::default()
+                        }
+                    };
+                    deciduous::pulse::print_pulse(&report, summary, limits);
                 }
             }
             Err(e) => {
@@ -6648,6 +6747,209 @@ struct CommitMatch {
 }
 
 /// Get git commits for audit (since Nov 2024)
+/// One node as `nodes --json` prints it: the row's fields, with `metadata`
+/// as an object. `graph` keeps `metadata_json` as the string the database
+/// holds; a consumer of this command should not have to parse twice.
+fn node_json_row(n: &deciduous::db::DecisionNode) -> serde_json::Value {
+    let metadata = n
+        .metadata_json
+        .as_deref()
+        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+        .filter(|v| v.is_object())
+        .unwrap_or_else(|| serde_json::json!({}));
+    serde_json::json!({
+        "id": n.id,
+        "change_id": n.change_id,
+        "node_type": n.node_type,
+        "title": n.title,
+        "description": n.description,
+        "status": n.status,
+        "created_at": n.created_at,
+        "updated_at": n.updated_at,
+        "metadata": metadata,
+    })
+}
+
+/// `deciduous audit` without `--associate-commits`: the report, or one of
+/// the two fixes that need no judgement.
+fn run_audit(
+    db: &Database,
+    close_records: bool,
+    close_committed: bool,
+    json: bool,
+    dry_run: bool,
+    yes: bool,
+) {
+    let report = match deciduous::audit::audit_db(db) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{} {}", "Error:".red(), e);
+            exit(1);
+        }
+    };
+
+    if close_records || close_committed {
+        let mut to_close: Vec<deciduous::audit::Found> = Vec::new();
+        if close_records {
+            to_close.extend(report.open_records.iter().cloned());
+        }
+        if close_committed {
+            to_close.extend(report.open_with_commit.iter().cloned());
+        }
+        if to_close.is_empty() {
+            println!("Nothing to close.");
+            return;
+        }
+        let mut by_type: std::collections::BTreeMap<&str, usize> = Default::default();
+        for f in &to_close {
+            *by_type.entry(f.node_type.as_str()).or_insert(0) += 1;
+        }
+        let what = by_type
+            .iter()
+            .map(|(t, c)| format!("{c} {t}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if dry_run {
+            for f in &to_close {
+                println!(
+                    "  #{:<5} {:<12} {} -> completed  {}",
+                    f.id,
+                    f.node_type,
+                    f.status,
+                    truncate(&f.title, 60)
+                );
+            }
+            println!(
+                "{} would close {}; nothing changed",
+                "Dry run:".cyan(),
+                what
+            );
+            return;
+        }
+        if !yes {
+            use std::io::{IsTerminal, Write};
+            if !std::io::stdin().is_terminal() {
+                eprintln!(
+                    "{} this would set {} to completed; pass --yes to do it, or --dry-run to list them",
+                    "Error:".red(),
+                    what
+                );
+                exit(1);
+            }
+            print!("Set {} to completed? [y/N]: ", what);
+            std::io::stdout().flush().ok();
+            let mut input = String::new();
+            if std::io::stdin().read_line(&mut input).is_err() || input.trim().to_lowercase() != "y"
+            {
+                println!("{}", "Aborted".yellow());
+                return;
+            }
+        }
+        let (closed, failed) = deciduous::audit::close(db, &to_close);
+        for (id, e) in &failed {
+            eprintln!("{} node {}: {}", "Failed:".red(), id, e);
+        }
+        println!(
+            "{} {} set to completed, {} failed",
+            "Done:".green(),
+            closed.len(),
+            failed.len()
+        );
+        if !failed.is_empty() {
+            exit(1);
+        }
+        return;
+    }
+
+    if json {
+        match serde_json::to_string_pretty(&report) {
+            Ok(j) => println!("{}", j),
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                exit(1);
+            }
+        }
+        return;
+    }
+
+    println!(
+        "{} {} nodes, {} edges",
+        "Audit:".bold(),
+        report.total_nodes,
+        report.total_edges
+    );
+    let section = |title: &str, found: &[deciduous::audit::Found], fix: &str| {
+        if found.is_empty() {
+            return;
+        }
+        println!();
+        println!("{} ({})", title.bold(), found.len());
+        for f in found.iter().take(8) {
+            println!(
+                "  #{:<5} {:<12} {:<10} {}",
+                f.id,
+                f.node_type,
+                f.status,
+                truncate(&f.title, 70)
+            );
+        }
+        if found.len() > 8 {
+            println!("  {}", format!("{} more: --json", found.len() - 8).dimmed());
+        }
+        println!("  {}", fix.dimmed());
+    };
+    section(
+        "Status no command accepts",
+        &report.unknown_status,
+        "fix: deciduous status <id> <status>",
+    );
+    section(
+        "Outcomes and observations still open",
+        &report.open_records,
+        "they record what already happened. fix: deciduous audit --close-records",
+    );
+    section(
+        "Open actions that carry a commit",
+        &report.open_with_commit,
+        "the code exists. fix: deciduous audit --close-committed",
+    );
+    section(
+        "Open goals with an outcome and nothing open beneath them",
+        &report.goals_with_nothing_open,
+        "done or dropped? deciduous status <id> completed | abandoned",
+    );
+    section(
+        "Nodes with no edge",
+        &report.orphans,
+        "fix: deciduous link <parent> <id> -r \"why\"",
+    );
+    if report.untyped_choices > 0 {
+        println!();
+        println!(
+            "{} ({})",
+            "Option -> decision edges typed leads_to".bold(),
+            report.untyped_choices
+        );
+        println!(
+            "  {}",
+            "leads_to does not say which option was taken: link -t chosen | rejected".dimmed()
+        );
+    }
+    if !report.edge_types.is_empty() {
+        println!();
+        let parts: Vec<String> = report
+            .edge_types
+            .iter()
+            .map(|(t, c)| format!("{t}({c})"))
+            .collect();
+        println!("Edge types: {}", parts.join(" "));
+    }
+    if report.findings() == 0 {
+        println!();
+        println!("{}", "Nothing found.".green());
+    }
+}
+
 fn get_git_commits_for_audit() -> Vec<AuditCommit> {
     let output = ProcessCommand::new("git")
         .args(["log", "--format=%H|%s", "--since=2024-11-01"])

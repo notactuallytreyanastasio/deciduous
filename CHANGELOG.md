@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+A graph written by following the shipped instructions could not say what was open: on this repository's own, 1,462 of 1,477 nodes were `pending`, 499 of them outcomes and observations, and `pulse` printed 1,991 lines under "Active Goals". Reported against 0.16.0 in #208; still true in 1.1.0.
+
+### Changed
+- **An outcome or an observation is born `completed`.** They record what already happened. Everything else is still born `pending`. The CLI, the local MCP server and the graph server's `add_node` agree; the server's `log_observation` and `capture_conversation_turn` wrote observations as `active`, which never closed either. A status given explicitly still wins.
+- **`pulse` lists open work.** "Open Goals" are goals that are `pending` or `active`, most recently touched first, each with its open descendants and a count of the closed ones. Ten goals and eight descendants each by default (`--goals`, `--children`, `--all`); orphans and coverage gaps are capped at fifteen and limited to open nodes. `--json` is never cut and gains `closed_children` and `last_activity` per goal. On this repository: 142 lines.
+
+### Added
+- **`deciduous nodes --status <s>`, `--open`, `--json`.** `--open` is `pending` or `active`. `--json` prints an array with `metadata` as an object, not the escaped string `graph` carries. `--type` is accepted for `--node-type`, which the documents have always written. A status or type nothing can have is an error, not "No nodes found".
+- **`deciduous audit` with no action reports what drifted**: statuses no command accepts, outcomes and observations still open, open actions that carry a commit, open goals with an outcome and nothing open beneath them, nodes with no edge, option -> decision edges typed `leads_to`. `--close-records` and `--close-committed` apply the two fixes that need no judgement (`--dry-run` lists them; without a terminal, `--yes` is required). `--json` for the report.
+- **The instructions teach closing.** The trigger table every harness gets (Claude Code, OpenCode, Windsurf; local and remote) gains a status row, the six statuses with what each means, and when to use `chosen`, `rejected`, `blocks` and `enables` instead of `leads_to`.
+
+### Not done
+- Nodes already in a graph keep the status they have. `deciduous audit --close-records --close-committed` is the migration, and it is not run for you.
+- Whether an open goal with nothing open beneath it is done or dropped is a judgement; `audit` names the goals and stops.
+- The web viewer still shows status as one line of text, with no filter.
+
 ## [1.1.0] - 2026-10-24
 
 The agent does not have to log anything for a session to be in the graph. Claude Code already wrote the whole session to a JSONL transcript; 1.1.0 reads it.

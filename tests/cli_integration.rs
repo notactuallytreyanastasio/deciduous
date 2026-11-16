@@ -1046,3 +1046,248 @@ fn test_nodes_listing_survives_multibyte_titles_and_descriptions() {
         "long description should end with an ellipsis marker: {out}"
     );
 }
+
+// =============================================================================
+// What is open: default status, `nodes` filters, `pulse`, `audit`
+// =============================================================================
+
+/// goal 1 -> option 2 -> decision 3 -> action 4 -> outcome 5, observation 6
+/// under the goal, each with the status it is born with.
+fn open_work_graph(db_path: &PathBuf) {
+    for (kind, title) in [
+        ("goal", "Ship rate limiting"),
+        ("option", "Token bucket"),
+        ("decision", "Token bucket over a fixed window"),
+        ("action", "Implement the bucket"),
+        ("outcome", "212 passed, 0 failed"),
+        ("observation", "Redis is already a dependency"),
+    ] {
+        let output = run_deciduous(&["add", kind, title], db_path);
+        assert!(output.status.success(), "{}", stderr(&output));
+    }
+    for (from, to) in [("1", "2"), ("2", "3"), ("3", "4"), ("4", "5"), ("1", "6")] {
+        let output = run_deciduous(&["link", from, to, "-r", "next"], db_path);
+        assert!(output.status.success(), "{}", stderr(&output));
+    }
+}
+
+fn nodes_json(args: &[&str], db_path: &PathBuf) -> Vec<serde_json::Value> {
+    let output = run_deciduous(args, db_path);
+    assert!(output.status.success(), "{}", stderr(&output));
+    serde_json::from_str(&stdout(&output)).unwrap_or_else(|e| panic!("{e}: {}", stdout(&output)))
+}
+
+#[test]
+fn an_outcome_and_an_observation_are_born_completed_and_everything_else_pending() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    open_work_graph(&db_path);
+
+    let rows = nodes_json(&["nodes", "--json"], &db_path);
+    let status: Vec<(&str, &str)> = rows
+        .iter()
+        .map(|n| {
+            (
+                n["node_type"].as_str().unwrap(),
+                n["status"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        status,
+        [
+            ("goal", "pending"),
+            ("option", "pending"),
+            ("decision", "pending"),
+            ("action", "pending"),
+            ("outcome", "completed"),
+            ("observation", "completed"),
+        ]
+    );
+}
+
+#[test]
+fn nodes_filters_by_status_and_json_carries_metadata_as_an_object() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    open_work_graph(&db_path);
+    let output = run_deciduous(
+        &["add", "action", "Tune the refill rate", "-c", "70"],
+        &db_path,
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(run_deciduous(&["status", "4", "completed"], &db_path)
+        .status
+        .success());
+    assert!(run_deciduous(&["status", "7", "active"], &db_path)
+        .status
+        .success());
+
+    let ids = |args: &[&str]| -> Vec<i64> {
+        nodes_json(args, &db_path)
+            .iter()
+            .map(|n| n["id"].as_i64().unwrap())
+            .collect()
+    };
+    assert_eq!(
+        ids(&["nodes", "--json", "--status", "completed"]),
+        [4, 5, 6]
+    );
+    assert_eq!(ids(&["nodes", "--json", "--open"]), [1, 2, 3, 7]);
+    assert_eq!(ids(&["nodes", "--json", "--open", "-t", "action"]), [7]);
+    // The documents have always written `--type`; it is the same flag.
+    assert_eq!(ids(&["nodes", "--json", "--type", "goal"]), [1]);
+    assert!(nodes_json(&["nodes", "--json", "--status", "rejected"], &db_path).is_empty());
+
+    let rows = nodes_json(&["nodes", "--json", "--status", "active"], &db_path);
+    assert_eq!(rows[0]["metadata"]["confidence"], 70, "{rows:?}");
+    assert!(rows[0].get("metadata_json").is_none());
+
+    // The table takes the same filter.
+    let out = stdout(&run_deciduous(&["nodes", "--open"], &db_path));
+    assert!(out.contains("Ship rate limiting"), "{out}");
+    assert!(!out.contains("212 passed"), "{out}");
+}
+
+#[test]
+fn nodes_refuses_a_status_or_type_nothing_can_have() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    open_work_graph(&db_path);
+
+    let output = run_deciduous(&["nodes", "--status", "resolved"], &db_path);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("unknown status 'resolved'"),
+        "{}",
+        stderr(&output)
+    );
+
+    let output = run_deciduous(&["nodes", "-t", "gaol"], &db_path);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("unknown node type 'gaol'"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn pulse_lists_open_goals_with_their_open_work_and_counts_the_rest() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    open_work_graph(&db_path);
+    // A second goal, finished.
+    assert!(
+        run_deciduous(&["add", "goal", "Retire the old limiter"], &db_path)
+            .status
+            .success()
+    );
+    assert!(run_deciduous(&["status", "7", "completed"], &db_path)
+        .status
+        .success());
+    assert!(run_deciduous(&["status", "2", "completed"], &db_path)
+        .status
+        .success());
+
+    let out = stdout(&run_deciduous(&["pulse"], &db_path));
+    assert!(out.contains("Open Goals (1)"), "{out}");
+    assert!(out.contains("Ship rate limiting"), "{out}");
+    assert!(
+        !out.contains("#7 [goal] Retire the old limiter"),
+        "a completed goal is not open: {out}"
+    );
+    assert!(out.contains("Implement the bucket"), "{out}");
+    assert!(
+        !out.contains("├── #5"),
+        "a completed outcome is not open work: {out}"
+    );
+    assert!(out.contains("3 closed"), "{out}");
+
+    // --children caps the list and says how many it left out.
+    let out = stdout(&run_deciduous(&["pulse", "--children", "1"], &db_path));
+    assert!(out.contains("1 more open, 3 closed"), "{out}");
+
+    // --json is never cut, and says what it left out of each tree.
+    let output = run_deciduous(&["pulse", "--json", "--children", "1"], &db_path);
+    let report: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    let goals = report["active_goals"].as_array().unwrap();
+    assert_eq!(goals.len(), 1);
+    assert_eq!(goals[0]["children"].as_array().unwrap().len(), 2);
+    assert_eq!(goals[0]["closed_children"], 3);
+}
+
+#[test]
+fn pulse_with_nothing_open_says_so() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    assert!(run_deciduous(&["add", "goal", "Done already"], &db_path)
+        .status
+        .success());
+    assert!(run_deciduous(&["status", "1", "completed"], &db_path)
+        .status
+        .success());
+    let out = stdout(&run_deciduous(&["pulse"], &db_path));
+    assert!(out.contains("Open Goals: none"), "{out}");
+}
+
+#[test]
+fn audit_reports_what_drifted_and_closes_what_needs_no_judgement() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    open_work_graph(&db_path);
+    // The state every graph written before this version is in.
+    for id in ["5", "6"] {
+        assert!(run_deciduous(&["status", id, "pending"], &db_path)
+            .status
+            .success());
+    }
+    // An action nothing points at. (An open action with a commit is the
+    // unit tests' case: `--commit` wants a real commit to resolve.)
+    let output = run_deciduous(&["add", "action", "Add the middleware"], &db_path);
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let output = run_deciduous(&["audit"], &db_path);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let out = stdout(&output);
+    assert!(
+        out.contains("Outcomes and observations still open (2)"),
+        "{out}"
+    );
+    assert!(!out.contains("Open actions that carry a commit"), "{out}");
+    assert!(out.contains("Nodes with no edge (1)"), "{out}");
+    assert!(
+        out.contains("Option -> decision edges typed leads_to (1)"),
+        "{out}"
+    );
+
+    let output = run_deciduous(&["audit", "--json"], &db_path);
+    let report: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    assert_eq!(report["open_records"].as_array().unwrap().len(), 2);
+
+    // Without a terminal and without --yes nothing is written.
+    let output = run_deciduous(&["audit", "--close-records"], &db_path);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("--yes"), "{}", stderr(&output));
+    let output = run_deciduous(&["audit", "--close-records", "--dry-run"], &db_path);
+    assert!(stdout(&output).contains("would close 1 observation, 1 outcome"));
+    assert_eq!(
+        nodes_json(&["nodes", "--json", "--open"], &db_path).len(),
+        7
+    );
+
+    let output = run_deciduous(
+        &["audit", "--close-records", "--close-committed", "--yes"],
+        &db_path,
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).contains("2 set to completed, 0 failed"));
+    let open: Vec<i64> = nodes_json(&["nodes", "--json", "--open"], &db_path)
+        .iter()
+        .map(|n| n["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(open, [1, 2, 3, 4, 7]);
+
+    let out = stdout(&run_deciduous(&["audit", "--close-records"], &db_path));
+    assert!(out.contains("Nothing to close."), "{out}");
+}
