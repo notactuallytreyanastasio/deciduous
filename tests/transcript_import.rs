@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
 
+const SESSION: &str = "0f1e2d3c-0000-4000-8000-000000000001";
+
 fn run(args: &[&str], db_path: &Path) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_deciduous"))
         .args(args)
@@ -34,13 +36,28 @@ fn line(v: Value) -> String {
 /// following `git log`), and reports. The second is a question answered
 /// in prose. A `git commit` run through a heredoc edits nothing.
 fn write_transcript(dir: &Path, project: &Path) -> PathBuf {
-    let p = dir.join("0f1e2d3c-0000-4000-8000-000000000001.jsonl");
+    write_session(dir, project, SESSION, None)
+}
+
+/// The same session under another id, and, with `logs`, the agent logging a
+/// goal for the first prompt: `logs` is what the command printed.
+fn write_session(dir: &Path, project: &Path, id: &str, logs: Option<&str>) -> PathBuf {
+    let p = dir.join(format!("{id}.jsonl"));
     let mut s = String::new();
-    s.push_str(&line(json!({"type":"ai-title","aiTitle":"Add the widget","sessionId":"0f1e2d3c-0000-4000-8000-000000000001"})));
-    s.push_str(&line(json!({"type":"user","uuid":"u1","timestamp":"2026-10-01T10:00:00Z","cwd":project,"gitBranch":"feat/widget","sessionId":"0f1e2d3c-0000-4000-8000-000000000001",
+    s.push_str(&line(
+        json!({"type":"ai-title","aiTitle":"Add the widget","sessionId":id}),
+    ));
+    s.push_str(&line(json!({"type":"user","uuid":"u1","timestamp":"2026-10-01T10:00:00Z","cwd":project,"gitBranch":"feat/widget","sessionId":id,
         "message":{"role":"user","content":"add a widget to the thing\n\nit should be blue"}})));
     s.push_str(&line(json!({"type":"assistant","uuid":"a1","timestamp":"2026-10-01T10:00:05Z","cwd":project,"gitBranch":"feat/widget",
         "message":{"role":"assistant","content":[{"type":"text","text":"Reading the module, then adding the widget."}]}})));
+    if let Some(printed) = logs {
+        s.push_str(&line(json!({"type":"assistant","uuid":"al","timestamp":"2026-10-01T10:00:05Z","cwd":project,"gitBranch":"feat/widget",
+            "message":{"role":"assistant","content":[{"type":"tool_use","id":"tl","name":"Bash","input":{"command":"deciduous add goal \"Blue widget\" -p \"add a widget to the thing\" | tail -1"}}]}})));
+        s.push_str(&line(json!({"type":"user","uuid":"rl","timestamp":"2026-10-01T10:00:05Z",
+            "toolUseResult":{"stdout":printed,"stderr":""},
+            "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tl","content":printed}]}})));
+    }
     s.push_str(&line(json!({"type":"assistant","uuid":"a2","timestamp":"2026-10-01T10:00:06Z","cwd":project,"gitBranch":"feat/widget",
         "message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":project.join("src/lib.rs")}}]}})));
     s.push_str(&line(json!({"type":"user","uuid":"r1","timestamp":"2026-10-01T10:00:07Z",
@@ -297,7 +314,12 @@ fn goals(g: &Value) -> Vec<(i64, String)> {
 #[test]
 fn a_goal_logged_during_the_session_is_the_goal_the_import_hangs_its_work_under() {
     let (_tmp, root, db) = project();
-    let transcript = write_transcript(root.parent().unwrap(), &root);
+    let transcript = write_session(
+        root.parent().unwrap(),
+        &root,
+        SESSION,
+        Some("Created node 1 (type: goal, title: Blue widget) [prompt: 42 chars]"),
+    );
 
     // Two seconds after the prompt was sent, as an agent does it.
     let o = run(
@@ -388,7 +410,9 @@ fn a_goal_logged_during_the_session_is_the_goal_the_import_hangs_its_work_under(
 #[test]
 fn a_goal_with_the_same_prompt_from_another_day_is_left_alone() {
     let (_tmp, root, db) = project();
-    let transcript = write_transcript(root.parent().unwrap(), &root);
+    // The agent logged a goal and the output was cut, so there is no id
+    // to go by: the goal is found by its words and its time.
+    let transcript = write_session(root.parent().unwrap(), &root, SESSION, Some(""));
     for date in ["2026-09-30T09:00:00Z", "2026-10-01T10:01:00Z"] {
         let o = run(
             &[
@@ -426,6 +450,99 @@ fn a_goal_with_the_same_prompt_from_another_day_is_left_alone() {
         .filter(|e| e["from_node_id"] == 1 || e["to_node_id"] == 1)
         .count();
     assert_eq!(from_early, 0);
+}
+
+fn add_goal(db: &Path, title: &str, prompt: &str, at: &str) {
+    let o = run(&["add", "goal", title, "-p", prompt, "--date", at], db);
+    assert!(o.status.success(), "{}", err(&o));
+}
+
+fn import_json(db: &Path, transcript: &Path) -> Value {
+    let o = run(
+        &[
+            "transcript",
+            "import",
+            transcript.to_str().unwrap(),
+            "--json",
+        ],
+        db,
+    );
+    assert!(o.status.success(), "{}", err(&o));
+    serde_json::from_str::<Value>(&out(&o)).unwrap()[0].clone()
+}
+
+fn edges_touching(db: &Path, id: i64) -> usize {
+    graph(db)["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["from_node_id"] == id || e["to_node_id"] == id)
+        .count()
+}
+
+const WORDS: &str = "add a widget to the thing\n\nit should be blue";
+
+/// Two sessions were sent the same words in the same minutes and one of
+/// them logged a goal. The words and the time fit both; only the session
+/// whose transcript shows the logging gets the goal.
+#[test]
+fn a_session_that_logged_no_goal_does_not_take_one_another_session_logged() {
+    let (_tmp, root, db) = project();
+    add_goal(&db, "Blue widget", WORDS, "2026-10-01T10:00:02Z");
+    let silent = write_session(root.parent().unwrap(), &root, SESSION, None);
+    let report = import_json(&db, &silent);
+    assert_eq!(report["attached_to_logged_goals"], 0, "{report:#}");
+    assert_eq!(report["created"]["goals"], 1, "{report:#}");
+    assert_eq!(edges_touching(&db, 1), 0);
+}
+
+/// Both sessions logged a goal with the same words, and the id was cut from
+/// both outputs. The first import takes the earlier goal; the second finds
+/// another session's work under it and takes the other, not the same one.
+#[test]
+fn two_sessions_that_logged_the_same_words_each_keep_their_own_goal() {
+    let (_tmp, root, db) = project();
+    add_goal(&db, "Mine", WORDS, "2026-10-01T10:00:02Z");
+    add_goal(&db, "Theirs", WORDS, "2026-10-01T10:00:03Z");
+    let dir = root.parent().unwrap();
+    let first = write_session(dir, &root, SESSION, Some(""));
+    let second = write_session(dir, &root, "0f1e2d3c-0000-4000-8000-000000000002", Some(""));
+
+    let report = import_json(&db, &first);
+    assert_eq!(report["root_id"], 1, "{report:#}");
+    let under_first = edges_touching(&db, 1);
+    assert!(under_first >= 3);
+
+    let report = import_json(&db, &second);
+    assert_eq!(report["attached_to_logged_goals"], 1, "{report:#}");
+    assert_eq!(report["root_id"], 2, "{report:#}");
+    assert_eq!(edges_touching(&db, 1), under_first);
+    assert_eq!(edges_touching(&db, 2), under_first);
+
+    // With no goal left for it, a third makes its own.
+    let third = write_session(dir, &root, "0f1e2d3c-0000-4000-8000-000000000003", Some(""));
+    let report = import_json(&db, &third);
+    assert_eq!(report["attached_to_logged_goals"], 0, "{report:#}");
+    assert_eq!(report["created"]["goals"], 1, "{report:#}");
+}
+
+/// The agent logged the goal with a prompt it had tidied up. The words no
+/// longer match, and they do not need to: the command printed the id.
+#[test]
+fn a_logged_goal_is_found_by_the_id_its_command_printed() {
+    let (_tmp, root, db) = project();
+    add_goal(&db, "Decoy", WORDS, "2026-10-01T10:00:01Z");
+    add_goal(&db, "Blue widget", "add a widget", "2026-10-01T10:00:02Z");
+    let transcript = write_session(
+        root.parent().unwrap(),
+        &root,
+        SESSION,
+        Some("Created node 2 (type: goal, title: Blue widget) [prompt: 12 chars]"),
+    );
+    let report = import_json(&db, &transcript);
+    assert_eq!(report["attached_to_logged_goals"], 1, "{report:#}");
+    assert_eq!(report["root_id"], 2, "{report:#}");
+    assert_eq!(edges_touching(&db, 1), 0);
 }
 
 fn run_hook(input: &str, db: &Path) -> std::process::Output {
