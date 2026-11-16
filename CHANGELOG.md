@@ -13,10 +13,25 @@ A graph written by following the shipped instructions could not say what was ope
 - **`deciduous audit` with no action reports what drifted**: statuses no command accepts, outcomes and observations still open, open actions that carry a commit, open goals with an outcome and nothing open beneath them, nodes with no edge, option -> decision edges typed `leads_to`. `--close-records` and `--close-committed` apply the two fixes that need no judgement (`--dry-run` lists them; without a terminal, `--yes` is required). `--json` for the report.
 - **The instructions teach closing.** The trigger table every harness gets (Claude Code, OpenCode, Windsurf; local and remote) gains a status row, the six statuses with what each means, and when to use `chosen`, `rejected`, `blocks` and `enables` instead of `leads_to`.
 
+- **`deciduous init --no-server`** (and `remote setup --no-server`, and a fifth choice in the setup menu): the graph lives in `.deciduous/graph.json`, committed with the code, and nothing is installed or run. The choice is written to `.deciduous/config.toml` as `[graph] server = "none"`, so `update` stops asking, `init` and `update` no longer exit 1 without a terminal on such a project, and writes stop printing the "no shared server" note. A project that never chose still gets the note. `DECIDUOUS_NO_SERVER=1` is unchanged and remembers nothing.
+
+### Fixed
+- **A command run outside a project fails.** `deciduous nodes` in a directory with no `.deciduous` above it printed "No nodes found", exited 0 and left a new database behind; `add` succeeded against it. Both now exit 1 naming `deciduous init`. #208 found writes from a subdirectory of the wrong repository this way.
+- **DOT labels break the line.** A node with a confidence was drawn as `Ship it\n(90%)`: the label wrote `\n` and `escape_dot` escaped it again.
+- **`deciduous completion zsh | head -1` no longer panics** on the closed pipe.
+- **`deciduous backup` writes to `.deciduous/backups/`**, which ignores itself, instead of the working directory, where each backup sat in `git status`. `-o` is unchanged.
+- **`themes create` of a name that exists** says so instead of `UNIQUE constraint failed: themes.name`.
+- **`writeup` of nodes that match nothing** is an error, not an empty document with a test plan.
+- **`prompt` on a node that does not exist** says that, without first warning that the prompt looks like a summary.
+- **The crate carries what builds it.** `deciduous_demo` (a 13 MB recording), `decid_demo.cast`, `Formula/`, `deploy/`, `bindings/`, `tester/` and the harness directories are excluded; the package is 920 KB. `homepage` is deciduous.dev, not the GitHub Pages site that still teaches 0.x.
+
 ### Not done
 - Nodes already in a graph keep the status they have. `deciduous audit --close-records --close-committed` is the migration, and it is not run for you.
 - Whether an open goal with nothing open beneath it is done or dropped is a judgement; `audit` names the goals and stops.
 - The web viewer still shows status as one line of text, with no filter.
+- The guides still describe 1.1.0: `init --no-server` is not in the README or docs/ until it is released.
+- `deciduous tag 1 perf` is still `unrecognized subcommand`; it is `tag add 1 perf`.
+- CI still runs `cargo test --lib` and `--test cli_integration` by name in `type-check.yml`; eleven of twenty-one Rust test files run nowhere. Replacing the two steps with `cargo test` needs a push with the `workflow` scope.
 
 ## [1.1.0] - 2026-10-24
 

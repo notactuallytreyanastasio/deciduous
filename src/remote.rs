@@ -3622,6 +3622,47 @@ pub fn read_remote_url(project: &Path) -> Option<String> {
     doc.get("remote")?.get("url")?.as_str().map(str::to_string)
 }
 
+/// True when this project said it wants no graph server: `[graph] server =
+/// "none"` in its config, written by `deciduous init --no-server` or the
+/// setup menu's last choice. Its graph is `.deciduous/graph.json`, committed
+/// with the code. A `[remote]` wins: connecting a server later needs no
+/// second edit.
+pub fn no_server_chosen(project: &Path) -> bool {
+    if read_remote_url(project).is_some() {
+        return false;
+    }
+    std::fs::read_to_string(project.join(".deciduous").join("config.toml"))
+        .ok()
+        .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
+        .and_then(|doc| {
+            doc.get("graph")?
+                .get("server")?
+                .as_str()
+                .map(|s| s == "none")
+        })
+        .unwrap_or(false)
+}
+
+/// Records the choice [`no_server_chosen`] reads, preserving the file's
+/// formatting.
+pub fn write_no_server(project: &Path) -> Result<(), String> {
+    let dir = project.join(".deciduous");
+    let path = dir.join("config.toml");
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut doc = crate::config::parse_with_table(&existing, "graph")
+        .map_err(|e| format!("{} is not valid TOML: {e}", path.display()))?;
+    let graph = doc["graph"].or_insert(toml_edit::table());
+    graph["server"] = toml_edit::value("none");
+    if let Some(table) = graph.as_table_mut() {
+        table.decor_mut().set_prefix(
+            "\n# No graph server: the graph is .deciduous/graph.json, committed with the code.\n\
+             # `deciduous remote setup` connects one later.\n",
+        );
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    std::fs::write(&path, doc.to_string()).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 /// Writes `[remote] url` into a project's config, preserving its formatting.
 ///
 /// Format-preserving for the same reason `Config::save_remote` is: these are

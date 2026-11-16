@@ -1291,3 +1291,191 @@ fn audit_reports_what_drifted_and_closes_what_needs_no_judgement() {
     let out = stdout(&run_deciduous(&["audit", "--close-records"], &db_path));
     assert!(out.contains("Nothing to close."), "{out}");
 }
+
+// =============================================================================
+// The first ten minutes: no project, no server, and the small things
+// =============================================================================
+
+/// Runs in `dir` with nothing in the environment naming a database.
+fn run_in(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(args)
+        .current_dir(dir)
+        .env_remove("DECIDUOUS_DB_PATH")
+        .env_remove("DECIDUOUS_NO_SERVER")
+        .env("HOME", dir)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("Failed to execute deciduous")
+}
+
+#[test]
+fn a_command_outside_a_project_says_so_and_creates_nothing() {
+    let temp_dir = TempDir::new().unwrap();
+    for args in [&["nodes"][..], &["add", "goal", "stray"], &["pulse"]] {
+        let output = run_in(temp_dir.path(), args);
+        assert!(!output.status.success(), "{args:?} succeeded");
+        let err = stderr(&output);
+        assert!(err.contains("no deciduous project here"), "{err}");
+        assert!(err.contains("deciduous init"), "{err}");
+    }
+    assert!(
+        !temp_dir.path().join(".deciduous").exists(),
+        "a database was created by a command that failed"
+    );
+}
+
+#[test]
+fn init_no_server_needs_no_terminal_and_is_remembered() {
+    let temp_dir = TempDir::new().unwrap();
+    let dir = temp_dir.path();
+    assert!(Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(dir)
+        .status()
+        .unwrap()
+        .success());
+
+    let output = run_in(dir, &["init", "--no-server"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("No server:"), "{out}");
+    let config = std::fs::read_to_string(dir.join(".deciduous/config.toml")).unwrap();
+    assert!(config.contains("[graph]\nserver = \"none\""), "{config}");
+
+    // A write does not nag about a server the project chose not to have.
+    let output = run_in(dir, &["add", "goal", "First"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("no shared server"),
+        "{}",
+        stderr(&output)
+    );
+
+    // `update` without a terminal no longer fails for want of an answer.
+    let output = run_in(dir, &["update"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(stdout(&output).contains("this project chose none"));
+}
+
+#[test]
+fn init_without_a_terminal_or_a_choice_names_no_server_among_the_choices() {
+    let temp_dir = TempDir::new().unwrap();
+    let dir = temp_dir.path();
+    assert!(Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(dir)
+        .status()
+        .unwrap()
+        .success());
+    let output = run_in(dir, &["init"]);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("deciduous remote setup --no-server"),
+        "{}",
+        stderr(&output)
+    );
+
+    let output = run_in(dir, &["remote", "setup", "--no-server"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let output = run_in(dir, &["update"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+}
+
+#[test]
+fn a_dot_label_with_a_confidence_breaks_the_line_once() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    assert!(
+        run_deciduous(&["add", "goal", "Ship it", "-c", "90"], &db_path)
+            .status
+            .success()
+    );
+    let out = stdout(&run_deciduous(&["dot"], &db_path));
+    assert!(out.contains(r#"Ship it\n(90%)""#), "{out}");
+    assert!(!out.contains(r"\\n"), "{out}");
+}
+
+#[test]
+fn a_second_theme_of_one_name_is_refused_in_words() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    assert!(run_deciduous(&["themes", "create", "perf"], &db_path)
+        .status
+        .success());
+    let output = run_deciduous(&["themes", "create", "Perf"], &db_path);
+    assert!(!output.status.success());
+    let err = stderr(&output);
+    assert!(err.contains("a theme named 'perf' already exists"), "{err}");
+    assert!(!err.contains("UNIQUE"), "{err}");
+}
+
+#[test]
+fn a_writeup_of_no_nodes_is_an_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    assert!(run_deciduous(&["add", "goal", "Only one"], &db_path)
+        .status
+        .success());
+    let output = run_deciduous(&["writeup", "-t", "x", "--nodes", "500-600"], &db_path);
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("no nodes match"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn a_backup_lands_beside_the_database_in_a_directory_git_ignores() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join(".deciduous").join("deciduous.db");
+    assert!(run_deciduous(&["add", "goal", "Keep me"], &db_path)
+        .status
+        .success());
+    let output = run_deciduous(&["backup"], &db_path);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let backups = temp_dir.path().join(".deciduous").join("backups");
+    let files: Vec<String> = std::fs::read_dir(&backups)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+    assert!(
+        files.iter().any(|f| f.starts_with("deciduous_backup_")),
+        "{files:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(backups.join(".gitignore")).unwrap(),
+        "*\n"
+    );
+}
+
+#[test]
+fn prompt_on_a_missing_node_says_only_that() {
+    let temp_dir = TempDir::new().unwrap();
+    let db_path = temp_dir.path().join("test.db");
+    assert!(run_deciduous(&["add", "goal", "One"], &db_path)
+        .status
+        .success());
+    let output = run_deciduous(&["prompt", "99", "x"], &db_path);
+    assert!(!output.status.success());
+    let err = stderr(&output);
+    assert!(err.contains("Node 99 does not exist"), "{err}");
+    assert!(!err.contains("looks like a summary"), "{err}");
+}
+
+#[test]
+fn completion_into_a_closed_pipe_does_not_panic() {
+    use std::io::Read;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["completion", "zsh"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Read one byte and hang up, as `| head -1` does.
+    let mut first = [0u8; 1];
+    child.stdout.take().unwrap().read_exact(&mut first).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(!stderr(&output).contains("panicked"), "{}", stderr(&output));
+}

@@ -7,7 +7,7 @@ authors = ["Trey Anastasio <trey@example.com>"]
 description = "Decision graph tooling for AI-assisted development. Track every goal, decision, and outcome. Survive context loss. Query your reasoning."
 license = "Apache-2.0"
 repository = "https://github.com/notactuallytreyanastasio/deciduous"
-homepage = "https://notactuallytreyanastasio.github.io/deciduous/"
+homepage = "https://deciduous.dev"
 documentation = "https://docs.rs/deciduous"
 readme = "README.md"
 keywords = ["decision-graph", "ai-development", "context-management", "claude", "llm"]
@@ -31,6 +31,20 @@ exclude = [
     "deps/**",
     # Elixir MCP server - deployed as a container, not shipped in the crate
     "deciduous_mcp/**",
+    # Recordings, packaging and harness files: none of it builds the binary
+    "deciduous_demo",
+    "*.cast",
+    "tester/**",
+    "Formula/**",
+    "deploy/**",
+    "bindings/**",
+    "screencaps_of_it_in_action/**",
+    ".claude/**",
+    ".opencode/**",
+    ".windsurf/**",
+    ".github/**",
+    "Dockerfile",
+    "opencode.json",
     # Misc stray files
     "prodigious/**",
     "burrito_out/**",

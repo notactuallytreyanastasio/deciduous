@@ -166,6 +166,13 @@ pub fn ensure(project: &Path, caller: Caller) -> Result<(), String> {
         }
         // Where the graph lives is the user's choice, not a default: ask in a
         // terminal, and without one say how to answer on the command line.
+        None if remote::no_server_chosen(project) => {
+            println!(
+                "   {} this project chose none ([graph] server = \"none\"); its graph is .deciduous/graph.json.",
+                "No server:".green()
+            );
+            Ok(())
+        }
         None => {
             use std::io::IsTerminal;
             if std::io::stdin().is_terminal() {
@@ -190,7 +197,8 @@ const SCRIPTED_CHOICES: &str = "    \
     deciduous remote setup --local                  # this machine: a background service, PostgreSQL on localhost:5432\n    \
     deciduous remote setup --database-url <url>     # this machine's server, a PostgreSQL you name\n    \
     deciduous remote setup --docker-postgres        # this machine: PostgreSQL and the server in Docker\n    \
-    deciduous remote setup --url <url>              # a server someone else runs\n";
+    deciduous remote setup --url <url>              # a server someone else runs\n    \
+    deciduous remote setup --no-server              # no server: the graph in .deciduous/graph.json, committed with the code\n";
 
 /// What to do when nothing answers on localhost:5432: the default needs a
 /// PostgreSQL, and a machine without one is told how to get one rather than
@@ -232,6 +240,20 @@ pub enum SetupChoice {
     Ask,
     Local(LocalRequest),
     Url(String),
+    /// No server: the graph is `.deciduous/graph.json`, committed with the code.
+    NoServer,
+}
+
+/// Records that `project` wants no server, and says what that means.
+pub fn choose_no_server(project: &Path) -> Result<(), String> {
+    remote::write_no_server(project)?;
+    println!(
+        "   {} this project's graph is {}, committed with the code.\n   \
+         `deciduous sync` after a pull merges teammates' records; `deciduous remote setup` connects a server later.",
+        "No server:".green(),
+        ".deciduous/graph.json".cyan()
+    );
+    Ok(())
 }
 
 /// `deciduous remote setup`: the same end state as `init`'s server step,
@@ -289,6 +311,7 @@ pub fn setup_wizard(project: &Path, choice: SetupChoice) -> Result<(), String> {
     };
 
     match choice {
+        SetupChoice::NoServer => choose_no_server(project),
         SetupChoice::Local(req) => {
             println!();
             connect_local(project, &req, interactive).map_err(LocalError::message)?;
@@ -381,7 +404,8 @@ fn ask_where() -> Result<SetupChoice, String> {
     println!("  2) This machine: the server as a background service, using a PostgreSQL you name");
     println!("     (any host, port, user, password)");
     println!("  3) This machine, in Docker: a new PostgreSQL and the server in containers");
-    println!("  4) A server someone else runs: you need its URL and token\n");
+    println!("  4) A server someone else runs: you need its URL and token");
+    println!("  5) No server: the graph in .deciduous/graph.json, committed with the code\n");
     if !postgres_answers {
         println!("  {}\n", NO_POSTGRES_HINT.trim_start());
     }
@@ -398,7 +422,7 @@ fn ask_where() -> Result<SetupChoice, String> {
             ..LocalRequest::default()
         }))
     };
-    match ask("Choose 1-4", Some("1"))?.as_str() {
+    match ask("Choose 1-5", Some("1"))?.as_str() {
         "1" => local(Database::System),
         "2" => {
             println!(
@@ -420,7 +444,8 @@ fn ask_where() -> Result<SetupChoice, String> {
             "Server URL (e.g. https://example.com/deciduous-mcp)",
             None,
         )?)),
-        other => Err(format!("expected 1, 2, 3 or 4, got {other:?}")),
+        "5" => Ok(SetupChoice::NoServer),
+        other => Err(format!("expected 1, 2, 3, 4 or 5, got {other:?}")),
     }
 }
 

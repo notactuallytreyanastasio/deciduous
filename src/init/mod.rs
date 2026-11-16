@@ -311,7 +311,7 @@ pub fn init_project(
     );
     println!("\nNext steps:");
     println!(
-        "  1. Restart your assistant so it connects to the server; it sends the logging instructions"
+        "  1. Restart your assistant so it loads the logging instructions and the deciduous MCP tools"
     );
     println!(
         "  2. Use slash commands: {}, {}, {}, {}, etc.",
