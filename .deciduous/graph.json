@@ -1188,6 +1188,16 @@
       "to_change_id": "350cbd5a-40aa-452f-b2b7-297efc68e894",
       "weight": 1.0
     },
+    "1817eb838127b0a8602d": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-16T17:30:11.380171-05:00",
+      "edge_id": "1817eb838127b0a8602d",
+      "edge_type": "leads_to",
+      "from_change_id": "46648e54-320e-4770-b369-fa2d3cfc433f",
+      "rationale": "what the audit found",
+      "to_change_id": "61e20ac6-7202-45d3-909b-edc8ed2cb226",
+      "weight": 1.0
+    },
     "181f7dd7cbace233bfe5": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-18T21:27:29.189201-05:00",
@@ -10641,6 +10651,16 @@
       "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
       "rationale": "Phase 9 implementation for roadmap board",
       "to_change_id": "ae4848ad-1a94-4e69-afb8-eaafc20d5696",
+      "weight": 1.0
+    },
+    "c1b96ac435e77c7ebe80": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-16T17:30:11.449243-05:00",
+      "edge_id": "c1b96ac435e77c7ebe80",
+      "edge_type": "leads_to",
+      "from_change_id": "6555d6bc-3b09-4a25-b5bc-52fb749b4cde",
+      "rationale": "the September stack",
+      "to_change_id": "61e20ac6-7202-45d3-909b-edc8ed2cb226",
       "weight": 1.0
     },
     "c1d1851354d440d74c21": {
@@ -22459,6 +22479,19 @@
       "status": "pending",
       "title": "Create bin/gen_types.rs",
       "updated_at": "2025-12-12T17:30:29.075505-05:00"
+    },
+    "61e20ac6-7202-45d3-909b-edc8ed2cb226": {
+      "author": "Bobby Grayson",
+      "change_id": "61e20ac6-7202-45d3-909b-edc8ed2cb226",
+      "created_at": "2026-11-16T17:30:03.446806-05:00",
+      "metadata": {
+        "branch": "99-the-graph-pane-is-reachable-on-a-phone",
+        "confidence": 90
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Closed #237, #238 and #253 unmerged with a note on each; branches kept",
+      "updated_at": "2026-11-16T17:30:11.516076-05:00"
     },
     "61e8d591-fd01-4ac4-a021-134d1410414f": {
       "author": "Bobby Grayson",
