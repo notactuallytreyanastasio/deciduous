@@ -7833,6 +7833,18 @@ fn print_transcript_report(r: &deciduous::transcript::ImportReport) {
             r.skipped.idle_prompts
         ));
     }
+    if r.skipped.go_aheads > 0 {
+        notes.push(format!(
+            "{} go-aheads joined to the prompt before them",
+            r.skipped.go_aheads
+        ));
+    }
+    if r.skipped.logged_by_agent > 0 {
+        notes.push(format!(
+            "{} actions and outcomes the agent logged itself not derived again",
+            r.skipped.logged_by_agent
+        ));
+    }
     if r.unreadable_lines > 0 {
         notes.push(format!("{} unreadable lines", r.unreadable_lines));
     }

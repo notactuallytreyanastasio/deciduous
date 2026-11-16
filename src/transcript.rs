@@ -332,6 +332,11 @@ enum Step {
 #[derive(Debug, Clone)]
 struct Turn {
     prompt: String,
+    /// Which prompt of the session this is, from 1.
+    number: usize,
+    /// Prompts after this one that only said to go on ("ok do it", "sure"):
+    /// what they set off is this prompt's work. Filled by [`joined`].
+    follow_ups: Vec<String>,
     uuid: String,
     timestamp: String,
     branch: Option<String>,
@@ -392,6 +397,8 @@ fn turns(t: &Transcript) -> Vec<Turn> {
         if let Some(prompt) = human_prompt(e) {
             out.push(Turn {
                 prompt,
+                number: out.len() + 1,
+                follow_ups: Vec::new(),
                 uuid: e.uuid.clone(),
                 timestamp: e.timestamp.clone(),
                 branch: e.git_branch.clone(),
@@ -432,6 +439,145 @@ fn turns(t: &Transcript) -> Vec<Turn> {
         }
     }
     out
+}
+
+/// Words a prompt can be made of and still say nothing but "go on".
+const GO_AHEAD_WORDS: &[&str] = &[
+    "ok", "okay", "k", "yes", "yeah", "yep", "yup", "y", "sure", "please", "pls", "do", "it",
+    "that", "this", "go", "ahead", "for", "lets", "let's", "proceed", "continue", "retry", "again",
+    "try", "sounds", "good", "great", "fine", "lgtm", "ship", "then", "now", "and", "so",
+    "alright", "cool", "perfect", "agreed", "approved", "right", "on", "with", "the", "plan",
+    "both", "all", "of", "them",
+];
+
+/// "ok do it", "sure", "retry": a prompt of at most six words, every one of
+/// them from [`GO_AHEAD_WORDS`]. It names nothing, so it cannot be a goal:
+/// what it asks for is in the prompt before it.
+///
+/// A closed word list and not a length limit, because "add dark mode" is
+/// three words and a goal. The price is that "go dor it" and "1, 4, 2 in
+/// that order" are not recognised and stay prompts of their own.
+fn is_go_ahead(prompt: &str) -> bool {
+    let lower = prompt.to_lowercase();
+    let words: Vec<&str> = lower
+        .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+        .filter(|w| !w.is_empty())
+        .collect();
+    (1..=6).contains(&words.len()) && words.iter().all(|w| GO_AHEAD_WORDS.contains(w))
+}
+
+/// Fold each go-ahead into the turn before it: its steps follow that turn's,
+/// and its words are kept in `follow_ups`. A session that opens with one
+/// keeps it as a turn, there being nothing before it.
+fn joined(turns: Vec<Turn>, skipped: &mut Skipped) -> Vec<Turn> {
+    let mut out: Vec<Turn> = Vec::new();
+    for turn in turns {
+        match out.last_mut() {
+            Some(before) if is_go_ahead(&turn.prompt) => {
+                before.follow_ups.push(turn.prompt);
+                before.steps.extend(turn.steps);
+                skipped.go_aheads += 1;
+            }
+            _ => out.push(turn),
+        }
+    }
+    out
+}
+
+/// What the agent wrote to the graph itself during a turn, read from the
+/// turn's own tool calls.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct Logged {
+    /// Local ids of goals it created, from `Created node 12 (type: goal, ...`
+    /// in a command's output. An MCP write to a server does not give one.
+    pub goal_ids: Vec<i32>,
+    pub goal: bool,
+    pub action: bool,
+    pub outcome: bool,
+}
+
+impl Logged {
+    fn saw(&mut self, kind: &str) {
+        match kind {
+            "goal" => self.goal = true,
+            "action" => self.action = true,
+            "outcome" => self.outcome = true,
+            _ => {}
+        }
+    }
+}
+
+/// `Created node 12 (type: goal, title: ...` -> (12, "goal").
+fn created_line(line: &str) -> Option<(i32, &str)> {
+    let rest = &line[line.find("Created node ")? + "Created node ".len()..];
+    let (id, rest) = rest.split_once(" (type: ")?;
+    let kind = rest.split([',', ')']).next()?;
+    Some((id.trim().parse().ok()?, kind))
+}
+
+fn logged_in(turn: &Turn) -> Logged {
+    let mut logged = Logged::default();
+    for step in &turn.steps {
+        let Step::Tool {
+            name,
+            input,
+            result,
+            ..
+        } = step
+        else {
+            continue;
+        };
+        let failed = result.as_ref().is_some_and(|r| r.is_error);
+        if let Some(tool) = name.strip_prefix("mcp__deciduous__") {
+            if failed {
+                continue;
+            }
+            match tool {
+                "add_node" => {
+                    if let Some(kind) = input.get("node_type").and_then(Value::as_str) {
+                        logged.saw(kind);
+                    }
+                }
+                "capture_conversation_turn" => {
+                    for kind in ["goal", "action", "outcome"] {
+                        let has = |k: &str| input.get(k).is_some_and(|v| !v.is_null());
+                        if has(kind) || has(&format!("{kind}s")) {
+                            logged.saw(kind);
+                        }
+                    }
+                }
+                _ => {}
+            }
+            continue;
+        }
+        if name != "Bash" {
+            continue;
+        }
+        let cmd = input.get("command").and_then(Value::as_str).unwrap_or("");
+        if !cmd.contains("deciduous") {
+            continue;
+        }
+        // The output is the proof, however the command was spelled (a
+        // shell function, a path to the binary). A command whose output was
+        // cut or thrown away is read from its words instead.
+        let output = result.as_ref().map(bash_output).unwrap_or_default();
+        let mut read_any = false;
+        for (id, kind) in output.lines().filter_map(created_line) {
+            read_any = true;
+            logged.saw(kind);
+            if kind == "goal" {
+                logged.goal_ids.push(id);
+            }
+        }
+        if !read_any && !failed {
+            for kind in ["goal", "action", "outcome"] {
+                if cmd.contains(&format!(" add {kind} ")) {
+                    logged.saw(kind);
+                }
+            }
+        }
+    }
+    logged
 }
 
 // ---------------------------------------------------------------------------
@@ -546,6 +692,10 @@ pub struct Plan {
     pub turns: usize,
     pub nodes: Vec<DerivedNode>,
     pub skipped: Skipped,
+    /// For a goal the agent logged itself in that turn: its index in
+    /// `nodes`, and what the transcript shows of the logging.
+    #[serde(skip)]
+    pub logged_goals: BTreeMap<usize, Logged>,
 }
 
 /// Tool calls the import saw and did not turn into nodes.
@@ -560,6 +710,12 @@ pub struct Skipped {
     /// Prompts whose turn changed nothing: no edit, no commit, no test or
     /// build run. A question and its answer are not a goal.
     pub idle_prompts: usize,
+    /// Prompts that only said to go on: their work is under the prompt
+    /// before them.
+    pub go_aheads: usize,
+    /// Actions and outcomes not derived because the agent logged its own
+    /// in that turn.
+    pub logged_by_agent: usize,
 }
 
 /// A change id that is a function of (session, kind, anchor): hyphenated
@@ -842,13 +998,16 @@ pub fn plan(t: &Transcript, root: Option<&Path>) -> Result<Plan, TranscriptError
     if turns.is_empty() {
         return Err(TranscriptError::Empty(t.path.clone()));
     }
+    let prompts = turns.len();
+    let mut skipped = Skipped::default();
+    let turns = joined(turns, &mut skipped);
+    let mut logged_goals = BTreeMap::new();
     let mut ctx = Ctx {
         session_id: &t.session_id,
         root,
         touched: BTreeSet::new(),
     };
     let mut nodes: Vec<DerivedNode> = Vec::new();
-    let mut skipped = Skipped::default();
 
     let session_title = t
         .title
@@ -857,7 +1016,8 @@ pub fn plan(t: &Transcript, root: Option<&Path>) -> Result<Plan, TranscriptError
         .unwrap_or_else(|| title_from(&turns[0].prompt));
 
     let mut session_root: Option<usize> = None;
-    for (i, turn) in turns.iter().enumerate() {
+    for turn in &turns {
+        let i = turn.number - 1;
         let start = nodes.len();
         let goal_title = if session_root.is_none() {
             session_title.clone()
@@ -879,9 +1039,12 @@ pub fn plan(t: &Transcript, root: Option<&Path>) -> Result<Plan, TranscriptError
         if session_root.is_none() {
             meta["session"] = json!({
                 "id": t.session_id,
-                "turns": turns.len(),
+                "turns": prompts,
                 "transcript": t.path.to_string_lossy(),
             });
+        }
+        if !turn.follow_ups.is_empty() {
+            meta["follow_ups"] = json!(turn.follow_ups);
         }
         let goal = push(
             &mut nodes,
@@ -915,16 +1078,54 @@ pub fn plan(t: &Transcript, root: Option<&Path>) -> Result<Plan, TranscriptError
             if was_root {
                 session_root = None;
             }
+            continue;
+        }
+        // The import is the backstop. Where the agent logged its own
+        // actions in this turn, a derived "Edited src/db.rs" beside its
+        // "Add the status column" is the same work twice, and the same for
+        // outcomes. What it did not log is still derived.
+        let logged = logged_in(turn);
+        if logged.action || logged.outcome {
+            skipped.logged_by_agent += drop_kinds(&mut nodes, start, &logged);
+        }
+        if logged.goal {
+            logged_goals.insert(start, logged);
         }
     }
 
     Ok(Plan {
         session_id: t.session_id.clone(),
         title: session_title,
-        turns: turns.len(),
+        turns: prompts,
         nodes,
         skipped,
+        logged_goals,
     })
+}
+
+/// Remove the turn's derived actions and outcomes of the kinds the agent
+/// logged. The turn's goal is `nodes[goal]`; what hung under a removed node
+/// hangs under the goal. Returns how many were removed.
+fn drop_kinds(nodes: &mut Vec<DerivedNode>, goal: usize, logged: &Logged) -> usize {
+    let tail = nodes.split_off(goal + 1);
+    let gone = |n: &DerivedNode| {
+        (n.node_type == "action" && logged.action) || (n.node_type == "outcome" && logged.outcome)
+    };
+    // Old index -> new index, for the ones that stay.
+    let mut moved: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut removed = 0;
+    for (offset, mut n) in tail.into_iter().enumerate() {
+        if gone(&n) {
+            removed += 1;
+            continue;
+        }
+        if let Some(parent) = n.parent.filter(|p| *p > goal) {
+            n.parent = Some(moved.get(&parent).copied().unwrap_or(goal));
+        }
+        moved.insert(goal + 1 + offset, nodes.len());
+        nodes.push(n);
+    }
+    removed
 }
 
 fn push(nodes: &mut Vec<DerivedNode>, n: DerivedNode) -> usize {
@@ -1666,8 +1867,8 @@ pub struct ImportOptions {
     pub hash_files: bool,
 }
 
-/// Goals already in the graph that carry a prompt, for recognising the goal
-/// an agent logged while the session ran.
+/// Goals already in the graph that an agent logged, for recognising the
+/// goal it logged for a prompt while the session ran.
 ///
 /// The import derives a goal per prompt, with a change_id made from the
 /// session and the prompt's entry. An agent that followed its instructions
@@ -1676,35 +1877,79 @@ pub struct ImportOptions {
 /// logged gave every prompt two goals: one with the agent's options and
 /// decisions under it, one with the transcript's actions and outcomes.
 ///
-/// A logged goal is the prompt's when its `metadata.prompt` is the prompt,
-/// verbatim after trimming, and it was created after the prompt was sent
-/// and before the next one (or within a day, for the last). The window is
-/// what keeps "ok do it" in this session from claiming the goal another
-/// session logged for the same three words. Each goal is claimed once.
+/// Matching on the words and the time alone let a second session claim the
+/// goal: two sessions were sent "fix the tests" in the same hour, one logged
+/// a goal, and both imports hung their work under it. So a goal is a
+/// prompt's only when the transcript shows this session logging a goal in
+/// that turn ([`Logged`]), and then:
+///
+/// - by id, when the command's output gave one: that node, if it is a logged
+///   goal created inside the turn;
+/// - otherwise by words: `metadata.prompt` is the prompt (or one of its
+///   go-aheads), verbatim after trimming, created inside the turn.
+///
+/// Inside the turn is after the prompt was sent and before the next goal's
+/// (or within a day, for the last). Either way a goal that already has
+/// another session's derived work under it is not taken: two sessions that
+/// both logged the same words each keep their own.
 struct LiveGoals {
-    /// (id, trimmed prompt, created_at)
-    goals: Vec<(i32, String, Option<chrono::DateTime<chrono::FixedOffset>>)>,
+    goals: Vec<LiveGoal>,
     claimed: BTreeSet<i32>,
+}
+
+struct LiveGoal {
+    id: i32,
+    /// Trimmed; empty when the goal was logged without one.
+    prompt: String,
+    created_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    /// Sessions whose derived nodes hang under it.
+    sessions: BTreeSet<String>,
 }
 
 fn parse_time(s: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
     chrono::DateTime::parse_from_rfc3339(s).ok()
 }
 
+/// The session a node was derived from, if it was derived.
+fn derived_session(metadata_json: Option<&str>) -> Option<String> {
+    let meta: Value = serde_json::from_str(metadata_json?).ok()?;
+    Some(meta.get("evidence")?.get("session")?.as_str()?.to_string())
+}
+
 impl LiveGoals {
     fn load(db: &Database) -> Result<Self, TranscriptError> {
-        let goals = db
-            .get_all_nodes()?
+        let nodes = db.get_all_nodes()?;
+        let session_of: BTreeMap<i32, String> = nodes
+            .iter()
+            .filter_map(|n| Some((n.id, derived_session(n.metadata_json.as_deref())?)))
+            .collect();
+        let mut under: BTreeMap<i32, BTreeSet<String>> = BTreeMap::new();
+        for e in db.get_all_edges()? {
+            if let Some(session) = session_of.get(&e.to_node_id) {
+                under
+                    .entry(e.from_node_id)
+                    .or_default()
+                    .insert(session.clone());
+            }
+        }
+        let goals = nodes
             .into_iter()
             .filter(|n| n.node_type == "goal")
-            .filter_map(|n| {
-                let meta: Value = serde_json::from_str(n.metadata_json.as_deref()?).ok()?;
-                // A goal an import derived is found by its change_id, never here.
-                if meta.get("evidence").is_some() {
-                    return None;
+            // A goal an import derived is found by its change_id, never here.
+            .filter(|n| !session_of.contains_key(&n.id))
+            .map(|n| {
+                let prompt = n
+                    .metadata_json
+                    .as_deref()
+                    .and_then(|m| serde_json::from_str::<Value>(m).ok())
+                    .and_then(|m| Some(m.get("prompt")?.as_str()?.trim().to_string()))
+                    .unwrap_or_default();
+                LiveGoal {
+                    id: n.id,
+                    prompt,
+                    created_at: parse_time(&n.created_at),
+                    sessions: under.remove(&n.id).unwrap_or_default(),
                 }
-                let prompt = meta.get("prompt")?.as_str()?.trim().to_string();
-                (!prompt.is_empty()).then(|| (n.id, prompt, parse_time(&n.created_at)))
             })
             .collect();
         Ok(Self {
@@ -1713,26 +1958,66 @@ impl LiveGoals {
         })
     }
 
-    /// The logged goal for a prompt sent at `sent`, with the next prompt at
-    /// `next`. Claims it.
-    fn claim(&mut self, prompt: &str, sent: &str, next: Option<&str>) -> Option<i32> {
-        let prompt = prompt.trim();
+    /// The goal this session logged for a turn whose prompt was sent at
+    /// `sent`, the next goal's at `next`. `prompts` are the turn's own words
+    /// and its go-aheads. Claims it.
+    fn claim(
+        &mut self,
+        session: &str,
+        logged: &Logged,
+        prompts: &[&str],
+        sent: &str,
+        next: Option<&str>,
+    ) -> Option<i32> {
         let sent = parse_time(sent)?;
         let day = sent + chrono::Duration::hours(24);
         let until = next.and_then(parse_time).map_or(day, |n| n.min(day));
-        let id = self
+        let free = |g: &&LiveGoal| {
+            !self.claimed.contains(&g.id)
+                && g.created_at.is_some_and(|at| at >= sent && at < until)
+                && g.sessions.iter().all(|s| s == session)
+        };
+        let by_id = self
             .goals
             .iter()
-            .filter(|(id, p, at)| {
-                p == prompt
-                    && !self.claimed.contains(id)
-                    && at.is_some_and(|at| at >= sent && at < until)
-            })
-            .map(|(id, _, at)| (*at, *id))
-            .min()
-            .map(|(_, id)| id)?;
+            .filter(free)
+            .find(|g| logged.goal_ids.contains(&g.id))
+            .map(|g| g.id);
+        let id = by_id.or_else(|| {
+            self.goals
+                .iter()
+                .filter(free)
+                .filter(|g| !g.prompt.is_empty() && prompts.iter().any(|p| p.trim() == g.prompt))
+                .map(|g| (g.created_at, g.id))
+                .min()
+                .map(|(_, id)| id)
+        })?;
         self.claimed.insert(id);
         Some(id)
+    }
+
+    /// [`claim`](Self::claim) for the goal at `plan.nodes[i]`.
+    fn claim_for(&mut self, plan: &Plan, i: usize, next: Option<&str>) -> Option<i32> {
+        let logged = plan.logged_goals.get(&i)?;
+        let n = &plan.nodes[i];
+        let mut prompts: Vec<&str> = Vec::new();
+        prompts.extend(n.metadata.get("prompt").and_then(Value::as_str));
+        if let Some(more) = n.metadata.get("follow_ups").and_then(Value::as_array) {
+            prompts.extend(more.iter().filter_map(Value::as_str));
+        }
+        self.claim(&plan.session_id, logged, &prompts, &n.created_at, next)
+    }
+
+    /// True when the plan is nothing but goals the agent logged: the agent
+    /// logged its own actions and outcomes too, and an import adds nothing.
+    fn covers(&mut self, plan: &Plan) -> bool {
+        self.claimed.clear();
+        let times: Vec<&str> = plan.nodes.iter().map(|n| n.created_at.as_str()).collect();
+        !plan.nodes.is_empty()
+            && (0..plan.nodes.len()).all(|i| {
+                plan.nodes[i].node_type == "goal"
+                    && self.claim_for(plan, i, times.get(i + 1).copied()).is_some()
+            })
     }
 }
 
@@ -1760,7 +2045,7 @@ pub fn import(
         transcript: path.to_string_lossy().to_string(),
         turns: plan.turns,
         files_hashed,
-        skipped: plan.skipped,
+        skipped: std::mem::take(&mut plan.skipped),
         unreadable_lines: t.unreadable_lines,
         dry_run: opts.dry_run,
         ..Default::default()
@@ -1781,9 +2066,9 @@ pub fn import(
         let logged = if n.node_type == "goal" {
             let next = goal_times.get(goal_index + 1).copied();
             goal_index += 1;
-            match (existing, n.metadata.get("prompt").and_then(Value::as_str)) {
-                (None, Some(prompt)) => live.claim(prompt, &n.created_at, next),
-                _ => None,
+            match existing {
+                None => live.claim_for(&plan, i, next),
+                Some(_) => None,
             }
         } else {
             None
@@ -1882,6 +2167,7 @@ pub struct Listed {
 /// its root goal is already in the graph.
 pub fn list(db: &Database, dir: &Path) -> Result<Vec<Listed>, TranscriptError> {
     let mut out = Vec::new();
+    let mut live = LiveGoals::load(db)?;
     if !dir.is_dir() {
         return Err(TranscriptError::NoDirectory(dir.to_path_buf()));
     }
@@ -1900,11 +2186,16 @@ pub fn list(db: &Database, dir: &Path) -> Result<Vec<Listed>, TranscriptError> {
         };
         // The root may be a goal the agent logged, which has its own
         // change_id; then anything else the import derived says it ran.
-        let planned = plan(&t, None).map(|p| p.nodes).unwrap_or_default();
-        let work = !planned.is_empty();
-        let imported = planned
-            .iter()
-            .any(|n| matches!(db.node_id_by_change_id(&n.change_id), Ok(Some(_))));
+        // And when the agent logged everything itself there is nothing
+        // derived to find: the session is in because nothing is left out.
+        let planned = plan(&t, None).ok();
+        let work = planned.as_ref().is_some_and(|p| !p.nodes.is_empty());
+        let imported = planned.as_ref().is_some_and(|p| {
+            p.nodes
+                .iter()
+                .any(|n| matches!(db.node_id_by_change_id(&n.change_id), Ok(Some(_))))
+                || live.covers(p)
+        });
         out.push(Listed {
             path: path.clone(),
             session_id: t.session_id.clone(),
@@ -2243,7 +2534,9 @@ mod tests {
         fs::write(&p, &questions).unwrap();
         let plan = super::plan(&parse(&p).unwrap(), Some(dir.path())).unwrap();
         assert!(plan.nodes.is_empty(), "{:?}", plan.nodes);
-        assert_eq!(plan.skipped.idle_prompts, 2);
+        // "ok try again" names nothing: it is part of the prompt before it.
+        assert_eq!(plan.skipped.idle_prompts, 1);
+        assert_eq!(plan.skipped.go_aheads, 1);
 
         let work = user("u3", "2026-10-01T10:02:00Z", "rename x to y")
             + &line(
@@ -2257,7 +2550,7 @@ mod tests {
             );
         fs::write(&p, questions + &work).unwrap();
         let plan = super::plan(&parse(&p).unwrap(), Some(dir.path())).unwrap();
-        assert_eq!(plan.skipped.idle_prompts, 2);
+        assert_eq!(plan.skipped.idle_prompts, 1);
         let root = &plan.nodes[0];
         assert_eq!(root.metadata["prompt"], "rename x to y");
         assert_eq!(root.parent, None);
@@ -2266,6 +2559,221 @@ mod tests {
             .nodes
             .iter()
             .all(|n| n.metadata["prompt"] != "ok try again"));
+    }
+
+    fn user(uuid: &str, at: &str, text: &str) -> String {
+        line(
+            json!({"type":"user","uuid":uuid,"timestamp":at,"cwd":"/p","sessionId":"s3",
+            "message":{"role":"user","content":text}}),
+        )
+    }
+
+    fn says(uuid: &str, at: &str, text: &str) -> String {
+        line(
+            json!({"type":"assistant","uuid":uuid,"timestamp":at,"cwd":"/p",
+            "message":{"role":"assistant","content":[{"type":"text","text":text}]}}),
+        )
+    }
+
+    /// A tool call and its result.
+    fn tool(id: &str, at: &str, name: &str, input: Value, stdout: &str) -> String {
+        line(
+            json!({"type":"assistant","uuid":format!("a-{id}"),"timestamp":at,"cwd":"/p",
+            "message":{"role":"assistant","content":[{"type":"tool_use","id":id,"name":name,"input":input}]}}),
+        ) + &line(
+            json!({"type":"user","uuid":format!("r-{id}"),"timestamp":at,"cwd":"/p",
+                "toolUseResult":{"stdout":stdout,"stderr":""},
+                "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,"content":stdout}]}}),
+        )
+    }
+
+    fn plan_of(text: &str) -> Plan {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("s.jsonl");
+        fs::write(&p, text).unwrap();
+        super::plan(&parse(&p).unwrap(), None).unwrap()
+    }
+
+    #[test]
+    fn a_go_ahead_is_made_of_nothing_but_go_ahead_words() {
+        for yes in [
+            "ok do it",
+            "sure",
+            "retry",
+            "Ok, do it?",
+            "yes please",
+            "go for it",
+            "ok",
+        ] {
+            assert!(is_go_ahead(yes), "{yes}");
+        }
+        for no in [
+            "add dark mode",
+            "ok do it but in rust",
+            "go dor it",
+            "1, 4, 2, 5, 7 in that order",
+            "no",
+            "",
+            "ok ok ok ok ok ok ok",
+        ] {
+            assert!(!is_go_ahead(no), "{no}");
+        }
+    }
+
+    /// The ask, a proposal, "ok do it", the work: one goal, and it is the ask.
+    #[test]
+    fn work_set_off_by_a_go_ahead_belongs_to_the_prompt_before_it() {
+        let plan = plan_of(
+            &(user(
+                "u1",
+                "2026-10-01T10:00:00Z",
+                "should the cache be per user?",
+            ) + &says(
+                "a1",
+                "2026-10-01T10:00:02Z",
+                "Yes: here is how I would do it.",
+            ) + &user("u2", "2026-10-01T10:01:00Z", "ok do it")
+                + &tool(
+                    "t1",
+                    "2026-10-01T10:01:02Z",
+                    "Edit",
+                    json!({"file_path":"/p/src/cache.rs","old_string":"a","new_string":"b"}),
+                    "ok",
+                )
+                + &says("a2", "2026-10-01T10:01:05Z", "Done.")),
+        );
+        let goals: Vec<&DerivedNode> = plan
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == "goal")
+            .collect();
+        assert_eq!(goals.len(), 1, "{:?}", plan.nodes);
+        assert_eq!(goals[0].metadata["prompt"], "should the cache be per user?");
+        assert_eq!(goals[0].metadata["follow_ups"], json!(["ok do it"]));
+        assert_eq!(goals[0].change_id, derive_change_id("s3", "goal", "u1"));
+        assert_eq!(plan.skipped.go_aheads, 1);
+        assert_eq!(plan.skipped.idle_prompts, 0);
+        assert_eq!(plan.turns, 2);
+        assert!(plan.nodes.iter().any(|n| n.node_type == "action"));
+    }
+
+    #[test]
+    fn what_the_agent_logged_is_read_from_the_output_however_the_command_was_spelled() {
+        let turn = |steps: String| {
+            let dir = tempfile::tempdir().unwrap();
+            let p = dir.path().join("s.jsonl");
+            fs::write(
+                &p,
+                user("u1", "2026-10-01T10:00:00Z", "add the thing") + &steps,
+            )
+            .unwrap();
+            logged_in(&turns(&parse(&p).unwrap())[0])
+        };
+        let l = turn(tool(
+            "t1",
+            "2026-10-01T10:00:01Z",
+            "Bash",
+            json!({"command":"Q() { \"$@\" | grep Created; }; Q ./target/release/deciduous add goal \"Thing\" -p \"add the thing\""}),
+            "Created node 12 (type: goal, title: Thing) [prompt: 13 chars]",
+        ));
+        assert_eq!(l.goal_ids, vec![12]);
+        assert!(l.goal && !l.action && !l.outcome);
+
+        // Output thrown away: the words of the command are what is left.
+        let l = turn(tool(
+            "t1",
+            "2026-10-01T10:00:01Z",
+            "Bash",
+            json!({"command":"deciduous add action \"Add it\" >/dev/null"}),
+            "",
+        ));
+        assert!(l.action && l.goal_ids.is_empty());
+
+        let l = turn(tool(
+            "t1",
+            "2026-10-01T10:00:01Z",
+            "mcp__deciduous__add_node",
+            json!({"node_type":"outcome","title":"It works"}),
+            "{}",
+        ));
+        assert!(l.outcome && !l.action);
+
+        // A command that only mentions the line is not deciduous writing.
+        let l = turn(tool(
+            "t1",
+            "2026-10-01T10:00:01Z",
+            "Bash",
+            json!({"command":"cat notes.txt"}),
+            "Created node 12 (type: goal, title: Thing)",
+        ));
+        assert_eq!(l, Logged::default());
+    }
+
+    /// The agent logged an action for its edits: the import does not add
+    /// "Edited src/x.rs" beside it, and still records the test run nobody
+    /// logged.
+    #[test]
+    fn a_kind_the_agent_logged_in_the_turn_is_not_derived_again() {
+        let edit = tool(
+            "t1",
+            "2026-10-01T10:00:01Z",
+            "Edit",
+            json!({"file_path":"/p/src/x.rs","old_string":"a","new_string":"b"}),
+            "ok",
+        );
+        let tests = tool(
+            "t2",
+            "2026-10-01T10:00:05Z",
+            "Bash",
+            json!({"command":"cargo test"}),
+            "test result: ok. 3 passed; 0 failed; 0 ignored",
+        );
+        let logs_action = tool(
+            "t3",
+            "2026-10-01T10:00:06Z",
+            "Bash",
+            json!({"command":"deciduous add action \"Rename a to b\""}),
+            "Created node 7 (type: action, title: Rename a to b)",
+        );
+        let base = user("u1", "2026-10-01T10:00:00Z", "rename a to b") + &edit + &tests;
+
+        let without = plan_of(&(base.clone() + &says("a9", "2026-10-01T10:00:09Z", "Done.")));
+        assert!(without.nodes.iter().any(|n| n.node_type == "action"));
+        assert_eq!(without.skipped.logged_by_agent, 0);
+
+        let with =
+            plan_of(&(base.clone() + &logs_action + &says("a9", "2026-10-01T10:00:09Z", "Done.")));
+        assert!(
+            with.nodes.iter().all(|n| n.node_type != "action"),
+            "{:?}",
+            with.nodes
+        );
+        assert_eq!(with.skipped.logged_by_agent, 1);
+        // The test run hung under the edit; it hangs under the goal now.
+        let run = with
+            .nodes
+            .iter()
+            .find(|n| n.title == "cargo test passed")
+            .unwrap();
+        assert_eq!(run.parent, Some(0));
+        // And every parent still points at a node that is there.
+        assert!(with
+            .nodes
+            .iter()
+            .all(|n| n.parent.is_none_or(|p| p < with.nodes.len())));
+
+        let logs_outcome = tool(
+            "t4",
+            "2026-10-01T10:00:07Z",
+            "Bash",
+            json!({"command":"deciduous add outcome \"3 tests pass\""}),
+            "Created node 8 (type: outcome, title: 3 tests pass)",
+        );
+        let both = plan_of(
+            &(base + &logs_action + &logs_outcome + &says("a9", "2026-10-01T10:00:09Z", "Done.")),
+        );
+        assert_eq!(both.nodes.len(), 1, "{:?}", both.nodes);
+        assert_eq!(both.nodes[0].node_type, "goal");
     }
 
     #[test]
