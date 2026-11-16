@@ -222,7 +222,7 @@ See [Documents and transcripts](content/evidence.md).
 
 `board read`: `--unanswered <LABEL>` (what is waiting on you), `--to`, `--from`, `--since <ID>`, `-q, --query`, `--limit` (default 50, max 200), `--json`. `board show <ID> [--json]`.
 
-With a `[remote]` the board lives on the server, per workspace; without one, in the main worktree's database. Messages are not graph nodes and are never exported. See [Many agents, one graph](content/teams.md).
+With a `[remote]` the board lives on the server, per workspace; without one, in the main worktree's database. Messages are not graph nodes and are never exported. See [The message board](content/board.md).
 
 ## Export
 

@@ -1,6 +1,6 @@
 # Many agents, one workspace
 
-Every agent and every person on a project writes to the same workspace on the same server, each on its own git branch. Nothing locks: two sessions writing one branch both succeed and their nodes interleave. What keeps them from colliding is that each can see the others, through `check_activity`, the message board, and `took_from` edges that say whose idea a node built on.
+Every agent and every person on a project writes to the same workspace on the same server, each on its own git branch. Nothing locks: two sessions writing one branch both succeed and their nodes interleave. What keeps them from colliding is that each can see the others, through `check_activity`, [the message board](board.md), and `took_from` edges that say whose idea a node built on.
 
 ## One workspace per repository
 
@@ -108,64 +108,17 @@ Locks never protected source files either. File ownership is the coordinator's j
 
 ## The message board
 
-Agents coordinate here, never in a scratch file: a file has no ids to answer, no way to ask what is waiting for you, and is gone with the worktree. With a `[remote]`, the board lives on the server, per workspace, and the CLI and MCP tools read and write the same one.
-
-From the CLI in the tests worktree:
+Agents ask each other questions and announce interface changes on the board, never in a scratch file. `@label` addresses a message, a reply takes it off the addressee's list, and each agent asks what is waiting for it:
 
 ```console
 $ deciduous board post --as tests -s "@api is the 422 body stable?" -m "I am asserting code and field, not message. @api confirm the shape."
 Posted #222, to api
-```
-
-The API agent, over MCP:
-
-```javascript
-read_messages({workspace: "my-app", unanswered_for: "api"})
-```
-
-```json
-{ "messages": [{ "id": 222, "author": "tests", "branch": "agent-tests", "mentions": ["api"],
-                 "subject": "@api is the 422 body stable?", "reply_to": null, ... }],
-  "latest_id": 222, "truncated": false }
-```
-
-```javascript
-post_message({workspace: "my-app", branch: "agent-api", author: "api",
-  subject: "Re: 422 body", reply_to: 222,
-  body: "Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts."})
-```
-
-Back on the CLI, in a different checkout:
-
-```console
 $ deciduous board read --unanswered api
-Nothing addressed to api is waiting for an answer.
-$ deciduous board read --unanswered tests
-#223  api -> tests  re #222  [agent-api]  2026-11-08T18:36:16.277592Z
-    Re: 422 body
-    | Stable: {type, title, errors:[{field, code}]}. @tests codes live in src/errors.ts.
 ```
 
-The rules that make this work:
+Over MCP the same two operations are `post_message` and `read_messages`, on the same board. Start each agent with its label, `DECIDUOUS_AGENT_LABEL=api claude`, and the hook that `deciduous init` installs shows it what is waiting at session start and on each prompt.
 
-- `@label` anywhere in the subject or body addresses a message. Labels are whatever the agents call themselves; agree on them up front.
-- A reply (`reply_to` / `--reply-to`) from the addressed label takes the message off that label's unanswered list. A reply from anyone else, or a new post that answers it in prose, does not. A reply that mentions the asker lands on the asker's unanswered list in turn, as #223 does here.
-- `board post` needs a label: `--as`, or `DECIDUOUS_AGENT_LABEL` in the environment. Without either: `Error: who is posting? Pass --as LABEL (or set DECIDUOUS_AGENT_LABEL).`
-- `--branch` defaults to the current git branch.
-- Message ids are numbered across the whole server, so they jump. `since_id` / `--since` with the last `latest_id` you saw returns only what is new.
-- Messages are not graph nodes. They are not in `get_graph`, not exported, not pulled into the cache.
-
-`deciduous init` installs `.claude/hooks/board-mentions.sh` as a SessionStart and UserPromptSubmit hook. When `DECIDUOUS_AGENT_LABEL` is set for the session, it shows that label's unanswered messages at start and anything new on each prompt; without the variable it does nothing. Start each agent from its worktree root with the label set, `DECIDUOUS_AGENT_LABEL=api claude`. The hook looks for `.deciduous/` in the session's current directory and exits silently when it is not there.
-
-```console
-$ DECIDUOUS_AGENT_LABEL=api .claude/hooks/board-mentions.sh start
-DECIDUOUS BOARD: messages for @api you have not answered.
-Answer each with post_message reply_to=<id>, or: deciduous board post --as api --reply-to <id> -s ... -m ...
-
-#225  tests -> api  [main]  2026-11-08T18:43:12.249771Z
-    @api fixtures moved
-    | tests/fixtures/items/*.json now carry the problem+json bodies.
-```
+[The message board](board.md) has a full exchange between a CLI and an MCP agent, the rules for what counts as addressed and answered, and the limits.
 
 ## Borrowing across branches: took_from
 
