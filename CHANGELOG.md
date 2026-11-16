@@ -39,6 +39,7 @@ A graph written by following the shipped instructions could not say what was ope
 - Migration `20261114120000_named_tokens` adds `api_tokens` and `write_activity.actor`. `STRUCTURE.sql` carries both.
 
 ### Fixed
+- **The server `remote setup --local` installs starts on Linux.** The systemd user unit put `WorkingDirectory` in double quotes, which systemd refuses as "path is not absolute", a fatal error that stops the unit from loading. The path is now written verbatim, spaces included, with `%` escaped as `%%`. macOS was not affected. Also `--database-url`.
 - **The local MCP server's `add_node` takes `parent_id`.** Every CLAUDE.md since 1.0.10 tells the agent to "create and link in one call: `add_node` with `parent_id`", which is the graph server's tool. On a project with no server the local tool had no such argument and refused the call as an unknown argument. It now takes `parent_id` (local id or change_id prefix), `edge_type`, `rationale` and `status`, and checks all four before writing: an unknown parent, edge type or status creates nothing.
 - **Selecting a node in the viewer's tree highlights that node.** Each row was handed the root's selection flag, so choosing the root lit every row and choosing any other lit none.
 - **`mix hex.audit` is clean again.** bandit 1.13.1 to 1.14.1 (EEF-CVE-2026-110499) and ecto 3.14.2 to 3.14.3 (EEF-CVE-2026-118391); either would have failed the server build at the next release.

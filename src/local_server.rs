@@ -515,8 +515,12 @@ pub fn launchd_plist(p: &ServicePaths) -> String {
     )
 }
 
-/// A systemd user unit. Paths are quoted, so a home directory with a space
-/// in it still works.
+/// A systemd user unit. ExecStart and Environment are quoted, so a home
+/// directory with a space in it still works. WorkingDirectory is not: systemd
+/// takes that value verbatim to the end of the line, spaces included, and a
+/// quoted one is "not absolute", a fatal error that stops the unit loading
+/// (systemd 252: `WorkingDirectory= path is not absolute: "/home/..."`). Its
+/// only escape is `%` for specifiers, written `%%`.
 pub fn systemd_unit(p: &ServicePaths) -> String {
     let q = |path: &Path| {
         format!(
@@ -555,7 +559,7 @@ pub fn systemd_unit(p: &ServicePaths) -> String {
          WantedBy=default.target\n",
         envfile = env("DECIDUOUS_ENV_FILE", p.env_file),
         rt = env("DECIDUOUS_MCP_INSTALL_DIR", p.runtime_dir),
-        home = q(p.home),
+        home = p.home.display().to_string().replace('%', "%%"),
         bin = q(p.binary),
         // systemd takes append: paths verbatim, up to the end of the line.
         log = p.log.display(),
@@ -859,5 +863,25 @@ mod tests {
         assert!(unit.contains("Restart=always"));
         assert!(unit.contains("WantedBy=default.target"));
         assert!(!unit.contains("DATABASE_URL") && !unit.contains("TOKEN"));
+    }
+
+    #[test]
+    fn the_systemd_working_directory_is_unquoted_because_systemd_refuses_quotes() {
+        let (bin, env, rt, home, log) = paths("/home/a b/100%/.config/deciduous/server");
+        let unit = systemd_unit(&ServicePaths {
+            binary: &bin,
+            env_file: &env,
+            runtime_dir: &rt,
+            home: &home,
+            log: &log,
+        });
+        let line = unit
+            .lines()
+            .find(|l| l.starts_with("WorkingDirectory="))
+            .unwrap();
+        assert_eq!(
+            line,
+            "WorkingDirectory=/home/a b/100%%/.config/deciduous/server"
+        );
     }
 }
