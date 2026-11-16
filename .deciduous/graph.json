@@ -2660,6 +2660,16 @@
       "to_change_id": "17c0e3fb-f0b1-484e-bfd7-b9a3f4de1800",
       "weight": 1.0
     },
+    "3436304c7fcaa37a039b": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.454082-05:00",
+      "edge_id": "3436304c7fcaa37a039b",
+      "edge_type": "rejected",
+      "from_change_id": "50445105-19ee-48a0-9006-cec8adfbb0e6",
+      "rationale": "20 open goals from three sessions, most of them not goals; prompts in git nobody chose to log",
+      "to_change_id": "20b55fff-7944-4865-865c-d56752a9a216",
+      "weight": 1.0
+    },
     "344e44a4ee5666dd1632": {
       "author": "Bobby Grayson",
       "created_at": "2026-11-14T22:27:52.210598-05:00",
@@ -3538,6 +3548,16 @@
       "from_change_id": "17b0b0da-ff84-4306-b0a9-7a8c2e13f5fc",
       "rationale": "Merged to main",
       "to_change_id": "63d17d46-48a9-463f-8f4b-76f1ccd48789",
+      "weight": 1.0
+    },
+    "4411ff1dd3b3432a44c9": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.511809-05:00",
+      "edge_id": "4411ff1dd3b3432a44c9",
+      "edge_type": "rejected",
+      "from_change_id": "d5ada9cf-0cbf-4a61-a5e4-e42b94ef6227",
+      "rationale": "the backstop for an agent that logged nothing would leave orphan actions or no record",
+      "to_change_id": "20b55fff-7944-4865-865c-d56752a9a216",
       "weight": 1.0
     },
     "4485045998d66edd8570": {
@@ -4769,6 +4789,16 @@
       "to_change_id": "63b3327e-1c81-4f6c-a9e2-bf4b77f6d5fe",
       "weight": 1.0
     },
+    "593b7ce8a31de2d7333c": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:47:29.372863-05:00",
+      "edge_id": "593b7ce8a31de2d7333c",
+      "edge_type": "leads_to",
+      "from_change_id": "c58c8900-2573-4011-857e-051441123435",
+      "rationale": "result",
+      "to_change_id": "deb99514-423c-4a35-9a6a-bed25389de94",
+      "weight": 1.0
+    },
     "5950ba5ccf37f60fb662": {
       "author": "Bobby Grayson",
       "created_at": "2026-01-31T03:57:04.581782-05:00",
@@ -5057,6 +5087,16 @@
       "from_change_id": "c7b92439-d2dc-4739-8d15-4b58a8073ddc",
       "rationale": "TraceView UI",
       "to_change_id": "edffe0ec-1189-4173-934d-111d8725d709",
+      "weight": 1.0
+    },
+    "5ebcad5b8f5aada05ad4": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.396382-05:00",
+      "edge_id": "5ebcad5b8f5aada05ad4",
+      "edge_type": "leads_to",
+      "from_change_id": "7554673f-b2f0-4015-a187-fd51e2200c0d",
+      "rationale": "possible approach",
+      "to_change_id": "ef37a8dd-4120-4f86-880e-35aa7f50fdd1",
       "weight": 1.0
     },
     "5ed1b84049336a0921e9": {
@@ -7523,6 +7563,16 @@
       "to_change_id": "f0f3be6d-9077-4496-bb9b-d5bea02b8f7a",
       "weight": 1.0
     },
+    "8a5724efc321ac9e4f19": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.569048-05:00",
+      "edge_id": "8a5724efc321ac9e4f19",
+      "edge_type": "chosen",
+      "from_change_id": "ef37a8dd-4120-4f86-880e-35aa7f50fdd1",
+      "rationale": "keeps the backstop, clears the open list",
+      "to_change_id": "20b55fff-7944-4865-865c-d56752a9a216",
+      "weight": 1.0
+    },
     "8a680fce8c7166eee418": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-12T00:15:26.106410-05:00",
@@ -8321,6 +8371,16 @@
       "from_change_id": "c06c4d4f-ad06-4212-bba9-7309f4f630f6",
       "rationale": "PR opened",
       "to_change_id": "f3feb439-e333-4208-a341-8653b352213f",
+      "weight": 1.0
+    },
+    "98bb4fcb3cdad3792e8a": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.339201-05:00",
+      "edge_id": "98bb4fcb3cdad3792e8a",
+      "edge_type": "leads_to",
+      "from_change_id": "7554673f-b2f0-4015-a187-fd51e2200c0d",
+      "rationale": "possible approach",
+      "to_change_id": "d5ada9cf-0cbf-4a61-a5e4-e42b94ef6227",
       "weight": 1.0
     },
     "9931a550a804c6f284f1": {
@@ -11332,6 +11392,16 @@
       "to_change_id": "85446554-618d-4d59-b8b0-3b6b036ee8fb",
       "weight": 1.0
     },
+    "d615c1774b316aba541f": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.281355-05:00",
+      "edge_id": "d615c1774b316aba541f",
+      "edge_type": "leads_to",
+      "from_change_id": "7554673f-b2f0-4015-a187-fd51e2200c0d",
+      "rationale": "possible approach",
+      "to_change_id": "50445105-19ee-48a0-9006-cec8adfbb0e6",
+      "weight": 1.0
+    },
     "d66038c6606b89f6fa17": {
       "author": "Bobby Grayson",
       "created_at": "2025-12-10T14:17:27.638722-05:00",
@@ -13038,6 +13108,16 @@
       "from_change_id": "8709501f-9d2c-43c5-8edb-b21a27666685",
       "rationale": "Implementation step",
       "to_change_id": "1f94f41f-631f-4e79-baec-6d1bccf2463d",
+      "weight": 1.0
+    },
+    "f3958456215a8b58c2f5": {
+      "author": "Bobby Grayson",
+      "created_at": "2026-11-14T22:43:46.626982-05:00",
+      "edge_id": "f3958456215a8b58c2f5",
+      "edge_type": "leads_to",
+      "from_change_id": "20b55fff-7944-4865-865c-d56752a9a216",
+      "rationale": "implementation",
+      "to_change_id": "c58c8900-2573-4011-857e-051441123435",
       "weight": 1.0
     },
     "f3977b63ed449146c554": {
@@ -16673,6 +16753,19 @@
       "status": "pending",
       "title": "Implement tree_component.ex for LiveView",
       "updated_at": "2026-03-05T07:52:29.065581Z"
+    },
+    "20b55fff-7944-4865-865c-d56752a9a216": {
+      "author": "Bobby Grayson",
+      "change_id": "20b55fff-7944-4865-865c-d56752a9a216",
+      "created_at": "2026-11-14T22:43:46.221662-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 85
+      },
+      "node_type": "decision",
+      "status": "completed",
+      "title": "A derived goal only when the turn changed something, and closed: not every prompt, and not none",
+      "updated_at": "2026-11-14T22:43:46.861182-05:00"
     },
     "20f26515-2242-49ab-be19-ffea9cdf558f": {
       "author": "Bobby Grayson",
@@ -20806,6 +20899,19 @@
       "title": "Breadth-first traversal causes high memory usage - gitignore matchers accumulate for wide directories (#1550: user searching all Rust crates saw ~1GB memory usage)",
       "updated_at": "2020-04-17T00:00:00-04:00"
     },
+    "50445105-19ee-48a0-9006-cec8adfbb0e6": {
+      "author": "Bobby Grayson",
+      "change_id": "50445105-19ee-48a0-9006-cec8adfbb0e6",
+      "created_at": "2026-11-14T22:43:46.035664-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 20
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "Every prompt is a goal, as now",
+      "updated_at": "2026-11-14T22:43:46.689402-05:00"
+    },
     "50fdb762-de8d-4077-933a-b963660d6315": {
       "author": "Bobby Grayson",
       "change_id": "50fdb762-de8d-4077-933a-b963660d6315",
@@ -23527,6 +23633,20 @@
       "status": "pending",
       "title": "Add 6 unit tests for chain recency functions",
       "updated_at": "2025-12-12T09:22:08.070340-05:00"
+    },
+    "7554673f-b2f0-4015-a187-fd51e2200c0d": {
+      "author": "Bobby Grayson",
+      "change_id": "7554673f-b2f0-4015-a187-fd51e2200c0d",
+      "created_at": "2026-11-14T22:38:12.631445-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 90,
+        "prompt": "sure"
+      },
+      "node_type": "goal",
+      "status": "completed",
+      "title": "Import: a prompt becomes a goal only when its turn changed something, and closed; auto_import=false really stops it; deciduous's own claude -p calls are skipped",
+      "updated_at": "2026-11-14T22:47:20.589995-05:00"
     },
     "75bad24b-db71-40ab-9c3a-c9dd831e88f7": {
       "author": "Bobby Grayson",
@@ -30120,6 +30240,26 @@
       "title": "Previous attempt removed Burrito as unnecessary complexity - now re-adding it based on user preference for single-binary distribution",
       "updated_at": "2026-03-04T00:54:39.358981-05:00"
     },
+    "c58c8900-2573-4011-857e-051441123435": {
+      "author": "Bobby Grayson",
+      "change_id": "c58c8900-2573-4011-857e-051441123435",
+      "created_at": "2026-11-14T22:43:37.238511-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 90,
+        "files": [
+          "src/transcript.rs",
+          "src/db.rs",
+          "src/main.rs",
+          "src/serve.rs",
+          "src/init/mod.rs"
+        ]
+      },
+      "node_type": "action",
+      "status": "completed",
+      "title": "Import: no goal for a turn with no edit, commit or check; derived goals born completed; --hook honours auto_import=false; ai-describe and Ask set the guard",
+      "updated_at": "2026-11-14T22:47:20.531227-05:00"
+    },
     "c59442dc-2c4a-4385-8fd6-6d76ddc053e2": {
       "author": "Bobby Grayson",
       "change_id": "c59442dc-2c4a-4385-8fd6-6d76ddc053e2",
@@ -31239,6 +31379,19 @@
       "title": "Implement records.rs: per-record JSON store, tombstones, legacy JSONL import, bidirectional reconcile",
       "updated_at": "2026-09-02T17:49:00.814105-04:00"
     },
+    "d5ada9cf-0cbf-4a61-a5e4-e42b94ef6227": {
+      "author": "Bobby Grayson",
+      "change_id": "d5ada9cf-0cbf-4a61-a5e4-e42b94ef6227",
+      "created_at": "2026-11-14T22:43:46.097912-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 40
+      },
+      "node_type": "option",
+      "status": "rejected",
+      "title": "The import makes no goals at all",
+      "updated_at": "2026-11-14T22:43:46.747447-05:00"
+    },
     "d5b2f736-4a64-49f8-9382-538afef9745e": {
       "author": "Bobby Grayson",
       "change_id": "d5b2f736-4a64-49f8-9382-538afef9745e",
@@ -31915,6 +32068,20 @@
       "status": "pending",
       "title": "Git Guard: Runtime-enforced git safety rules",
       "updated_at": "2025-12-18T12:48:54.756360-05:00"
+    },
+    "deb99514-423c-4a35-9a6a-bed25389de94": {
+      "author": "Bobby Grayson",
+      "change_id": "deb99514-423c-4a35-9a6a-bed25389de94",
+      "created_at": "2026-11-14T22:47:20.416765-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "commit": "01dce6008ec70b76ea91b98a728bbf0dadc0ab7d",
+        "confidence": 95
+      },
+      "node_type": "outcome",
+      "status": "pending",
+      "title": "12-prompt session now gives 4 closed goals; question-only sessions list as no work; auto_import=false stops the hook; 738 tests pass",
+      "updated_at": "2026-11-14T22:47:20.416765-05:00"
     },
     "dec51edc-1bdd-4f11-81d1-4f0f1c205509": {
       "author": "Bobby Grayson",
@@ -33405,6 +33572,19 @@
       "status": "pending",
       "title": "MCP docs rewritten - quickstarts first, real examples from graph, separate API ref",
       "updated_at": "2026-05-06T21:37:16.917028-04:00"
+    },
+    "ef37a8dd-4120-4f86-880e-35aa7f50fdd1": {
+      "author": "Bobby Grayson",
+      "change_id": "ef37a8dd-4120-4f86-880e-35aa7f50fdd1",
+      "created_at": "2026-11-14T22:43:46.160298-05:00",
+      "metadata": {
+        "branch": "97-a-prompt-is-a-goal-only-when-it-changed-something",
+        "confidence": 85
+      },
+      "node_type": "option",
+      "status": "completed",
+      "title": "A goal only for a prompt whose turn changed something, born completed",
+      "updated_at": "2026-11-14T22:43:46.804259-05:00"
     },
     "ef59a316-d390-4b57-a1e0-65095ccd5ca6": {
       "author": "Bobby Grayson",

@@ -557,6 +557,9 @@ pub struct Skipped {
     pub deciduous_writes: usize,
     /// Reads, searches, and commands that are neither tests nor commits.
     pub other_tools: usize,
+    /// Prompts whose turn changed nothing: no edit, no commit, no test or
+    /// build run. A question and its answer are not a goal.
+    pub idle_prompts: usize,
 }
 
 /// A change id that is a function of (session, kind, anchor): hyphenated
@@ -855,7 +858,8 @@ pub fn plan(t: &Transcript, root: Option<&Path>) -> Result<Plan, TranscriptError
 
     let mut session_root: Option<usize> = None;
     for (i, turn) in turns.iter().enumerate() {
-        let goal_title = if i == 0 {
+        let start = nodes.len();
+        let goal_title = if session_root.is_none() {
             session_title.clone()
         } else {
             title_from(&turn.prompt)
@@ -872,7 +876,7 @@ pub fn plan(t: &Transcript, root: Option<&Path>) -> Result<Plan, TranscriptError
         if let Some(b) = &turn.branch {
             meta["branch"] = json!(b);
         }
-        if i == 0 {
+        if session_root.is_none() {
             meta["session"] = json!({
                 "id": t.session_id,
                 "turns": turns.len(),
@@ -893,10 +897,25 @@ pub fn plan(t: &Transcript, root: Option<&Path>) -> Result<Plan, TranscriptError
                 edge_rationale: session_root.map(|_| format!("prompt {} of the session", i + 1)),
             },
         );
-        if session_root.is_none() {
+        let was_root = session_root.is_none();
+        if was_root {
             session_root = Some(goal);
         }
         derive_turn(turn, goal, &mut ctx, &mut nodes, &mut skipped);
+        // "why is my internet so slow" is a prompt and not a goal. A turn
+        // is kept when the transcript proves it did something: an action
+        // (edits, a commit) or a test or build run with its exit. The
+        // assistant's closing words alone are not that.
+        let worked = nodes[start + 1..]
+            .iter()
+            .any(|n| n.node_type == "action" || n.evidence == Evidence::Proven);
+        if !worked {
+            nodes.truncate(start);
+            skipped.idle_prompts += 1;
+            if was_root {
+                session_root = None;
+            }
+        }
     }
 
     Ok(Plan {
@@ -1854,6 +1873,9 @@ pub struct Listed {
     pub prompts: usize,
     pub first_prompt_at: String,
     pub imported: bool,
+    /// False when no prompt of the session changed anything: an import
+    /// would add nothing.
+    pub work: bool,
 }
 
 /// Every top-level transcript in a directory, newest first, with whether
@@ -1876,16 +1898,13 @@ pub fn list(db: &Database, dir: &Path) -> Result<Vec<Listed>, TranscriptError> {
         let Some(first) = turns.first() else {
             continue;
         };
-        let root_cid = derive_change_id(&t.session_id, "goal", &first.uuid);
         // The root may be a goal the agent logged, which has its own
         // change_id; then anything else the import derived says it ran.
-        let imported = db.node_id_by_change_id(&root_cid)?.is_some()
-            || plan(&t, None).is_ok_and(|p| {
-                p.nodes
-                    .iter()
-                    .skip(1)
-                    .any(|n| matches!(db.node_id_by_change_id(&n.change_id), Ok(Some(_))))
-            });
+        let planned = plan(&t, None).map(|p| p.nodes).unwrap_or_default();
+        let work = !planned.is_empty();
+        let imported = planned
+            .iter()
+            .any(|n| matches!(db.node_id_by_change_id(&n.change_id), Ok(Some(_))));
         out.push(Listed {
             path: path.clone(),
             session_id: t.session_id.clone(),
@@ -1897,6 +1916,7 @@ pub fn list(db: &Database, dir: &Path) -> Result<Vec<Listed>, TranscriptError> {
             prompts: turns.len(),
             first_prompt_at: first.timestamp.clone(),
             imported,
+            work,
         });
     }
     out.sort_by(|a, b| b.first_prompt_at.cmp(&a.first_prompt_at));
@@ -2146,10 +2166,10 @@ mod tests {
                 ("outcome", "cargo test passed"),
                 ("action", "Committed: feat: thing"),
                 ("outcome", "Done. The thing is added and both tests pass."),
-                ("goal", "why did you pick that name?"),
-                ("observation", "Because the module already used it."),
-            ]
+            ],
+            "the second prompt is a question answered in prose: not a goal"
         );
+        assert_eq!(plan.skipped.idle_prompts, 1);
         let root = &plan.nodes[0];
         assert_eq!(
             root.metadata["prompt"],
@@ -2191,19 +2211,61 @@ mod tests {
         assert_eq!(closing.metadata["evidence"]["kind"], "inferred");
         assert_eq!(closing.parent, Some(0));
 
-        let second = &plan.nodes[5];
-        assert_eq!(second.parent, Some(0));
-        assert_eq!(
-            second.edge_rationale.as_deref(),
-            Some("prompt 2 of the session")
-        );
-        assert_eq!(plan.nodes[6].node_type, "observation");
-
         // Same transcript, same ids.
         let again = super::plan(&parse(&p).unwrap(), Some(dir.path())).unwrap();
         let a: Vec<&str> = plan.nodes.iter().map(|n| n.change_id.as_str()).collect();
         let b: Vec<&str> = again.nodes.iter().map(|n| n.change_id.as_str()).collect();
         assert_eq!(a, b);
+    }
+
+    /// A session that opens with a question and then does work: the root is
+    /// the prompt that did the work, and a session of questions is empty.
+    #[test]
+    fn a_prompt_that_changed_nothing_is_not_a_goal() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("s.jsonl");
+        let user = |uuid: &str, at: &str, text: &str| {
+            line(
+                json!({"type":"user","uuid":uuid,"timestamp":at,"cwd":dir.path(),"sessionId":"s2",
+                "message":{"role":"user","content":text}}),
+            )
+        };
+        let says = |uuid: &str, at: &str, text: &str| {
+            line(
+                json!({"type":"assistant","uuid":uuid,"timestamp":at,"cwd":dir.path(),
+                "message":{"role":"assistant","content":[{"type":"text","text":text}]}}),
+            )
+        };
+        let questions = user("u1", "2026-10-01T10:00:00Z", "why is my internet so slow")
+            + &says("a1", "2026-10-01T10:00:02Z", "I cannot tell from here.")
+            + &user("u2", "2026-10-01T10:01:00Z", "ok try again")
+            + &says("a2", "2026-10-01T10:01:02Z", "Still nothing.");
+        fs::write(&p, &questions).unwrap();
+        let plan = super::plan(&parse(&p).unwrap(), Some(dir.path())).unwrap();
+        assert!(plan.nodes.is_empty(), "{:?}", plan.nodes);
+        assert_eq!(plan.skipped.idle_prompts, 2);
+
+        let work = user("u3", "2026-10-01T10:02:00Z", "rename x to y")
+            + &line(
+                json!({"type":"assistant","uuid":"a3","timestamp":"2026-10-01T10:02:02Z","cwd":dir.path(),
+                "message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Edit",
+                    "input":{"file_path":dir.path().join("src/lib.rs"),"old_string":"x","new_string":"y"}}]}}),
+            )
+            + &line(
+                json!({"type":"user","uuid":"r1","timestamp":"2026-10-01T10:02:03Z","cwd":dir.path(),
+                "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}),
+            );
+        fs::write(&p, questions + &work).unwrap();
+        let plan = super::plan(&parse(&p).unwrap(), Some(dir.path())).unwrap();
+        assert_eq!(plan.skipped.idle_prompts, 2);
+        let root = &plan.nodes[0];
+        assert_eq!(root.metadata["prompt"], "rename x to y");
+        assert_eq!(root.parent, None);
+        assert_eq!(root.metadata["session"]["id"], "s2");
+        assert!(plan
+            .nodes
+            .iter()
+            .all(|n| n.metadata["prompt"] != "ok try again"));
     }
 
     #[test]

@@ -603,6 +603,8 @@ fn handle_ask_question(mut request: Request) -> std::io::Result<()> {
     // Execute claude -p command, piping prompt via stdin for reliability
     let mut child = match Command::new("claude")
         .arg("-p")
+        // Not a session to import when it ends.
+        .env(crate::decisions::GUARD_ENV, "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

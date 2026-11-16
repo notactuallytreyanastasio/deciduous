@@ -5812,9 +5812,19 @@ fn main() {
                     hash_files: !no_hash,
                 };
                 if hook {
-                    // The session ending is the model call `transcript
-                    // decisions` made: it has nothing to import.
+                    // The session ending is a model call deciduous itself
+                    // made (`transcript decisions`, `doc --ai-describe`, the
+                    // viewer's Ask panel): it has nothing to import.
                     if std::env::var_os(deciduous::decisions::GUARD_ENV).is_some() {
+                        return;
+                    }
+                    // `[transcript] auto_import = false` turns the import
+                    // off wherever the hook entry came from: a settings.json
+                    // somebody else committed still carries it.
+                    if db
+                        .project_root()
+                        .is_some_and(|root| !deciduous::init::transcript_hook_wanted(root))
+                    {
                         return;
                     }
                     use std::io::Read;
@@ -5944,6 +5954,10 @@ fn main() {
                             for l in &listed {
                                 let mark = if l.imported {
                                     "imported".green()
+                                } else if !l.work {
+                                    // No prompt changed anything: an
+                                    // import would add nothing.
+                                    "no work".dimmed()
                                 } else {
                                     "new".yellow()
                                 };
@@ -7051,6 +7065,8 @@ fn generate_ai_description(filename: &str, file_path: &std::path::Path) -> Optio
 
     let output = std::process::Command::new("claude")
         .args(["-p", &content_context])
+        // Not a session to import when it ends.
+        .env(deciduous::decisions::GUARD_ENV, "1")
         .output()
         .ok()?;
 
@@ -7809,6 +7825,12 @@ fn print_transcript_report(r: &deciduous::transcript::ImportReport) {
         notes.push(format!(
             "{} deciduous MCP writes skipped (already in the graph)",
             r.skipped.deciduous_writes
+        ));
+    }
+    if r.skipped.idle_prompts > 0 {
+        notes.push(format!(
+            "{} prompts changed nothing and are not goals",
+            r.skipped.idle_prompts
         ));
     }
     if r.unreadable_lines > 0 {
