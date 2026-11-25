@@ -47,6 +47,39 @@ end
 
 config :deciduous_mcp, api_token: read_env.("DECIDUOUS_MCP_TOKEN")
 
+# What ask_graph and query_nodes do when a caller passes no detail or
+# include_retired / exclude_retired argument. Unset or empty keeps today's
+# answers: full detail, retired notes included. A caller's argument wins.
+ask_detail_default =
+  case read_env.("DECIDUOUS_ASK_DETAIL_DEFAULT") do
+    nil ->
+      "full"
+
+    value when value in ["full", "lean"] ->
+      value
+
+    other ->
+      raise "DECIDUOUS_ASK_DETAIL_DEFAULT must be full or lean, got: #{inspect(other)}"
+  end
+
+hide_retired_default =
+  case read_env.("DECIDUOUS_HIDE_RETIRED_DEFAULT") do
+    nil ->
+      false
+
+    "true" ->
+      true
+
+    "false" ->
+      false
+
+    other ->
+      raise "DECIDUOUS_HIDE_RETIRED_DEFAULT must be true or false, got: #{inspect(other)}"
+  end
+
+config :deciduous_mcp,
+  read_defaults: [detail: ask_detail_default, hide_retired: hide_retired_default]
+
 # The settings file names the port DECIDUOUS_PORT (the host port, in Docker
 # terms); a container or a hand-run server sets PORT.
 port_text = Map.get(settings_file, "DECIDUOUS_PORT") || read_env.("PORT") || "4000"

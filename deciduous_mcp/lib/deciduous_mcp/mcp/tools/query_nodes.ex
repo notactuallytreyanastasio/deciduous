@@ -2,7 +2,7 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
   @moduledoc "MCP Tool: search and filter decision graph nodes."
   use DeciduousMcp.MCP.Component, type: :tool
 
-  alias DeciduousMcp.MCP.Scope
+  alias DeciduousMcp.MCP.{ReadDefaults, Scope}
   alias DeciduousMcp.Graph.{Nodes, Related}
   alias DeciduousMcp.Schema.Node
 
@@ -41,6 +41,14 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
             ],
             description: "Filter by status"
           },
+          exclude_retired: %{
+            type: "boolean",
+            description:
+              "If true, leave out retired notes (observations whose status is superseded or " <>
+                "abandoned) before limit. Decisions, options, goals, actions, outcomes and " <>
+                "revisits are kept whatever their status. Ignored when status is given: an " <>
+                "explicit status always wins. Default: false unless the server says otherwise."
+          },
           branch: %{type: "string", description: "Filter by git branch"},
           search: %{type: "string", description: "Text search in title and description"},
           file: %{
@@ -77,12 +85,15 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
 
   def call(%{arguments: args, server: frame}) do
     case Scope.read_scope(frame, args) do
-      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:ok, workspace_id} -> do_call(workspace_id, args, exclude_retired?(args))
       {:error, message} -> {:error, %{code: -1, message: message}}
     end
   end
 
-  defp do_call(workspace_id, %{"file" => file} = args) do
+  defp exclude_retired?(%{"exclude_retired" => value}) when is_boolean(value), do: value
+  defp exclude_retired?(_args), do: ReadDefaults.hide_retired?()
+
+  defp do_call(workspace_id, %{"file" => file} = args, exclude_retired) do
     case Related.nodes_for_file(workspace_id, file) do
       {:ok, matches} ->
         match_of = Map.new(matches, &{&1.node.id, &1.match})
@@ -93,7 +104,7 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
         nodes =
           Nodes.list_nodes(
             workspace_id,
-            filter_opts(args)
+            filter_opts(args, exclude_retired)
             |> Keyword.put(:ids, Map.keys(match_of))
             |> Keyword.put(:limit, max(map_size(match_of), 1))
           )
@@ -117,6 +128,7 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
           |> encode(fn n, map -> Map.put(map, :file_match, Map.fetch!(match_of, n.id)) end)
           |> Map.put(:decisions_above, above)
           |> Map.put(:file_node_count, map_size(match_of))
+          |> Map.put(:exclude_retired, exclude_retired)
 
         {:ok, Jason.encode!(result)}
 
@@ -125,24 +137,29 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
     end
   end
 
-  defp do_call(workspace_id, args) do
-    opts =
-      []
-      |> maybe_opt(:type, args["type"])
-      |> maybe_opt(:status, args["status"])
-      |> maybe_opt(:branch, args["branch"])
-      |> maybe_opt(:search, args["search"])
-      |> maybe_opt(:limit, args["limit"])
+  defp do_call(workspace_id, args, exclude_retired) do
+    opts = filter_opts(args, exclude_retired) |> maybe_opt(:limit, args["limit"])
 
-    {:ok, Jason.encode!(encode(Nodes.list_nodes(workspace_id, opts), fn _n, map -> map end))}
+    result =
+      Nodes.list_nodes(workspace_id, opts)
+      |> encode(fn _n, map -> map end)
+      |> Map.put(:exclude_retired, exclude_retired)
+
+    {:ok, Jason.encode!(result)}
   end
 
-  defp filter_opts(args) do
+  # An explicit status always wins, so retired notes are excluded only when the
+  # caller named no status.
+  defp filter_opts(args, exclude_retired) do
     []
     |> maybe_opt(:type, args["type"])
     |> maybe_opt(:status, args["status"])
     |> maybe_opt(:branch, args["branch"])
     |> maybe_opt(:search, args["search"])
+    |> maybe_opt(
+      :exclude_retired_notes,
+      if(exclude_retired and is_nil(args["status"]), do: true)
+    )
   end
 
   defp encode(nodes, extra) do

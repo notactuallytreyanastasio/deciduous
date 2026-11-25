@@ -205,4 +205,35 @@ defmodule DeciduousMcp.MCP.CloseThreadTest do
       assert from == goal.id
     end
   end
+
+  describe "lesson notes" do
+    test "lessons_are_born_completed", %{a: a, own_goal: goal} do
+      client = McpClient.connect()
+
+      assert %{"lessons_logged" => 2, "next_goals_created" => 1} =
+               McpClient.call!(client, "close_thread", %{
+                 "title" => "ct lessons",
+                 "parent_node_id" => goal.id,
+                 "goal_node_id" => goal.id,
+                 "lessons_learned" => ["first lesson", "second lesson"],
+                 "next_steps" => [%{"title" => "follow up"}],
+                 "workspace" => "ct-a",
+                 "branch" => "b-lessons"
+               })
+
+      written = Nodes.list_nodes(a.id, branch: "b-lessons")
+      {follow_up, closed} = Enum.split_with(written, &(&1.title == "follow up"))
+
+      assert Enum.map(closed, & &1.title) |> Enum.sort() ==
+               ["ct lessons", "first lesson", "second lesson"]
+
+      # Nothing it wrote is left open, except the follow-up goal it was asked for.
+      assert Enum.all?(closed, &(&1.status in ["completed", "rejected"]))
+
+      assert Enum.count(closed, &(&1.node_type == "observation" and &1.status == "completed")) ==
+               2
+
+      assert [%{status: "pending"}] = follow_up
+    end
+  end
 end
