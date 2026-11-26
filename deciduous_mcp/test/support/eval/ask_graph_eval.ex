@@ -44,11 +44,13 @@ defmodule DeciduousMcp.Eval.AskGraph do
   `%{summary: map, by_category: map, questions: [map]}`.
 
   Options: `:workspace` (default #{inspect(@workspace)}), `:only` (list of
-  categories).
+  categories), `:ask_args` (extra `ask_graph` arguments sent with every
+  question; `lean_args/0` asks for the lean, retired-free read).
   """
   def run(opts \\ []) do
     :ok = Fixture.validate!()
     ws = Keyword.get(opts, :workspace, @workspace)
+    ask_args = Keyword.get(opts, :ask_args, %{})
     client = McpClient.connect(name: "ask-graph-eval")
 
     {ids, load_ms} = timed(fn -> load!(client, ws) end)
@@ -77,9 +79,9 @@ defmodule DeciduousMcp.Eval.AskGraph do
         cats -> Enum.filter(Fixture.rare_term_set(), &(&1.category in cats))
       end
 
-    rows = Enum.map(questions, &ask_and_score(client, ws, ids, &1))
-    held_rows = Enum.map(held, &ask_and_score(client, ws, ids, &1))
-    probe_rows = Enum.map(probe, &ask_and_score(client, ws, ids, &1))
+    rows = Enum.map(questions, &ask_and_score(client, ws, ids, &1, ask_args))
+    held_rows = Enum.map(held, &ask_and_score(client, ws, ids, &1, ask_args))
+    probe_rows = Enum.map(probe, &ask_and_score(client, ws, ids, &1, ask_args))
 
     # The rare-term set asks a graph with the release history added, in a
     # workspace of its own, so the other sets keep scoring the graph they
@@ -98,7 +100,7 @@ defmodule DeciduousMcp.Eval.AskGraph do
             Fixture.edges() ++ Fixture.release_edges()
           )
 
-        Enum.map(rare, &ask_and_score(client, rare_ws, rare_ids, &1))
+        Enum.map(rare, &ask_and_score(client, rare_ws, rare_ids, &1, ask_args))
       end
 
     %{
@@ -121,6 +123,37 @@ defmodule DeciduousMcp.Eval.AskGraph do
         questions: rare_rows
       }
     }
+  end
+
+  @doc "The `ask_graph` arguments of the lean read: lean results, retired nodes left out."
+  def lean_args, do: %{"detail" => "lean", "include_retired" => false}
+
+  @lean_ranked ~w(recall5 recall10 mrr context_recall)a
+
+  @doc """
+  The headline scores on which the lean read scored below the default read,
+  as `[{metric, default, lean}]`; empty when lean is not worse on any.
+  Scores are compared on the main question set's summary.
+
+  Nodes with equal scores are ordered differently from one run to the next
+  (the same default read, run twice, moves `t08` between R@10 0.0 and 0.5),
+  so a ranked score may fall by one question's worth, `1 / answerable
+  questions`, without that being lean's doing. The adversarial pass count
+  does not depend on the order and must not fall at all.
+  """
+  def lean_regressions(%{summary: default}, %{summary: lean}) do
+    slack = 1 / max(default.questions - default.adversarial, 1)
+
+    ranked =
+      for m <- @lean_ranked,
+          d = Map.fetch!(default, m),
+          l = Map.fetch!(lean, m),
+          l < d - slack,
+          do: {m, d, l}
+
+    if lean.adversarial_pass < default.adversarial_pass,
+      do: ranked ++ [{:adversarial_pass, default.adversarial_pass, lean.adversarial_pass}],
+      else: ranked
   end
 
   defp by_category(rows),
@@ -187,12 +220,16 @@ defmodule DeciduousMcp.Eval.AskGraph do
 
   # --- asking and scoring ---------------------------------------------------
 
-  defp ask_and_score(client, ws, ids, q) do
+  defp ask_and_score(client, ws, ids, q, ask_args) do
     by_id = Map.new(ids, fn {k, id} -> {id, k} end)
 
     {answer, ms} =
       timed(fn ->
-        McpClient.call!(client, "ask_graph", %{"workspace" => ws, "question" => q.question})
+        McpClient.call!(
+          client,
+          "ask_graph",
+          Map.merge(ask_args, %{"workspace" => ws, "question" => q.question})
+        )
       end)
 
     results =
@@ -295,11 +332,16 @@ defmodule DeciduousMcp.Eval.AskGraph do
 
   # --- report ---------------------------------------------------------------
 
-  @doc "Formats a `run/1` result as plain text."
-  def format(%{summary: s, by_category: by_cat, questions: rows} = result) do
+  @doc """
+  Formats a `run/1` result as plain text. `label` (for example "lean mode")
+  is added to the heading when the run was not the default read.
+  """
+  def format(result, label \\ nil)
+
+  def format(%{summary: s, by_category: by_cat, questions: rows} = result, label) do
     header =
-      "ask_graph retrieval eval: #{s.questions} questions over #{s.nodes} nodes " <>
-        "(fixture loaded through MCP in #{s.load_ms}ms)\n\n"
+      "ask_graph retrieval eval#{if label, do: " (#{label})"}: #{s.questions} questions over " <>
+        "#{s.nodes} nodes (fixture loaded through MCP in #{s.load_ms}ms)\n\n"
 
     main = table(s, by_cat) <> "\n\nper question:\n" <> detail(rows) <> "\n"
 

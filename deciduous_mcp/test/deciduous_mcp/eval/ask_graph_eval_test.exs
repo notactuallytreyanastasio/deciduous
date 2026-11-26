@@ -64,6 +64,43 @@ defmodule DeciduousMcp.Eval.AskGraphEvalTest do
     assert AskGraph.adversarial_pass_old?(21, ["websocket"], ["websocket"])
   end
 
+  test "lean_regressions: a ranked score may fall by one question, adversarial passes not at all" do
+    # 10 answerable questions, so one question is worth 0.1.
+    score = %{
+      questions: 14,
+      adversarial: 4,
+      recall5: 0.8,
+      recall10: 0.9,
+      mrr: 0.7,
+      context_recall: 0.95,
+      adversarial_pass: 3
+    }
+
+    default = %{summary: score}
+
+    assert AskGraph.lean_regressions(default, %{summary: score}) == []
+    assert AskGraph.lean_regressions(default, %{summary: %{score | mrr: 0.75}}) == []
+
+    # One question's worth of tie-order noise is not a regression.
+    assert AskGraph.lean_regressions(default, %{summary: %{score | recall10: 0.82}}) == []
+
+    assert AskGraph.lean_regressions(default, %{
+             summary: %{score | context_recall: 0.8, adversarial_pass: 2}
+           }) == [{:context_recall, 0.95, 0.8}, {:adversarial_pass, 3, 2}]
+
+    # A set with no answerable questions has no recall to compare.
+    nil_scores = %{
+      score
+      | questions: 4,
+        recall5: nil,
+        recall10: nil,
+        mrr: nil,
+        context_recall: nil
+    }
+
+    assert AskGraph.lean_regressions(%{summary: nil_scores}, %{summary: nil_scores}) == []
+  end
+
   @tag :eval
   @tag timeout: 300_000
   test "ask_graph retrieval eval" do

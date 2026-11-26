@@ -178,7 +178,7 @@ defmodule DeciduousMcp.MCP.Tools.CloseThread do
           insert!(workspace_id, %{
             node_type: "observation",
             title: lesson,
-            status: "active",
+            status: "completed",
             metadata: meta
           })
 

@@ -7,6 +7,19 @@ defmodule DeciduousMcp.Graph.Nodes do
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Node, AuditLog}
 
+  # What a lean read hides: observations (handoff and scratch notes) that were
+  # retired. A retired decision, option, goal, action, outcome or revisit is
+  # still part of the record of why the code is the way it is.
+  @retired_statuses ["superseded", "abandoned"]
+
+  @doc """
+  True for a retired note: an observation whose status is superseded or
+  abandoned. The one kind of node a lean `ask_graph` or `query_nodes` read
+  leaves out; every other type is kept whatever its status.
+  """
+  def retired_note?(node_type, status),
+    do: node_type == "observation" and status in @retired_statuses
+
   @doc """
   Creates a new decision node in the given workspace.
   Generates a change_id (UUID) for sync compatibility with the Rust CLI.
@@ -257,6 +270,8 @@ defmodule DeciduousMcp.Graph.Nodes do
   Options:
   - `:type` — filter by node_type
   - `:status` — filter by status
+  - `:exclude_retired_notes`: leave out retired notes: observations whose
+    status is superseded or abandoned (see `retired_note?/2`)
   - `:branch` — filter by metadata.branch
   - `:search` — text search in title/description
   - `:limit` — max results (default 100)
@@ -268,6 +283,7 @@ defmodule DeciduousMcp.Graph.Nodes do
     |> where([n], is_nil(n.deleted_at))
     |> maybe_filter_type(opts[:type])
     |> maybe_filter_status(opts[:status])
+    |> maybe_exclude_retired_notes(opts[:exclude_retired_notes])
     |> maybe_filter_branch(opts[:branch])
     |> maybe_search(opts[:search])
     |> maybe_filter_ids(opts[:ids])
@@ -319,6 +335,16 @@ defmodule DeciduousMcp.Graph.Nodes do
 
   defp maybe_filter_status(query, nil), do: query
   defp maybe_filter_status(query, status), do: where(query, [n], n.status == ^status)
+
+  defp maybe_exclude_retired_notes(query, true) do
+    where(
+      query,
+      [n],
+      n.node_type != "observation" or is_nil(n.status) or n.status not in ^@retired_statuses
+    )
+  end
+
+  defp maybe_exclude_retired_notes(query, _), do: query
 
   defp maybe_filter_branch(query, nil), do: query
 
